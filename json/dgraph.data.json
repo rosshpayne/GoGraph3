@@ -1,0 +1,200 @@
+{
+       "DGraph_4" : [ 
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "name|EECCAA8877" },
+                  "T" : { "S": "E|4" },
+                  "pUID" : { "S": "name|AABBCC8899123123"},
+                  "S" : { "S": "Joe Smith"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "mobile|EEFFAA8866" },
+                  "T" : { "S": "E|6" },
+                  "pUID" : { "S": "mobile|AABBCC8899123123"},
+                  "S" : { "S": "0412114230"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "mobile|since|EEFFAA8866" },
+                   "T" : { "S": "F|9|5" },
+                  "pUIDf" : { "S": "mobile|AABBCC8899123123|since"},
+                  "Sf" : { "S": "13 July 2009"},
+                  "S" : { "S": "0412114230"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "mobile" },
+                  "T" : { "S": "E|6" },
+                  "pUID" : { "S": "mobile|AABBCC8899123123"},
+                  "S" : { "S": "0412197838"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "mobile|since|EAFCAA8886" },
+                   "T" : { "S": "F|9|5" },
+                  "pUIDf" : { "S": "mobile|AABBCC8899123123|since"},
+                  "Sf" : { "S": "3 April 2014"},
+                   "S" : { "S": "041219783829"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|EFEFAA8854" },
+                  "pUID" : { "S": "purchased|AABBCC8899123123"},
+                  "T" : { "S": "E|9" },
+                  "Nd" : { "B": "CABCA8899123655"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ranking|ECAFAA8854" },
+                  "pUIDf" : { "S": "purchased|AABBCC8899123123|ranking"},
+                  "T" : { "S": "F|9|7" },
+                  "Nf" : {"N": "6"},
+                   "Nd" : { "B": "CABCA8899123655"}                 
+            }
+           }
+        },
+                {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ECAEFAA8854" },
+                  "pUID" : { "S": "purchased|AABBCC8899123123"},
+                  "T" : { "S": "E|9" },
+                  "Nd" : { "B": "CABCA8899123655"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ranking|ECAEFAA8854" },
+                  "pUIDf" : { "S": "purchased|AABBCC8899123123|ranking"},
+                  "T" : { "S": "F|9|7" },
+                  "Nf" : {"N": "5"},
+                  "Nd" : { "B": "CABCA8899123655"}
+            }
+           }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|EAAFAA8857" },
+                  "pUID" : { "S": "purchased|AABBCC8899123123"},
+                  "T" : { "S": "E|9" },
+                  "Nd" : {"B": "BCBCA8899123645"}
+            }
+          }
+        },      
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ranking|EAAFAA8857" },
+                  "pUIDf" : { "S": "purchased|AABBCC8899123123|ranking"},
+                  "T" : { "S": "F|9|7" },
+                  "Nf" : {"N": "4"},
+                  "Nd" : {"B": "BCBCA8899123645"}
+            }
+           }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|EEAFAA8847" },
+                  "pUID" : { "S": "purchased|AABBCC8899123123"},
+                  "T" : { "S": "E|9" },
+                  "Nd" : {"B": "CAACB8899123637"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ranking|EEAFAA8847" },
+                  "pUIDf" : { "S": "purchased|AABBCC8899123123|ranking"},
+                  "T" : { "S": "F|9|7" },
+                  "Nf" : { "N": "3"},
+                  "Nd" : {"B": "CAACB8899123637"}
+            }
+           }
+        },
+                 {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ECFFAA8944" },
+                  "pUID" : { "S": "purchased|AABBCC8899123123"},
+                  "T" : { "S": "E|9" },
+                  "Nd" : {"B": "CFCB88991234187"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ranking|ECFFAA8944" },
+                  "pUIDf" : { "S": "purchased|AABBCC8899123123|ranking"},
+                   "T" : { "S": "F|9|7" },
+                  "Nf" : {"N": "2"},
+                  "Nd" : {"B": "CFCB88991234187"}
+            }
+        }
+        },
+                 {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|BCFFAA89441" },
+                  "pUID" : { "S": "purchased|AABBCC8899123123"},
+                  "T" : { "S": "E|9" },
+                  "Nd" : {"B": "BFCB88991234187"}
+            }
+          }
+        },
+        {
+          "PutRequest": { 
+               "Item": { 
+                  "PKey" : { "B": "AABBCC8899123123" },
+                  "SortK" : { "S": "purchased|ranking|BCFFAA89441" },
+                  "pUIDf" : { "S": "purchased|AABBCC8899123123|ranking"},
+                   "T" : { "S": "F|9|7" },
+                  "Nf" : {"N": "1"},
+                  "Nd" : {"B": "BFCB88991234187"}
+            }
+        }
+        }
+        ]
+}
+        

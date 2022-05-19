@@ -1,0 +1,45 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "Puid", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "SortK_Cuid", 
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "Status", 
+            "AttributeType": "S"
+        }
+    ], 
+    "KeySchema": [
+        {
+            "AttributeName": "Puid", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "SortK_Cuid", 
+            "KeyType": "RANGE"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST",
+    "LocalSecondaryIndexes": [
+        { "IndexName": "status_idx", 
+            "KeySchema": [
+                 {
+                    "AttributeName": "Puid", 
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "Status", 
+                    "KeyType": "RANGE"
+                }
+            ],
+            "Projection": {
+                "ProjectionType": "KEYS_ONLY"
+            }
+        }
+    ]
+}

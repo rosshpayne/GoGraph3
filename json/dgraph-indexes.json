@@ -1,0 +1,104 @@
+{
+    "TableName": "DyGraph", 
+        "AttributeDefinitions": [
+        {
+            "AttributeName": "PKey", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "SortK", 
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "P", 
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "N", 
+            "AttributeType": "N"
+        },
+        {
+            "AttributeName": "B", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "S", 
+            "AttributeType": "S"
+        }
+    ], 
+        "KeySchema": [
+        {
+            "AttributeName": "PKey", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "SortK", 
+            "KeyType": "RANGE"
+        }
+    ],
+        "ProvisionedThroughput": {
+                "ReadCapacityUnits": 2, 
+                "WriteCapacityUnits": 2
+    },
+    "GlobalSecondaryIndexes": [
+        { "IndexName": "P_N", 
+            "KeySchema": [
+                {
+                    "AttributeName": "P", 
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "N", 
+                    "KeyType": "RANGE"
+                }
+            ], 
+             "Projection": {
+                "ProjectionType": "INCLUDE",
+                 "NonKeyAttributes" : [ "Ty" ]
+            }, 
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 2, 
+                "WriteCapacityUnits": 2
+            }
+        },
+        { "IndexName": "P_S", 
+            "KeySchema": [
+                {
+                    "AttributeName": "P", 
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "S", 
+                    "KeyType": "RANGE"
+                }
+            ], 
+             "Projection": {
+                "ProjectionType": "INCLUDE",
+                "NonKeyAttributes" : [ "Ty" ]
+            }, 
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 2, 
+                "WriteCapacityUnits": 2
+            }
+        },
+        { "IndexName": "P_B", 
+            "KeySchema": [
+                {
+                    "AttributeName": "P", 
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "B", 
+                    "KeyType": "RANGE"
+                }
+            ], 
+             "Projection": {
+                "ProjectionType": "KEYS_ONLY"
+            }, 
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 2, 
+                "WriteCapacityUnits": 2
+            }
+        }
+    ]
+}

@@ -1,0 +1,113 @@
+package cache
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	param "github.com/GoGraph/dygparam"
+	elog "github.com/GoGraph/errlog"
+	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/util"
+)
+
+const logid = "vacuum: "
+
+type uuid = string
+
+/////////////////////////////////////
+
+func syslog(s string) {
+	slog.Log(logid, s)
+}
+
+// use channels to synchronise access to shared memory ie. the various maps, rLimiterMap.rCntMap.
+// "don't communicate by sharing memory, share memory by communicating"
+// grmgr runs as a single goroutine with sole access to the shared memory objects. Clients request or update data via channel requests.
+// TODO: keep adding entries to map. Determine when to purge entry from maps.
+func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup, runId util.UID) {
+
+	defer wgEnd.Done()
+
+	// InUseCh - when a process is about to use a util.UID it first registers the UID as InUse so it will not be purged from the cache.
+	var inUseCh = make(chan util.UID)
+	// PurgeReqCh - is a request to purge the UID once it is nolonger required - cache service adds request to a queue that is then purged by the cache-cleaner routine.
+	var purgeReqCh = make(chan util.UID, 5)
+
+	ctxSnap, cancelSnap := context.WithCancel(context.Background())
+	var wgSnap sync.WaitGroup
+	var wgStart sync.WaitGroup
+	wgStart.Add(1)
+	wgSnap.Add(1)
+
+	// start vacuum process
+	go func() {
+		wgStart.Done()
+		defer wgSnap.Done()
+		// wait for grmgr to start for loop
+		wpStart.Wait()
+		slog.Log(logid, "Report-snapshot Powering up...")
+		for {
+			select {
+			case t := <-time.After(time.Duration(vacuumInterval) * time.Second):
+				vacuumCh <- t
+			case <-ctxSnap.Done():
+				slog.Log(logid, "Report-snapshot Shutdown.")
+				return
+			}
+		}
+
+	}()
+
+	var (
+		inUse =)
+	slog.Log(logid, "Waiting for gr monitor to start...")
+	// wait for snap interrupter to start
+	wgStart.Wait()
+	slog.Log(logid, "Fully powered up...")
+	wpStart.Done()
+
+	inUse:=make(map[uuid]int)
+	
+	for {
+
+		select {
+
+		case uid = <-InUseCh:
+
+			inUse[uid]++
+
+		case p = <-PurgeReqCh:
+
+			inUse[uid]--
+		    toPurge[uid] = struct{}{}
+
+		case <-vacuumCh:
+			var ok bool
+			
+			gc = GetCache()
+			gc.Lock()
+			for uid:=range toPurge {
+				if cnt,ok= inUse[uid]; ok {
+					if cnt == 0 {
+						purgeIt(uid)
+					}
+				} 
+			}
+			gc.Unl12ock()
+
+		case <-ctx.Done():
+			cancelSnap()
+			slog.Log(param.Logid, "Waiting for snap to shutdown...")
+			wgSnap.Wait()
+			slog.Log(logid, "Shutdown.")
+			return
+
+		}
+
+	}
+}

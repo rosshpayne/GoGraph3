@@ -1,0 +1,167 @@
+{
+   "DyGraph":  [
+     {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" }, 
+            	    "SortK" : { "S" : "A#:N" },
+	                "S"     : { "S" : "Ross Payne"  },
+	                "P"     : { "S" : "Name" }
+                  } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" },
+	                "SortK" : { "S" : "A#:A" },
+	                "N"     : { "N" : "62" },
+	                "P"     : { "S" : "Age" }
+                  } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#:D" },
+                    "S"     : { "S" : "13-Mar-1958" },
+                    "P"     : { "S" : "DOB" }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B"  : "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S"  : "A#:C" },
+                    "SS"    : { "SS" : ["Honda","Fiat","Alfa"]}
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#S#:C#Honda" },
+                    "P"    : { "S" : "Car"},
+                    "S"   : { "S" : "Honda"}
+          } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#S#:C#Fiat" },
+                    "P"    : { "S" : "Car"},
+                    "S"    : { "S" : "Fiat"}
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#S#:C#Alfa" },
+                    "P"    : { "S" : "Car"},
+                    "S"    : { "S" : "Alfa"}
+          } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#:J" },
+                    "LS"    : { "L" : [ { "S": "job1a"}, { "S": "job2b" }, {"S": "job3c" }, {"S" : "Job4d"} ] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#G#:S" },
+                    "Nd"    : { "L" : [ { "B": "5lFOnTStSYWqmi8S6FDFDQ=="}, { "B": "k09bI9lSTXuZi2MSkyMm2A==" } ] },
+                    "XF"    : { "L" : [ { "N": "1"}, { "N": "1"} ] },
+                    "Id"    : { "L" : [ { "N": "0"}, { "N": "0"}] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "GFV#:S#:N#:C" },
+                    "LBl"    : { "L":  [ { "BOOL": false } ,  { "BOOL" : false } ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#G#:S#:N" },
+                    "LS"    : { "L":  [ { "S": "Paul Payne"} ,  { "S" : "Ian Payne" } ] },
+                     "XBl"     : { "L" : [ {"BOOL" : false}, {"BOOL" : false} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#G#:S#:A" },
+                    "LN"    : { "L":  [ { "N": "57" } ,  { "N" : "65" } ] },
+                    "XBl"     : { "L" : [ {"BOOL" : false}, {"BOOL" : false} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "GFV#:S#:A#:H" },
+                    "LN"    : { "L":  [ { "N": "9.0" } ,  { "N" : "9.5" } ] }
+                    }
+     } },
+  {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "GFV#:S#:A#:D" },
+                    "LBl"    : { "L":  [ { "BOOL": true } ,  { "BOOL" : true} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#G#:S#:D" },
+                    "LS"    : { "L":  [ { "S": "2-Jun-1960"} ,  { "S" : "28-Jan-1953" } ] },
+                                        "XBl"     : { "L" : [ {"BOOL" : false}, {"BOOL" : false} ] }
+                    }
+     } },
+         {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "bHeALyzDR+qW1cdNWF1sPg==" },
+                    "SortK" : { "S" : "A#FU#:S#:C" },
+                    "LBl"    : { "L" : [ { "BOOL": true }, { "BOOL": true } ] }
+          } 
+     } },
+     {
+    "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" }, 
+            	    "SortK" : { "S" : "A#FV#:N#:C" },
+	                "Bl"     : { "BOOL" : false  }
+                  } 
+     } },
+              {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" }, 
+            	    "SortK" : { "S" : "A#FV#:A#:H" },
+	                "N"     : { "N" : "8.5"  }
+                  } 
+     } },
+     {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" }, 
+            	    "SortK" : { "S" : "A#FV#:A#:D" },
+	                "Bl"     : { "BOOL" : false  }
+                  } 
+     } }
+    ]
+    }

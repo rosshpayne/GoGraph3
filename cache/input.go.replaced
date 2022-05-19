@@ -1,0 +1,124 @@
+package cache
+
+func makeOvflBlocks(di *blk.DataItem, ofblk []util.UID, id int, inputs db.Inputs) {
+
+	ofblk := make([]*blk.OverflowItem, 2)
+	ofblk[0].Pkey = v.Encodeb64()
+	ofblk[0].SortK = pn.SortK + "P" // associated parent node
+	ofblk[0].B = pn.Pkey            // parent node to which overflow block belongs
+
+	ofblk[1].Pkey = v
+	ofblk[1].SortK = pn.SortK // A#G#:S
+
+	const (
+		Item1 = 0 // Item 1
+		Item2 = 1 // Item 2
+	)
+
+	// Initialise overflow block with two items
+
+	// Block item 1 - contains a pointer back to the parent ie.PKEY of uid-pred containing the overflow block uid (in Nd)
+
+	// Block item 2 - an uid-pred Nd equivalent item ie. contains uids of child nodes e.g. sortk A#G#:S#<id>. id=1..n
+	//        each A#G#:S#<id> contains some configured number of uids e.g. 500, 1000 etc.
+	//        The id value is sourced from the parent uid-pred "Id" attribute.
+
+	var (
+		av  map[string]*dynamodb.AttributeValue
+		err error
+	)
+	//
+	for _, v := range ofblk {
+
+		for i := Item1; i <= Item2; i++ {
+			switch i {
+
+			case Item1:
+				input := db.NewInput()
+				input.SetKey(PropagatedTbl, v, "P")
+				input.AddMember("B", di.PKey)
+				inputs.Add(input, I)
+				// type OverflowI1 struct {
+				// 	PKey  []byte
+				// 	SortK string
+				// 	B     []byte
+				// }
+
+			case Item2:
+
+
+		}
+	}
+	return nil
+}
+
+func MakeOvflBlocks(di *blk.DataItem, ofblk []util.UID, id int, inputs db.Inputs) error {
+	// 	ofblk := make([]*blk.OverflowItem, 2)
+	// ofblk[0].Pkey = v.Encodeb64()
+	// ofblk[0].SortK = pn.SortK + "P" // associated parent node
+	// ofblk[0].B = pn.Pkey            // parent node to which overflow block belongs
+
+	// ofblk[1].Pkey = v
+	// ofblk[1].SortK = pn.SortK // A#G#:S
+
+	const (
+		Item1 = 0 // Item 1
+		Item2 = 1 // Item 2
+	)
+	//
+	// Initialise overflow block with two items
+	//
+	// Block item 1 - contains a pointer back to the parent ie.PKEY of uid-pred containing the overflow block uid (in Nd)
+
+	// Block item 2 - an uid-pred Nd equivalent item ie. contains uids of child nodes e.g. sortk A#G#:S#<id>. id=1..n
+	//        each A#G#:S#<id> contains some configured number of uids e.g. 500, 1000 etc.
+	//        The id value is sourced from the parent uid-pred "Id" attribute.
+	//
+	var (
+		err error
+	)
+	//
+	for _, v := range ofblk {
+
+		for i := Item1; i <= Item2; i++ {
+			switch i {
+
+			case Item1:
+				input := db.NewInput()
+				input.SetKey(PropagatedTbl, v, "P")
+				input.AddMember("B", di.PKey)
+				inputs.Add(input, I)
+
+			case Item2:
+				inputs(newUIDTarget(v, di.SortK, id), I) // e.g. sortk#1 A#G#:S#1
+			}
+		}
+	}
+	return nil
+}
+
+// <target-sortK>#<Id>#:<scalarPred>
+func newUIDTarget(tUID util.UID, sortk string, id int) db.Input { // create dummy item with flag value of DELETED. Why? To establish Nd & XF attributes as Lists rather than Sets..
+
+	nilItem := []byte("0")
+	nilUID := make([][]byte, 1, 1)
+	nilUID[0] = nilItem
+	//
+	xf := make([]int, 1, 1)
+	xf[0] = blk.UIDdetached // this is a nil (dummy) entry so mark it deleted. Used to append other cUIDs too.
+	//
+	// create a "batch" sortk
+	//
+	var s strings.Builder
+	s.WriteString(sortk)
+	s.WriteByte('#')
+	s.WriteString(strconv.Itoa(id)) //  <target-sortK>#<Id>
+	//
+	input.NewInput()
+	input.SetKey(PropagatedTbl, tUID, s.String())
+	input.AddMember("Nd", nilUID)
+	input.AddMember("XF", xf)
+	//a := TargetItem{PKey: tUID, SortK: s.String(), Nd: nilUID, XF: xf}
+
+	return input
+}

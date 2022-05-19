@@ -1,0 +1,149 @@
+{
+   "DyGTypes":  [
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Person2" }, 
+            	    "Atr" : { "S" : "Name" },
+            	    "Ty" : { "S": "S" },
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Ix": { "S" : "FT" },
+            	    "Pg" : { "BOOL" : true }
+                  } } 
+     } ,
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Person2" }, 
+            	    "Atr" : { "S" : "Director.film" },
+            	    "Ty" : { "S": "[Film]" },
+            	    "C" : { "S": "D" },
+            	    "P" : { "S" : "A" }
+                  }} 
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Person2" }, 
+            	    "Atr" : { "S" : "Actor.performance" },
+            	    "Ty" : { "S": "[Performance]" },
+            	    "C" : { "S": "A" },
+            	    "P" : { "S" : "A" }
+                  }} 
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Performance" }, 
+            	    "Atr" : { "S" : "performance.actor" },
+            	    "Ty" : { "S": "[Person2]"}, 
+                    "C" : { "S": "A" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Performance" }, 
+            	    "Atr" : { "S" : "performance.character" },
+            	    "Ty" : { "S": "[Character]"}, 
+                    "C" : { "S": "C" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Character" }, 
+            	    "Atr" : { "S" : "Name" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+          }}
+     },
+          {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Genre" }, 
+            	    "Atr" : { "S" : "Name" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+          }}
+     },
+          {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Genre" }, 
+            	    "Atr" : { "S" : "genre.film" },
+            	    "Ty" : { "S": "[Film]"}, 
+                    "C" : { "S": "F" },
+            	    "P" : { "S" : "A" },
+            	  "IncP" : {"SS" :["N"]}
+          }}
+     },
+    {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Film" }, 
+            	    "Atr" : { "S" : "Name" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+          }}
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Film" }, 
+            	    "Atr" : { "S" : "Initial_Release_Date" },
+            	    "Ty" : { "S": "D"}, 
+                    "C" : { "S": "R" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+         } }
+     },
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Film" }, 
+            	    "Atr" : { "S" : "Film.director" },
+            	    "Ty" : { "S": "[Person2]" },
+            	    "C" : { "S": "D" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+   {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Film" }, 
+            	    "Atr" : { "S" : "Film.performance" },
+            	    "Ty" : { "S": "[Performance]" },
+            	    "C" : { "S": "P" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+    {    
+          "PutRequest" : {
+          "Item" : {
+                	"Nm"  : {"S": "Film" }, 
+            	    "Atr" : { "S" : "Film.genre" },
+            	    "Ty" : { "S": "[Genre]" },
+            	    "C" : { "S": "G" },
+            	    "P" : { "S" : "A" }
+          }}
+     } 
+     ]
+}
+            	    
+        
+     

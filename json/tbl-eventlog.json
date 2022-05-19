@@ -1,0 +1,24 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "run", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "eidid", 
+            "AttributeType": "S"
+        }
+    ], 
+    "KeySchema": [
+        {
+            "AttributeName": "run", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "eidid", 
+            "KeyType": "RANGE"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST"
+}

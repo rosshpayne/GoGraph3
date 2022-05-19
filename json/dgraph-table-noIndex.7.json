@@ -1,0 +1,28 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "PKey", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "SortK", 
+            "AttributeType": "S"
+        }
+    ], 
+    "TableName": "DyGraph", 
+    "KeySchema": [
+        {
+            "AttributeName": "PKey", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "SortK", 
+            "KeyType": "RANGE"
+        }
+    ],
+    "ProvisionedThroughput": {
+                "ReadCapacityUnits": 100, 
+                "WriteCapacityUnits": 200
+    }
+}

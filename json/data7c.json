@@ -1,0 +1,139 @@
+{
+   "DyGraph":  [
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"B": "k09bI9lSTXuZi2MSkyMm2A==" }, 
+            	    "SortK" : { "S" : "A#:N" },
+	                "S"    : { "S" : "Paul Payne"  },
+	                 "P"  : { "S" : "Name" }
+                  } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+	                "SortK" : { "S" : "A#:A" },
+	                "N"    : { "N" : "58" },
+	                "P"  : { "S" : "Age" }
+                  } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#:D" },
+                    "S"    : { "S" : "2-Jun-1960" },
+                    "P"  : { "S" : "DOB" }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#:C" },
+                    "SS"    : { "SS" : ["Commodore","VW Golf"]}
+          } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#:J" },
+                    "LS"    : { "L" : [ { "S": "job1asasdfae32"}, { "S": "jasdfasdfob2as23b" }, {"S": "jasdfob3as3rc" } ] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#G#:S" },
+                    "Nd"    : { "L" : [ { "B": "5lFOnTStSYWqmi8S6FDFDQ=="}, { "B": "bHeALyzDR+qW1cdNWF1sPg==" } ] },
+                    "XF"    : { "L" : [ {"N":"1"}, {"N" : "1"} ] },
+                    "Id"    : { "L" : [ { "N": "0"}, { "N": "0"}] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#FU#:S#:C" },
+                    "LBl"    : { "L" : [ { "BOOL": true }, { "BOOL": true } ] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#G#:S#:N" },
+                    "LS"    : { "L":  [ { "S": "Ian Payne"} ,  { "S" : "Ross Payne" } ] },
+                     "XBl"     : { "L" : [ {"BOOL" : false}, {"BOOL" : false} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#G#:S#:A" },
+                    "LN"    : { "L":  [ { "N": "67"} ,  { "N" : "62" } ] },
+                     "XBl"     : { "L" : [ {"BOOL" : false}, {"BOOL" : false} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "GFV#:S#:A#:H" },
+                    "LN"    : { "L":  [ { "N": "9.5"} ,  { "N" : "8.5" } ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "GFV#:S#:A#:D" },
+                    "LBl"    : { "L":  [ { "BOOL": true } ,  { "BOOL" : true} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "GFV#:S#:N#:C" },
+                    "LBl"    : { "L":  [ { "BOOL": false } ,  { "BOOL" : false } ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "k09bI9lSTXuZi2MSkyMm2A==" },
+                    "SortK" : { "S" : "A#G#:S#:D" },
+                    "LS"    : { "L":  [ { "S": "29-Jan-1953"} ,  { "S" : "13-Mar-1958" } ] }
+                    }
+     } },
+     {
+    "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "k09bI9lSTXuZi2MSkyMm2A==" }, 
+            	    "SortK" : { "S" : "A#FV#:N#:C" },
+	                "Bl"     : { "BOOL" : false  }
+                  } 
+     } },
+              {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "k09bI9lSTXuZi2MSkyMm2A==" }, 
+            	    "SortK" : { "S" : "A#FV#:A#:H" },
+	                "N"     : { "N" : "9.0"  }
+                  } 
+     } },
+     {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "k09bI9lSTXuZi2MSkyMm2A==" }, 
+            	    "SortK" : { "S" : "A#FV#:A#:D" },
+	                "Bl"     : { "BOOL" : true  }
+                  } 
+     } }
+    ]
+ }

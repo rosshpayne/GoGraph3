@@ -1,0 +1,46 @@
+{
+   "GoGraphSS":  [
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Scalar" }, 
+            	    "SortK" : { "S" : "B" }
+                  }} 
+      },
+       {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Scalar" }, 
+            	    "SortK" : { "S" : "Bl" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Scalar" }, 
+            	    "SortK" : { "S" : "DT" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Scalar" }, 
+            	    "SortK" : { "S" : "F" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Scalar" }, 
+            	    "SortK" : { "S" : "I" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Scalar" }, 
+            	    "SortK" : { "S" : "S" }
+                  }} 
+      }
+     ]
+    }

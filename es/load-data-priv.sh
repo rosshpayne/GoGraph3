@@ -1,0 +1,1 @@
+curl -XPUT 'ip-172-31-14-66.ec2.internal:9200/dx1/_doc/2'  -H 'Content-Type: application/json'  -d '{ "CAR ALFA": "document" }'

@@ -1,0 +1,25 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "EID", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "SEQ", 
+            "AttributeType": "N"
+        }
+    ], 
+    "TableName": "DyGEvent", 
+    "KeySchema": [
+        {
+            "AttributeName": "EID", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "SEQ", 
+            "KeyType": "RANGE"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST"
+}

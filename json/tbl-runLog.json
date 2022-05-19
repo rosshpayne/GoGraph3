@@ -1,0 +1,35 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "run", 
+            "AttributeType": "B"
+        },
+                {
+            "AttributeName": "start", 
+            "AttributeType": "S"
+        }
+    ], 
+    "TableName": "runLog", 
+    "KeySchema": [
+        {
+            "AttributeName": "run", 
+            "KeyType": "HASH"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+        { "IndexName": "start_idx", 
+            "KeySchema": [
+                {
+                    "AttributeName": "start", 
+                    "KeyType": "HASH"
+                }
+            ], 
+             "Projection": {
+                "ProjectionType": "INCLUDE",
+                 "NonKeyAttributes" : [ "program", "finish", "status" ]
+            }
+        }
+    ]
+}

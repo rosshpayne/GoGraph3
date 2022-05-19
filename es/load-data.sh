@@ -1,0 +1,4 @@
+#curl -XPUT 'ec2-44-203-244-188.compute-1.amazonaws.com:9200/dx1/_doc/3'  -H 'Content-Type: application/json'  -d '{ "Attr": "document|abc" }'
+#curl -XPUT 'ec2-44-203-244-188.compute-1.amazonaws.com:9200/dx1/_doc/4'  -H 'Content-Type: application/json' -d '{"Attr":"Name", "Value":"Ian Payne", "PKey":"f0a1cf28-d4b3-49fb-9336-451e45335072", "SortK":"r|A#A#:N", "Type":"r|Pn"}'
+#curl -XPUT 'ec2-44-203-244-188.compute-1.amazonaws.com:9200/dx1/_doc/5'  -H 'Content-Type: application/json' -d '{"graph" : "r","attr" : "Name","value" : "Phil Smith","sortk" : "r|A#A#:N","type" : "r|Pn"}'
+curl -XPUT 'ec2-54-236-243-149.compute-1.amazonaws.com:9200/dx1/_doc/6'  -H 'Content-Type: application/json' -d '{"graph" : "r","attr" : "Comment","value" : "A great video Payne which I have enjoyed watching. It is always very interesting to see such beautiful scenery which I am unable to visit personally. Thank you.","sortk" : "r|A#A#:Ct","type" : "r|Pn"}'

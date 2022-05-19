@@ -1,0 +1,2 @@
+echo "./loader -g Relationship  -debug all -f ./rdf_test.rdf -table \"GoGraph.prd.3\" "
+history | grep loader | tail -3

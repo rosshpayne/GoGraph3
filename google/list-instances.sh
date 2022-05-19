@@ -1,0 +1,1 @@
+gcloud spanner instances list 

@@ -1,0 +1,11 @@
+aws dynamodb delete-table --table-name "GoGraph.dev"
+# aws dynamodb delete-table --table-name "Edge_Relationship"
+# aws dynamodb delete-table --table-name "EdgeChild_Relationship"
+aws dynamodb delete-table --table-name "Edge_Movies"
+aws dynamodb delete-table --table-name "EdgeChild_Movies"
+aws dynamodb delete-table --table-name "esLog"
+aws dynamodb delete-table --table-name "state"
+# aws dynamodb delete-table --table-name "EventLog"
+aws dynamodb delete-table --table-name "Edge_Relationship"  
+aws dynamodb delete-table --table-name "EdgeChild_Relationship"  
+

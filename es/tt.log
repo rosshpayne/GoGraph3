@@ -1,0 +1,3395 @@
+Successfully pinged database..
+Argument: concurrent: 6
+Argument: table: GoGraph.prd.2
+Argument: showsql: 0
+Argument: debug: 0
+Argument: graph: Movies
+Argument: reduced logging: 1
+Argument: batch size: 500
+
+ no error 
+create new logr for prefix:  TypesDB: 
+short Names:  [{Ch Character} {Fm Film} {Ge Genre} {P Person} {Pf Performance}]
+ShortNames:  Character Ch
+ShortNames:  Film Fm
+ShortNames:  Genre Ge
+ShortNames:  Person P
+ShortNames:  Performance Pf
+create new logr for prefix:  types: 
+PutITemINput :  {
+  Item: {
+    run: {
+      B: <binary> len 16
+    },
+    sortk: {
+      S: "AA"
+    },
+    start: {
+      S: "2022-05-08 19:57:44.750971207 +1000 AEST"
+    },
+    program: {
+      S: "dp"
+    },
+    status: {
+      S: "R"
+    },
+    logfile: {
+      S: "/home/ec2-user/environment/dev/log/GoGraph/GoGraph.y.log"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "runStats"
+}
+executeQuery:  select Value,RunId from State$ where Graph = ? and Name = ?
+*** NO DATA FOUND in STATE$
+create new logr for prefix:  ElasticSearch: 
+Establish ES client...
+Client: 7.6.0
+create new logr for prefix:  errlog: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+executeQuery:  select Attr,Ty,Sortk from State$ES where Graph = ? and Status != ?
+oPrepare true
+ftAttrs []main.ftrec{main.ftrec{Attr:"title", Ty:"m|Fm", Sortk:"m|A#A#:N"}, main.ftrec{Attr:"name", Ty:"m|P", Sortk:"m|A#A#:N"}}
+Merge:  insert into State$ES (Graph,Ty,Sortk,Attr,Status,Loaded) values (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Status = ?, Loaded = ifnull(Loaded,0)+?
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 19:57:52.458874734 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"7jzoKTXdQGGb42NQLMZESg==\" } }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"41a6Cqq9TPeJbck/eNDLrw==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:57:58.632266409 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"033xgD+rSSOOqAXJSosaiQ==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:05.006948071 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"AKnQO39nRdK16Nud5nt2Ew==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:11.412909055 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"hcdyW6mRTri1l4d/XJ06EQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:17.668597436 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"FBg2LTFuTPiebH9mB8Kz/Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:23.929637663 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"pNAmAgvxShubtNVBLUMn2Q==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:30.276783103 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 19:58:36.702461504 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"hA8RJjyqT36bdgcB76176w==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"44i5XsO9TN69++ybG2FGsQ==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:42.873046825 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"NhoEk2f9RtWRfUtKkbi98g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:48.317354055 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Nw5e49+bTLaC0kbAjtRsbg==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:53.35944821 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"Z6/SP0irQ9O6VhHxoJsQcQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|Fm\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:58:58.345627261 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+Merge:  insert into State$ES (Graph,Ty,Sortk,Attr,Status,Loaded) values (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Status = ?, Loaded = ifnull(Loaded,0)+?
+Merge:  insert into State$ES (Graph,Ty,Sortk,Attr,Status,Loaded) values (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Status = ?, Loaded = ifnull(Loaded,0)+?
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"kjH/sI8dS8Kn2EJWQLr15Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:06.699375905 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"vP0NAXAtTj+VSfGUmR0CQQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:11.9161383 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  dbExecute:
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"VMGq6Z/jRHG5mN6NZOoxqQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:16.657111931 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"ARN1F3VdR3+2uQpq/m70tQ==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:21.531132245 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"nyjjUwugQWWN+YpWHPQKuA==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:26.222620458 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"OtvaAabgTUyUVnd5Yo+9Kg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:31.144204844 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"38seM19hSr69a+ISDiXlcQ==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:36.02818909 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"29iY3yg9S9C358Nqteq5ow==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:40.615196358 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"/rhfzSntTp2ax11I/UwF6A==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:45.599854081 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"GGFiiDWRSXKCum4AinZJYw==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:50.539123966 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"Rgkg4aPTRuKV+psgQ7BBFA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 19:59:55.980549406 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"h5Ikg3NMQXuETd95JqYRvg==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:00.378376658 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"te2glj65QlWfJIKrjMv2Qg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:05.063360809 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"wrXRN3MQRYqKI11KCw+HRw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:09.569813849 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"mOCpffuPQXarwLkMj+P9gg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:14.355721896 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"cJ3xOZ88SXmFYHRNVFu/ZA==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:18.887901241 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"u1Q2nKtjTPirCOYRSMsCAQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:23.270865917 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"uyDh95yHSRaIzoEhGkdzyw==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:27.821915466 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"DjfZ2q0pSaWjNvV6lyPu9Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:32.250389953 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"pFA6u47lTKK4C9tZh+bvkw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:36.748939939 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"0klWdss6TzualYFCiJm0qw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:41.455921848 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Exohd6KzQi2LQxB2UWDqkg==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:45.975920272 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"HHsJi9+URZ2G7v9RnyoiLQ==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:50.577616796 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"nkmTNRC4TMCs8sBZQCZBSg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:00:55.530356891 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"fVEpRqlWQ9Kma1ytwnSlhQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:00.272342038 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"wFecpUqyQNycpqfwCLB6uA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:05.003409949 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:01:09.707279309 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"E54v3sDpSqSgcR33TWnN9w==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"vwrPjwN7Ra+NAZBOECUO2g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:14.439879565 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Tf4LeADURWOSw2GwHX45tQ==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:19.199789399 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:01:23.931566537 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"Q48WO6GDTeap5J5OdPmsAQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"61TQ4czURIuQbd85nZ2abQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:28.717493533 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"InzQtRkKS1KceDbcjqc52g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:33.51793307 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"BZW4D+wfSG2hDYLXg7lCWg==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:38.214880823 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"A0KdQr67Txmp/Wo+wNDv9w==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:43.191511665 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"b4RblQPOT662x5vVTpydNg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:47.825037564 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"pYcO0WscRUuvafnhgU5ITw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:52.471680281 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"iWwOQXFqRuuSEWzst74kvg==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:01:57.227999234 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"nHum1ONHRfCK841ouypj9w==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:01.790297836 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"6qlOnVmkS6mAONAG5UlcBA==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:06.452361108 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:02:10.975229015 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"E3EKRvewSrKt6+aZogXUhg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"+soAKRz0R4OlRoCI44hcvQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:15.665896272 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Gh2mLUdIQh2SsKBkse67ug==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:20.250867771 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"jWw2CZY5RiKIStY7J3Dweg==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:24.842112271 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"WoCphiG8Qc2rKdnxbVheXA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:29.387133369 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"fQvN+1KcROKPXzuchZpbKQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:33.999288583 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"NT35rE5ATVCZo/vfBW8RTw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:38.630295838 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"tpvHF+16SoKbYIYbK63+Sw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:43.207830286 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"tfP/BfYYTPaQDK51/pdAug==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:47.908752897 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:02:52.654341982 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"VwLXHXJmSa6gvjzCJEZZYA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"kn1ZT+thTmqFdrGpw0Q/DA==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:02:57.404449478 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"EcYASx16SbqHNp7dGnGFlw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:02.135203461 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"7H5yUsMaSD+l/S8Oi2wDzQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:06.937909679 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"sQjxZ7kFRTCcymWwDztCAA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:11.801508044 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"u1+EmAepQj2R6vAiMZ8GcA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:17.112650221 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"0G0Vc/4ISLG+hfCgJH9YgQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:21.990526748 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"PYUoEFRSR8KrdiuT1ByL6g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:27.042363012 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"ozxSpiLWTeGD8zqyyiJd4g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:31.871180774 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"nO0op62VQRytXO+noilL3Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:36.826397196 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:03:41.587620677 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"2qmb8UwNTVWaZG96hvFvnw==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"rCe6DVJrR3SRBkPUVP4mUA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:46.446691337 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"gOX0DQSmSz6Eme4U+tdYEg==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:51.095183547 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"dY+pd97pR6iL2r8bzorpTw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:54.976307845 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"stEvHtu5Raq+qerg60VhVA==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:03:58.568087606 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"m6kZlfM2T/y/Wsx6dmVUFw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:02.915164497 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"HxvX0APgSTmnMC9SYIHn6A==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:06.762862938 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"iQlzqbU9SX6Ba/mKI5mFUw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:10.70385814 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"F6lOUg+rQr6jBzqwvJphag==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:14.725503848 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"+cO/KI9eQe+MihUL+jC/Kw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:18.879336333 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"fuWprlQuSBmeEHA2rayrpQ==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:23.280179321 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:04:27.711959622 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"YYNafVunTRGrFvKRTsAUog==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"bKKKzInCT+yWWoqsk1vr/g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:32.415069023 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"3fPLimiHQpKIH/zTm2mBng==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:36.819987529 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"8ChvWD1GRcqnWgLTimbvVQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:41.241202132 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:04:45.323829964 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"WPpc9th/TN+rBLDsVq505A==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:04:49.640800288 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"+JTg0qFXSiO7HPTKnAOQSA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:04:53.939921989 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"N8RfOSOkSPGvZZQIuPBV6A==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"qTOMu6bKQf2pPE+cAAsmCg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:04:58.293045592 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"nX92Xt7VSfCXDUZEpw3wFw==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:02.793735251 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"i8bjBzX8RLifsxZ204SeOA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:07.35841165 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Yqzm14EdQsKoVdyXRPSSyw==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:11.88864606 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"jN4ICnFYRFeRdrUZW+6jkw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:16.527933075 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"SSdde+oqQm2pvmOHrup8JQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:21.325753755 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"qRqptaSpQRSSJTjf83dRgw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:26.114598588 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"ULU0Xiq7S8mGa83o3Tjwmw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:30.876649225 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"9hzIRIBwT9yu4pD4W+c+DA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:35.63117056 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"093AJRrjQ/iNUkmfypU13g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:40.571700515 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"staOAuErRJOMsretlqoOzQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:45.29680824 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"Cf1Y/OPfRTWIWSnjUFRlEQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:50.241721581 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"GJ3zCxk0T+GYMDMs2D7Zgw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:54.861044235 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"z2f05mCIRDm8+MHhvv9Z8g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:05:59.510960512 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"6Fs/tZ28SgWrEM9cIzCjRg==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:04.25714107 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"WrwiC8f1TBWTdejuyIrnqQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:08.922191448 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Nx/q5H8/SlabuLi/R57iCA==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:13.603368203 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:06:18.36652459 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"iCFaXrsMQIq3aim1C56Z+A==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"mRe429IDR9qudDzAb0SqaA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:23.16053302 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"YPkwqmq4SNO5jjyWzKhi9Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:28.10320844 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:06:32.965625454 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"K8FmQcZNQieRmrFspsBooA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"NDWlFUxXQhaS1dicAsgiCw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:37.878560061 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"B35DJVwfQuSFxG5WbHNH1A==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:42.695053363 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"UG9YliwsRWK9FP1/eYdQ6Q==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:47.70256699 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"UimI2gaKSa2DdiOz4IBH/Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:52.596622929 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"RMXZqX7BQn6Pi22w5CvnZA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:06:57.527033268 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:07:02.272763875 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"atc0s5G3RwCwOB0RvS5ivw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"wahIAuyuQXenKGa1b5U2sw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:07.113749772 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:07:11.918710639 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"yWB2hH+ET6uAmebswyo86A==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"1Wdf4UPbQweXSMoW3A2INw==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:16.739138582 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"lf0150DtSLi5e1C1SS7xig==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:21.587569755 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"R0xe2fALRpaC0wPofZL0ZQ==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:26.51511011 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"dtV7HdrfQRWmKyIL1rPGvw==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:31.465292957 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"wJ2nNNjgTAahaI4R0GIljw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:36.400264209 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"cF3aR2ClQlqeqZWXdZF/zw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:41.344283112 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"ZaRt/H6XTEeU48BRTJbnpg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:46.260239572 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:07:51.29381396 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"GXw8x7yhQUS/lsUv6cBGXg==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"UCtv05l0RCSc/h5zOqgQug==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:07:56.30321048 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"JLBXAwbcTT2yhf59SoY4jA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:01.243556378 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"dzV55u0FTBa4MRvDtCGw2Q==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:06.211781244 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"PjSL1w28R9iRZh9U5ZIFtg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:11.065697261 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"6Yta1X5QTpqAsMBlEvvIBA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:15.98764545 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"P1zaspYFTFSfTd3F5cZWFw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:20.835191618 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"iVoisg0lSiCJ1ZYq4NyaqA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:25.791774413 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"bKmVgsNYRRGwRXW1fGvjhw==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:30.94421272 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"y5v+a9yxSBiH+209Fx1weQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:35.981382131 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:08:40.905151946 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"UvrSOVHGQQaUTIaB7GT8RQ==\" } }{E : {\n  S: \"S\"\n} }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"TM3kiG0fTGuqm7+uEbjhVw==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:45.823192563 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"9PYq+LIHQu6xR4hg0VZyRA==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:50.751075506 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"Cei6RPi5SRWhKb/qO8kkiw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:08:55.73504677 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:09:00.739860879 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"VYrqhg1qT8udaIvKG8jXQw==\" } }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"kFXZKzQdQE+ejOWSJ+Bu0w==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:05.815796436 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"6t2EKQ6dTcCrpLTVK5ROlQ==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:10.924188309 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"dFirJDNuSxCPgi7U18yppA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:15.159418149 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"TKwtQygmT4O8qqqhZI5H5g==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:18.672426315 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"Nrdb5xT7R+CoEUftj3C0aA==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:22.631268442 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"x8XOJ/z1QoufPLX+Nzpr/Q==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:26.467144374 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{PKey : { B : \"4xea6ZB7QE6r7hZ4Rv6cDw==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:30.41410301 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"SPZKYsblSkSX5qBhKSnqyg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:34.507295996 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"dnOZ0ksDTt6+WAGmnyFRsg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:38.7398026 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"mTyTHkr0Qi+qS6k/C5mqXg==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:42.997683604 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"/DCYmw0SRmKpqFQ9AW/jRw==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:47.413812189 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"nZQNj+jRSmCPkIgL9TrCkQ==\" } }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:51.862382811 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{PKey : { B : \"W7nlfB6YRva+23Sps7V6cA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:09:56.754916319 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"pTIWcYHvQsGfm9LaLiBlpA==\" } }{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:10:01.040408654 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Updated: {
+      S: "2022-05-08 20:10:05.300393105 +1000 AEST"
+    },
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{E : {\n  S: \"S\"\n} }{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"WMjwERNFQfOmuyOyYuFO/w==\" } }"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+create new logr for prefix:  DB: 
+PutITemINput :  {
+  Item: {
+    Id: {
+      B: <binary> len 16
+    },
+    Name: {
+      S: "LastEvaluatedKey"
+    },
+    Value: {
+      S: "4{Ty : {\n  S: \"m|P\"\n} }{SortK : {\n  S: \"m|A#A#:N\"\n} }{PKey : { B : \"jB9uoBwUSkeTv7nWg7Xk9w==\" } }{E : {\n  S: \"S\"\n} }"
+    },
+    Updated: {
+      S: "2022-05-08 20:10:09.653534185 +1000 AEST"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "pgState"
+}
+create new logr for prefix:  ElasticSearch: 
+Merge:  insert into State$ES (Graph,Ty,Sortk,Attr,Status,Loaded) values (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Status = ?, Loaded = ifnull(Loaded,0)+?
+Merge:  insert into State$ (Graph,Name,Value,LastUpdated) values (?,?,?,SYSDATE()) ON DUPLICATE KEY UPDATE Value = ?, LastUpdated = SYSDATE()
+ ==================== ERRORS : 0	==============
+create new logr for prefix:  main:
+create new logr for prefix:  errlog: 
+create new logr for prefix:  grmgr: 
+create new logr for prefix:  ElasticSearch: 

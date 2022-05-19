@@ -1,0 +1,229 @@
+{
+   "GoGraphSS":  [     
+      {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#Graph" }, 
+            	    "SortK" : { "S" : "m" },
+            	    "Name" : { "S": "Movies" }
+                  }} 
+      },
+      {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#m.T" }, 
+            	    "SortK" : { "S" : "Ge" },
+            	    "Name" : { "S": "Genre" }
+                  }} 
+      },
+      {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#m.T" }, 
+            	    "SortK" : { "S" : "Ch" },
+            	    "Name" : { "S": "Character" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#m.T" }, 
+            	    "SortK" : { "S" : "P" },
+            	    "Name" : { "S": "Person" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#m.T" }, 
+            	    "SortK" : { "S" : "Pf" },
+            	    "Name" : { "S": "Performance" }
+                  }} 
+      },
+      {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#m.T" }, 
+            	    "SortK" : { "S" : "Fm" },
+            	    "Name" : { "S": "Film" }
+                  }} 
+      },
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Person" }, 
+            	    "SortK" : { "S" : "name" },
+            	    "Ty" : { "S": "S" },
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Ix": { "S" : "FT" },
+            	    "Pg" : { "BOOL" : true }
+                  } } 
+     } ,
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Person" }, 
+            	    "SortK" : { "S" : "director.film" },
+            	    "Ty" : { "S": "[Film]" },
+            	    "C" : { "S": "D" },
+            	    "P" : { "S" : "A" }
+                  }} 
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Person" }, 
+            	    "SortK" : { "S" : "actor.performance" },
+            	    "Ty" : { "S": "[Performance]" },
+            	    "C" : { "S": "A" },
+            	    "P" : { "S" : "A" }
+                  }} 
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Performance" }, 
+            	    "SortK" : { "S" : "performance.actor" },
+            	    "Ty" : { "S": "Person"}, 
+                    "C" : { "S": "A" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Performance" }, 
+            	    "SortK" : { "S" : "performance.character" },
+            	    "Ty" : { "S": "Character"}, 
+                    "C" : { "S": "C" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+    {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Performance" }, 
+            	    "SortK" : { "S" : "performance.film" },
+            	    "Ty" : { "S": "Film"}, 
+                    "C" : { "S": "F" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Character" }, 
+            	    "SortK" : { "S" : "name" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+          }}
+     },
+          {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Genre" }, 
+            	    "SortK" : { "S" : "name" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+          }}
+     },
+          {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Genre" }, 
+            	    "SortK" : { "S" : "genre.film" },
+            	    "Ty" : { "S": "[Film]"}, 
+                    "C" : { "S": "F" },
+            	    "P" : { "S" : "A" },
+            	  "IncP" : {"SS" :["N"]}
+          }}
+     },
+    {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "title" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Pg" : { "BOOL" : true }
+          }}
+     },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "initial_release_date" },
+            	    "Ty" : { "S": "S"}, 
+                    "C" : { "S": "R" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : true }, 
+            	    "Pg" : { "BOOL" : true }
+         } }
+     },
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "film.director" },
+            	    "Ty" : { "S": "[Person]" },
+            	    "C" : { "S": "D" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+   {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "film.performance" },
+            	    "Ty" : { "S": "[Performance]" },
+            	    "C" : { "S": "P" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+    {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "film.genre" },
+            	    "Ty" : { "S": "[Genre]" },
+            	    "C" : { "S": "G" },
+            	    "P" : { "S" : "A" }
+          }}
+     },
+         {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "film.netflix" },
+            	    "Ty" : { "S": "I" },
+            	    "C" : { "S": "Nf" },
+            	    "P" : { "S" : "A" },
+            	     "N" : { "BOOL" : true } 
+          }}
+     },
+         {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "m.Film" }, 
+            	    "SortK" : { "S" : "film.revenue" },
+            	    "Ty" : { "S": "F" },
+            	    "C" : { "S": "Rv" },
+            	    "P" : { "S" : "A" },
+            	     "N" : { "BOOL" : true }
+          }}
+     }
+     ]
+}
+            	    
+        
+     

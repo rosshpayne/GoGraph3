@@ -1,0 +1,173 @@
+{
+   "DyGraph":  [
+     {
+              "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "bHeALyzDR+qW1cdNWF1sPg==" }, 
+            	    "SortK" : { "S" : "A#T" },
+            	    "S"     : { "S" : "Person" }
+                  } 
+     } },
+     {
+                   "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "5lFOnTStSYWqmi8S6FDFDQ==" }, 
+            	    "SortK" : { "S" : "A#T" },
+            	    "S"     : { "S" : "Person" }
+                  } 
+     } },
+     {
+                   "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "k09bI9lSTXuZi2MSkyMm2A==" }, 
+            	    "SortK" : { "S" : "A#T" },
+            	    "S"     : { "S" : "Person" }
+                  } 
+     } },
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"B": "5lFOnTStSYWqmi8S6FDFDQ==" }, 
+            	    "SortK" : { "S" : "A#:N" },
+	                "S"    : { "S" : "Ian Payne"  },
+	                "P"  : { "S" : "Name" }
+                  } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "GFV#:S#:N#:C" },
+                    "LBl"    : { "L":  [ { "BOOL": false } ,  { "BOOL" : false } ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "GFV#:S#:A#:H" },
+                    "LN"    : { "L":  [ { "N": "8.5"} ,  { "N" : "9.0" } ] }
+                    }
+     } },
+         {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "GFV#:S#:A#:D" },
+                    "LBl"    : { "L":  [ { "BOOL": true} ,  { "BOOL" : true} ] }
+                    }
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+	                "SortK" : { "S" : "A#:A" },
+	                "N"    : { "N" : "67" },
+	                "P"  : { "S" : "Age" }
+                  } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#:D" },
+                    "S"    : { "S" : "29-Jan-1953" },
+                    "P"  : { "S" : "DOB" }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#:L" },
+                    "LN"    : { "L" : [ { "N" : "100000"}, { "N" : "150000"},{ "N" : "175000"}]},
+                    "P"  : { "S" : "SalaryLast3Year" }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                    "PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#:C" },
+                    "SS"    : { "SS" : ["Fiat","VW Passat","Commodore","Honda"]}
+          } 
+     } },
+     {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#:J" },
+                    "LS"    : { "L" : [ { "S": "job1ase32"}, { "S": "job2as23b" }, {"S": "job3as3rc" }, {"S" : "Jobasdf4d23"}] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#G#:S" },
+                    "Nd"    : { "L" : [ { "B": "bHeALyzDR+qW1cdNWF1sPg=="} ] },
+                 "XF"    : { "L" : [ { "N": "1"}] },
+                 "Id"  : { "L" : [ { "N": "0"}] }
+          } 
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#G#:S#:N" },
+                    "LS"    : { "L":  [ { "S": "Ross Payne"} ] },
+                    "XBl"     : { "L" : [ {"BOOL" : false} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#G#:S#:A" },
+                    "LN"    : { "L":  [ { "N" : "62" }  ] },
+                    "XBl"    : { "L":  [ { "BOOL" : false } ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#G#:S#:D" },
+                    "LS"    : { "L":  [ { "S": "13-Mar-1958"}  ] },
+                    "XBl"   : { "L" : [ {"BOOL" : false} ] }
+                    }
+     } },
+    {
+     "PutRequest" : {  
+          "Item" : {
+                	"PKey"  : { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                    "SortK" : { "S" : "A#FU#:S#:C" },
+                    "LBl"    : { "L" : [ { "BOOL": true }, { "NULL": true } ] }
+          } 
+     } },
+     {
+    "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "5lFOnTStSYWqmi8S6FDFDQ==" }, 
+            	    "SortK" : { "S" : "A#FV#:N#:C" },
+	                "Bl"     : { "BOOL" : false  }
+                  } 
+     } },
+              {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "5lFOnTStSYWqmi8S6FDFDQ==" }, 
+            	    "SortK" : { "S" : "A#FV#:A#:H" },
+	                "N"     : { "N" : "9.5"  }
+                  } 
+     } },
+     {
+     "PutRequest" : {
+          "Item" : {
+                	"PKey"  : { "B" : "5lFOnTStSYWqmi8S6FDFDQ==" }, 
+            	    "SortK" : { "S" : "A#FV#:A#:D" },
+	                "Bl"     : { "BOOL" : true  }
+                  } 
+     } }
+    ]
+    }

@@ -1,0 +1,38 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "run", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "sortk", 
+            "AttributeType": "S"
+        }
+    ], 
+    "TableName": "runStats", 
+    "KeySchema": [
+        {
+            "AttributeName": "run", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "sortk", 
+            "KeyType": "RANGE"
+        }   
+    ],
+    "BillingMode":  "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+        { "IndexName": "skidx", 
+            "KeySchema": [
+                {
+                    "AttributeName": "sortk", 
+                    "KeyType": "HASH"
+                }
+            ],
+             "Projection": {
+                "ProjectionType": "KEYS_ONLY"
+            }
+        }
+    ]
+}

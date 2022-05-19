@@ -1,0 +1,39 @@
+{
+   "DyGss":  [
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "A#Name#4" }, 
+            	    "SortK" : { "S" : "Ross" },
+            	    "A": {"S": {"Ross Payne"},
+            	    "ID":  { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                  } 
+     } },
+           {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "A#Name#5" }, 
+            	    "SortK" : { "S" : "Payne" },
+            	     "A": {"S":"Ross Payne"},
+            	                 	    "ID":  { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                  } 
+     } },
+                {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "A#Person#:N" }, 
+            	    "SortK" : { "S" : "Payne" },
+            	     "A": {"S":"Ross Payne"},
+            	                 	    "ID":  { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                  } 
+     } },
+                {    
+          "PutRequest" : {
+          "Item" : {
+            	"PKey"  : {"S": "A#Person#:N" }, 
+            	 "SortK" : ,
+            	             	    "ID":  { "B": "5lFOnTStSYWqmi8S6FDFDQ==" },
+                  } 
+     } }
+     ]
+    }

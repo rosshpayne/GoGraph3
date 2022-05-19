@@ -1,0 +1,16 @@
+TX: k edgeChild#tbl#EdgeChild_Relationship 
+p50: 23.355903
+p80: 27.102207
+ mean: 23.890529777777775, stddev: 12.521908724216287 
+ min:  8024211 max: 45249584 cnt: 9 
+panic: value 157676662 is too large to be recorded
+
+goroutine 1 [running]:
+github.com/GoGraph/db/stats.AggregateDurationStats()
+        /home/ec2-user/environment/dev/GoGraph/db/stats/stat-dyn.go:532 +0x8b0
+github.com/GoGraph/db/admin.saveStats()
+        /home/ec2-user/environment/dev/GoGraph/db/admin/admin.go:126 +0xf5
+github.com/GoGraph/db/admin.Finish()
+        /home/ec2-user/environment/dev/GoGraph/db/admin/admin.go:71 +0x38
+main.main()
+        /home/ec2-user/environment/dev/GoGraph/rdf/loader.go:271 +0x10a5

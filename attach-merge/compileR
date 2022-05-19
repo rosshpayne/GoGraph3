@@ -1,0 +1,2 @@
+go build -race  -tags "dynamodb filelog"
+mv attach-merge attach-merge-race

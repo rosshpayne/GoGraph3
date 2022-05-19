@@ -1,0 +1,45 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "Bid", 
+            "AttributeType": "N"
+        },
+         {
+            "AttributeName": "Puid", 
+            "AttributeType": "B"
+        },
+         {
+            "AttributeName": "Cnt", 
+            "AttributeType": "N"
+        }
+    ], 
+    "KeySchema": [
+        {
+            "AttributeName": "Bid", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "Puid", 
+            "KeyType": "RANGE"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST",
+    "LocalSecondaryIndexes": [
+        { "IndexName": "bid_cnt", 
+            "KeySchema": [
+                {
+                    "AttributeName": "Bid", 
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "Cnt", 
+                    "KeyType": "RANGE"
+                }
+             ],
+             "Projection": {
+                "ProjectionType": "KEYS_ONLY"
+            }
+        }
+    ]
+}

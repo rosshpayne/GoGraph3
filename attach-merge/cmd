@@ -1,0 +1,2 @@
+echo ' ./attach-merge -c 2 -tbl "GoGraph.prd.3"  -env prd -g Relationship -debug all'
+history |grep "./attach-merge" |grep tbl | tail -5

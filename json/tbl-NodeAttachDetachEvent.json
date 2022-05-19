@@ -1,0 +1,17 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "eid", 
+            "AttributeType": "B"
+        }
+    ], 
+    "TableName": "NodeAttachDetachEvent", 
+    "KeySchema": [
+        {
+            "AttributeName": "eid", 
+            "KeyType": "HASH"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST"
+}

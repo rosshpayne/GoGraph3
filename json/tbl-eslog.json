@@ -1,0 +1,17 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "PKey", 
+            "AttributeType": "B"
+        }
+    ], 
+    "TableName": "esLog", 
+    "KeySchema": [
+        {
+            "AttributeName": "PKey", 
+            "KeyType": "HASH"
+        }
+    ],
+    "BillingMode":  "PAY_PER_REQUEST"
+}

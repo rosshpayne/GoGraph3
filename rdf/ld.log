@@ -1,0 +1,91 @@
+Successfully pinged database..
+Argument: table: GoGraph.prd.3
+Argument: env: dev
+Argument: stats: 0
+Argument: env: dev
+Argument: inputfile: ../data/generated-fullsize.rdf
+Argument: concurrent: 7
+Argument: showsql: 0
+Argument: debug: 
+Argument: graph: Movies
+Argument: reduced logging: 1
+PutITemINput :  {
+  Item: {
+    status: {
+      S: "R"
+    },
+    logfile: {
+      S: ""
+    },
+    run: {
+      B: <binary> len 16
+    },
+    sortk: {
+      S: "AA"
+    },
+    start: {
+      S: "2022-05-12 14:26:41.529388823 +1000 AEST"
+    },
+    program: {
+      S: "rdfLoader"
+    }
+  },
+  ReturnConsumedCapacity: "INDEXES",
+  TableName: "runStats"
+}
+
+ no error 
+short Names:  [{Ch Character} {Fm Film} {Ge Genre} {P Person} {Pf Performance}]
+ShortNames:  Performance Pf
+ShortNames:  Character Ch
+ShortNames:  Film Fm
+ShortNames:  Genre Ge
+ShortNames:  Person P
+create new logr for prefix:  main:
+ ==================== ERRORS : 0	==============
+
+
+monitor: []interface {}{interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil)}
+============= Operation Stats ================
+capByTX     SaveNode:  
+ Consumed Capacity: 
+Table: [GoGraph.prd.3]
+CapacityUnits: Min: 3, Max: 8  Cnt: 316666  Sum: 1.435393e+06  Avg: 4.532829542799037
+
+ReadCapacityUnits: 
+WriteCapacityUnits: 
+Table:
+       GoGraph.prd.3
+           Capacity: Min: 2, Max: 4  Cnt: 316666  Sum: 837096  Avg: 2.643466617824459
+ 
+GSI: TyES
+           Capacity: Min: 1, Max: 1  Cnt: 77867  Sum: 77867  Avg: 1
+ 
+GSI: P_S
+           Capacity: Min: 1, Max: 2  Cnt: 197408  Sum: 203764  Avg: 1.0321972767061112
+ 
+GSI: TyIX
+           Capacity: Min: 1, Max: 1  Cnt: 316666  Sum: 316666  Avg: 1
+ 
+ 
+Table:  [GoGraph.prd.3]
+Items:  map[]
+Scanned:  map[]
+============= Table Stats ================
+CapByTable      GoGraph.prd.3:  
+       Capacity: Min: 2, Max: 4  Cnt: 316666  Sum: 837096  Avg: 2.643466617824459
+
+=============  GSI Stats ================
+CapByGSI      TyES:  
+       Capacity: Min: 1, Max: 1  Cnt: 77867  Sum: 77867  Avg: 1
+
+=============  GSI Stats ================
+CapByGSI      P_S:  
+       Capacity: Min: 1, Max: 2  Cnt: 197408  Sum: 203764  Avg: 1.0321972767061112
+
+=============  GSI Stats ================
+CapByGSI      TyIX:  
+       Capacity: Min: 1, Max: 1  Cnt: 316666  Sum: 316666  Avg: 1
+
+Exit.....Duration: 25m9.491810998s
+syslog STOP

@@ -1,0 +1,25 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "run", 
+            "AttributeType": "B"
+        },
+        {
+            "AttributeName": "gr", 
+            "AttributeType": "S"
+        }
+    ], 
+    "TableName": "mon_gr", 
+    "KeySchema": [
+        {
+            "AttributeName": "run", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "gr", 
+            "KeyType": "RANGE"
+        }   
+    ],
+    "BillingMode":  "PAY_PER_REQUEST"
+}

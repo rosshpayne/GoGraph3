@@ -1,0 +1,143 @@
+{
+   "GoGraphSS":  [
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "#Graph" }, 
+            	    "SortK" : { "S" : "r" },
+            	    "Name" : { "S": "Relationship" }
+                  }} 
+      },
+            {    
+          "PutRequest" : {
+          "Item" : {
+               	"PKey"  : {"S": "#r.T" }, 
+            	    "SortK" : { "S" : "Pn" },
+            	    "Name" : { "S": "Person" }
+                  }} 
+      },
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Name" },
+            	    "Ty" : { "S": "S" },
+            	    "F" : { "SS" : ["Changed#Bl#C"] },
+                    "C" : { "S": "N" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false }, 
+            	    "Ix": { "S" : "FTg" },
+            	    "Pg" : { "BOOL" : true }
+                  } 
+     } },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Age" },
+            	    "Ty" : { "S": "I" },
+            	    "F" : { "SS" : ["HealthStatus#F#H","HasDoctor#Bl#D"]},
+            	    "C" : { "S": "A" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false },
+            	    "Pg" : { "BOOL" : true }
+                  } 
+     } },
+          {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Comment" },
+            	    "Ty" : { "S": "S" },
+            	    "C" : { "S": "Ct" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : true },
+            	    "Pg" : { "BOOL" : false },
+            	    "Ix" : { "S" : "FT" }
+                  } 
+     } },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Cars" },
+            	    "Ty" : { "S": "SS" },
+            	    "C" : { "S": "C" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : true },
+            	    "Ix": { "S" : "x" }  
+                  } 
+     } },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Jobs" },
+            	    "Ty" : { "S": "LS" },
+            	    "C" : { "S": "J" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : true }
+                  } 
+     } },
+          {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "SalaryLast3Year" },
+            	    "Ty" : { "S": "SI" },
+            	    "C" : { "S": "SLY" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : true },
+            	    "Ix": { "S" : "x" }   
+                  } 
+     } },
+      {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "DOB" },
+            	    "Ty" : { "S": "S" },
+            	    "C" : { "S": "D" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : false },
+            	    "Pg" : { "BOOL" : true }
+                  } 
+     } },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Siblings" },
+            	    "Ty" : { "S": "[Person]" },
+            	    "C" : { "S": "S" },
+            	    "P" : { "S" : "A" },
+            	     "N" : {"BOOL":true},
+            	    "IncP" : {"SS" :["A","N"]}
+                  } 
+     } },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Friends" },
+            	    "Ty" : { "S": "[Person]" },
+            	    "N" : {"BOOL":true},
+            	    "C" : { "S": "F" },
+            	    "P" : { "S" : "A" },
+            	    "IncP" : { "SS" :["A","N","Ct"]}
+                  } 
+     } },
+     {    
+          "PutRequest" : {
+          "Item" : {
+                	"PKey"  : {"S": "r.Person" }, 
+            	    "SortK" : { "S" : "Address" },
+            	    "Ty" : { "S": "S" },
+            	    "C" : { "S": "E" },
+            	    "P" : { "S" : "A" },
+            	    "N" : { "BOOL" : true },
+            	    "Pg" : { "BOOL" : true }
+                  } 
+     } }
+     ]
+    }

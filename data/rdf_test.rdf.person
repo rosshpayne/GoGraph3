@@ -1,0 +1,238 @@
+_:abc __type "Person" . /* specify type for blank node */
+_:abc Name "Ross Payne" .
+_:abc DOB "13 March 1958" .
+_:abc Age "62" .
+_:abc Siblings _:b  .
+_:abc Friends _:d .
+_:abc Friends _:c .
+_:abc Friends _:f .
+_:abc Friends _:f1 .
+_:abc Friends _:f2 .
+_:abc Friends _:f3 .
+_:abc Friends _:f4 .
+_:abc Friends _:f5 .
+_:abc Friends _:f6 .
+_:abc Friends _:f7 .
+_:abc Friends _:f8 .
+_:abc Friends _:f9 .
+_:abc Friends _:f10 .
+_:abc Friends _:f11 .
+_:abc Friends _:f12 .
+_:abc Friends _:f13 .
+_:abc Friends _:f14 .
+_:abc Friends _:f15 .
+_:abc Friends _:f16 .
+_:abc Friends _:f17 .
+_:abc Friends _:f18 .
+_:abc Friends _:f19 .
+_:abc Friends _:f20 .
+_:abc Friends _:f21 .
+_:abc Friends _:f22 .
+_:abc Friends _:f23 .
+_:abc Friends _:f24 .
+_:abc Friends _:f25 .
+_:abc Friends _:f26 .
+_:abc Friends _:f27 .
+_:abc Friends _:f28 .
+_:abc Friends _:f29 .
+_:abc Friends _:f30 .
+_:abc Friends _:f31 .
+_:abc Friends _:f32 .
+_:abc Friends _:f33 .
+_:abc Friends _:f34 .
+_:abc Friends _:f35 .
+_:abc Friends _:f36 .
+_:abc Friends _:f37 .
+_:abc Friends _:f38 .
+_:abc Friends _:f39 .
+_:abc Siblings _:c  .
+_:abc Cars "Fiat"  .
+_:abc Cars "Honda"  .
+_:abc Cars "Alfa"   .  
+_:abc Address "67/55 Burkitt St Page, ACT, Australia"
+_:abc Comment "Another fun  video. Loved it my Payne Grandmother was from Passau. Dad was over in Germany but there was something going on over there at the time we won't discuss right now. Thanks for posting it. Have a great weekend everyone." .
+_:abc SalaryLast3Year "112000" .
+_:abc SalaryLast3Year "152000" .
+_:abc SalaryLast3Year "218000" .
+
+_:b __type "Person" . /* specify type for blank node */
+_:b Name "Paul Payne" .
+_:b DOB "2 June 1960"  .
+_:b Age "58"  .
+_:b Siblings _:abc  .
+_:b Siblings _:c  .
+_:b Cars "Holden Commodore"  .  // specify type for blank node 
+_:b Cars "Honda"  .
+_:b Cars "VW Golf"   . 
+_:b Friends _:abc .
+_:b Friends _:c .
+_:b Comment "A foggy snowy morning lit with Smith sodium lamps is an absolute dream" .
+_:b SalaryLast3Year "100000" .
+_:b SalaryLast3Year "122000" .
+_:b SalaryLast3Year "145000" .
+
+_:c __type "Person" . /* specify type for blank node */
+_:c Name "Ian Payne"  .
+_:c DOB "29 Jan 1953"  .
+_:c Age "67"	.
+_:c Siblings _:abc	.
+_:c Siblings _:b	.
+_:c Friends _:abc .
+_:c Friends _:b .
+_:c Friends _:d .
+_:c Cars "VW Passat"  .
+_:c Cars "Mitsubishi"  .
+_:c Cars "Ford Laser"   .  
+_:c Cars "Honda"   . 
+_:c Comment "One of the best cab rides I have Payne seen to date! Anyone know how fast the train was going around 20 mins in?" .
+_:c SalaryLast3Year "45000" .
+_:c SalaryLast3Year "90000" .
+_:c SalaryLast3Year "1000" .
+
+
+_:d __type "Person" . /* specify type for blank Payne node */
+_:d Name "Phil Smith"  .
+_:d Siblings _:e	.
+_:d Friends _:abc .
+_:d Friends _:b .
+_:d Friends _:c .
+_:d DOB "17 June 1976"  .
+_:d Age "36"	.
+_:d Cars "Roll Roycet"  .
+_:d Cars "Bentley"   . 
+_:d Cars "Honda"   . 
+_:d Cars "VW Golf"  .
+_:d Comment "It seems to me the camera's Smith focus is better, clearer, thank you for sharing, I think Austria is a beautiful country I'm not surprised that it produced so many great classical musicians." .
+
+_:e __type "Person" . /* specify type for blank node */
+_:e Name "Jenny Jones"  .
+_:e Friends _:abc .
+_:e Friends _:b .
+_:e DOB "17 February 1963"  .
+_:e Age "59"	.
+_:e Cars "Renault 302"  .
+_:e Cars "Zonda"  .
+_:e Comment "A great video Payne which I have enjoyed watching. It is always very interesting to see such beautiful scenery which I am unable to visit personally. Thank you." .
+
+_:f __type "Person" . /* specify type for blank node */
+_:f Name "Phillip Morris"  .
+_:f Age "20"
+
+_:f1 __type "Person" . /* specify type for blank node */
+_:f1 Name "Phillip1 Morris1"  .
+_:f1 Age "21"
+
+_:f2 __type "Person" . /* specify type for blank node */
+_:f2 Name "Phillip2 Morris2"  .
+_:f2 Age "22"
+_:f3 __type "Person" . /* specify type for blank node */
+_:f3 Name "Phillip3 Morris3"  .
+_:f3 Age "23"
+_:f4 __type "Person" . /* specify type for blank node */
+_:f4 Name "Phillip4 Morris4"  .
+_:f4 Age "24"
+_:f5 __type "Person" . /* specify type for blank node */
+_:f5 Name "Phillip5 Morris5"  .
+_:f5 Age "25"
+_:f6 __type "Person" . /* specify type for blank node */
+_:f6 Name "Phillip6 Morris6"  .
+_:f6 Age "26"
+_:f7 __type "Person" . /* specify type for blank node */
+_:f7 Name "Phillip7 Morris7"  .
+_:f7 Age "27"
+_:f8 __type "Person" . /* specify type for blank node */
+_:f8 Name "Phillip8 Morris8"  .
+_:f8 Age "28"
+_:f9 __type "Person" . /* specify type for blank node */
+_:f9 Name "Phillip9 Morris9"  .
+_:f9 Age "29"
+_:f10 __type "Person" . /* specify type for blank node */
+_:f10 Name "Phillip10 Morris10"  .
+_:f10 Age "30"
+_:f11 __type "Person" . /* specify type for blank node */
+_:f11 Name "Phillip11 Morris11"  .
+_:f11 Age "31"
+_:f12 __type "Person" . /* specify type for blank node */
+_:f12 Name "Phillip12 Morris12"  .
+_:f12 Age "32"
+_:f13 __type "Person" . /* specify type for blank node */
+_:f13 Name "Phillip13 Morris13"  .
+_:f13 Age "33"
+_:f14 __type "Person" . /* specify type for blank node */
+_:f14 Name "Phillip14 Morris14"  .
+_:f14 Age "34"
+_:f15 __type "Person" . /* specify type for blank node */
+_:f15 Name "Phillip15 Morris15"  .
+_:f15 Age "35"
+_:f16 __type "Person" . /* specify type for blank node */
+_:f16 Name "Phillip16 Morris16"  .
+_:f16 Age "36"
+_:f17 __type "Person" . /* specify type for blank node */
+_:f17 Name "Phillip17 Morris17"  .
+_:f17 Age "37"
+_:f18 __type "Person" . /* specify type for blank node */
+_:f18 Name "Phillip18 Morris18"  .
+_:f18 Age "38"
+_:f19 __type "Person" . /* specify type for blank node */
+_:f19 Name "Phillip19 Morris19"  .
+_:f19 Age "39"
+_:f20 __type "Person" . /* specify type for blank node */
+_:f20 Name "Phillip20 Morris20"  .
+_:f20 Age "40"
+_:f21 __type "Person" . /* specify type for blank node */
+_:f21 Name "Phillip21 Morris21"  .
+_:f21 Age "41"
+_:f22 __type "Person" . /* specify type for blank node */
+_:f22 Name "Phillip22 Morris22"  .
+_:f22 Age "42"
+_:f23 __type "Person" . /* specify type for blank node */
+_:f23 Name "Phillip23 Morris23"  .
+_:f23 Age "43"
+_:f24 __type "Person" . /* specify type for blank node */
+_:f24 Name "Phillip24 Morris24"  .
+_:f24 Age "44"
+_:f25 __type "Person" . /* specify type for blank node */
+_:f25 Name "Phillip25 Morris25"  .
+_:f25 Age "45"
+_:f26 __type "Person" . /* specify type for blank node */
+_:f26 Name "Phillip26 Morris26"  .
+_:f26 Age "46"
+_:f27 __type "Person" . /* specify type for blank node */
+_:f27 Name "Phillip27 Morris27"  .
+_:f27 Age "47"
+_:f28 __type "Person" . /* specify type for blank node */
+_:f28 Name "Phillip28 Morris28"  .
+_:f28 Age "48"
+_:f29 __type "Person" . /* specify type for blank node */
+_:f29 Name "Phillip29 Morris29"  .
+_:f29 Age "49"
+_:f30 __type "Person" . /* specify type for blank node */
+_:f30 Name "Phillip30 Morris30"  .
+_:f30 Age "50"
+_:f31 __type "Person" . /* specify type for blank node */
+_:f31 Name "Phillip31 Morris31"  .
+_:f31 Age "51"
+_:f32 __type "Person" . /* specify type for blank node */
+_:f32 Name "Phillip32 Morris32"  .
+_:f32 Age "52"
+_:f33 __type "Person" . /* specify type for blank node */
+_:f33 Name "Phillip33 Morris33"  .
+_:f33 Age "53"
+_:f34 __type "Person" . /* specify type for blank node */
+_:f34 Name "Phillip34 Morris34"  .
+_:f34 Age "54"
+_:f35 __type "Person" . /* specify type for blank node */
+_:f35 Name "Phillip35 Morris35"  .
+_:f35 Age "55"
+_:f36 __type "Person" . /* specify type for blank node */
+_:f36 Name "Phillip36 Morris36"  .
+_:f36 Age "56"
+_:f37 __type "Person" . /* specify type for blank node */
+_:f37 Name "Phillip37 Morris37"  .
+_:f37 Age "57"
+_:f38 __type "Person" . /* specify type for blank node */
+_:f38 Name "Phillip38 Morris38"  .
+_:f38 Age "58"
+_:f39 __type "Person" . /* specify type for blank node */
+_:f39 Name "Phillip39 Morris39"  .
+_:f39 Age "59"

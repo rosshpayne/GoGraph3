@@ -1,0 +1,10 @@
+Binary: rdf
+
+Purpose: load a correctly formated rdf file into the Graph table. 
+
+Format:
+
+<blank-node-id> <predicate> <scalar-value>
+<      "      > <uid-predicate> <child-blank-node-id>
+
+where identical blank-node_id's are grouped together.

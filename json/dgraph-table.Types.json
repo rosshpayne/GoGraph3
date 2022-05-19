@@ -1,0 +1,49 @@
+  
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "PKey", 
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "SortK", 
+            "AttributeType": "S"
+        }
+    ], 
+    "TableName": "GoGraphSS", 
+    "KeySchema": [
+        {
+            "AttributeName": "PKey", 
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "SortK", 
+            "KeyType": "RANGE"
+        }
+    ],
+    "ProvisionedThroughput": {
+                "ReadCapacityUnits": 2, 
+                "WriteCapacityUnits": 3
+    },
+    "GlobalSecondaryIndexes": [
+        { "IndexName": "SK-PK-index", 
+            "KeySchema": [
+                {
+                    "AttributeName": "SortK", 
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "PKey", 
+                    "KeyType": "RANGE"
+                }
+            ], 
+             "Projection": {
+                "ProjectionType": "ALL"
+            }, 
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 2, 
+                "WriteCapacityUnits": 2
+            }
+        }
+    ]
+}

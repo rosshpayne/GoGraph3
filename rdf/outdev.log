@@ -1,0 +1,116 @@
+Argument: stats: 0
+Argument: env: dev
+Argument: inputfile: ../data/movie-50.rdfArgument: concurrent: 6
+Argument: showsql: 0
+Argument: debug: all
+Argument: graph: Movies
+Argument: reduced logging: 1
+short Names:  [{Ch Character} {Fm Film} {Ge Genre} {P Person} {Pf Performance}]
+ShortNames:  Performance Pf
+ShortNames:  Character Ch
+ShortNames:  Film Fm
+ShortNames:  Genre Ge
+ShortNames:  Person P
+
+ no error 
+ ==================== ERRORS : 0	==============
+
+
+monitor: []interface {}{interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil), interface {}(nil)}
+============= Operation Stats ================
+capByTX     edgeChild:  
+ Consumed Capacity: 
+Table: [EdgeChild_Movies]
+CapacityUnits: Min: 2, Max: 50  Cnt: 2831  Sum: 7148  Avg: 2.524902861179795
+
+ReadCapacityUnits: 
+WriteCapacityUnits: 
+Table:
+       EdgeChild_Movies
+           Capacity: Min: 1, Max: 25  Cnt: 2831  Sum: 3574  Avg: 1.2624514305898975
+ 
+LSI:  status_idx
+            Capacity: Min: 1, Max: 25  Cnt: 2831  Sum: 3574  Avg: 1.2624514305898975
+
+ 
+Table:  [EdgeChild_Movies]
+Items:  map[]
+Scanned:  map[]
+============= Operation Stats ================
+capByTX     edge:  
+ Consumed Capacity: 
+Table: [Edge_Movies]
+CapacityUnits: Min: 42, Max: 50  Cnt: 56  Sum: 2792  Avg: 49.857142857142854
+
+ReadCapacityUnits: 
+WriteCapacityUnits: 
+Table:
+       Edge_Movies
+           Capacity: Min: 21, Max: 25  Cnt: 56  Sum: 1396  Avg: 24.928571428571427
+ 
+LSI:  bid_cnt
+            Capacity: Min: 21, Max: 25  Cnt: 56  Sum: 1396  Avg: 24.928571428571427
+
+ 
+Table:  [Edge_Movies]
+Items:  map[]
+Scanned:  map[]
+============= Operation Stats ================
+capByTX     SaveNode:  
+ Consumed Capacity: 
+Table: [GoGraphDev2]
+CapacityUnits: Min: 5, Max: 13  Cnt: 73164  Sum: 583959  Avg: 7.9815072986714775
+
+ReadCapacityUnits: 
+WriteCapacityUnits: 
+Table:
+       GoGraphDev2
+           Capacity: Min: 3, Max: 7  Cnt: 73164  Sum: 364317  Avg: 4.979457110054125
+ 
+GSI: TyIX
+           Capacity: Min: 1, Max: 1  Cnt: 73164  Sum: 73164  Avg: 1
+ 
+GSI: P_N
+           Capacity: Min: 1, Max: 3  Cnt: 72504  Sum: 145435  Avg: 2.0058893302438485
+ 
+GSI: P_S
+           Capacity: Min: 1, Max: 2  Cnt: 993  Sum: 1043  Avg: 1.0503524672708964
+ 
+ 
+Table:  [GoGraphDev2]
+Items:  map[]
+Scanned:  map[]
+============= Table Stats ================
+CapByTable      GoGraphDev2:  
+       Capacity: Min: 3, Max: 7  Cnt: 73164  Sum: 364317  Avg: 4.979457110054125
+
+============= Table Stats ================
+CapByTable      EdgeChild_Movies:  
+       Capacity: Min: 1, Max: 25  Cnt: 2831  Sum: 3574  Avg: 1.2624514305898975
+
+============= Table Stats ================
+CapByTable      Edge_Movies:  
+       Capacity: Min: 21, Max: 25  Cnt: 56  Sum: 1396  Avg: 24.928571428571427
+
+=============  GSI Stats ================
+CapByGSI      TyIX:  
+       Capacity: Min: 1, Max: 1  Cnt: 73164  Sum: 73164  Avg: 1
+
+=============  GSI Stats ================
+CapByGSI      P_N:  
+       Capacity: Min: 1, Max: 3  Cnt: 72504  Sum: 145435  Avg: 2.0058893302438485
+
+=============  GSI Stats ================
+CapByGSI      P_S:  
+       Capacity: Min: 1, Max: 2  Cnt: 993  Sum: 1043  Avg: 1.0503524672708964
+
+============= LSI Stats ================
+CapByLSI      status_idx:  
+       Capacity: Min: 1, Max: 25  Cnt: 2831  Sum: 3574  Avg: 1.2624514305898975
+
+============= LSI Stats ================
+CapByLSI      bid_cnt:  
+       Capacity: Min: 21, Max: 25  Cnt: 56  Sum: 1396  Avg: 24.928571428571427
+
+Exit.....Duration: 1m48.642812289s
+syslog STOP
