@@ -40,6 +40,14 @@ func New(logid string, program string) (uuid.UID, error) {
 	return runid, nil
 }
 
+func New2(logid string) (runid uuid.UID) {
+
+	runid, _ = uuid.MakeUID()
+
+	return
+
+}
+
 func Finish(err error) {
 
 	rtx := tx.NewSingle(param.StatsSystemTag)

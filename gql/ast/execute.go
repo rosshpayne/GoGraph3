@@ -8,6 +8,7 @@ import (
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
 	"github.com/GoGraph/ds"
+	"github.com/GoGraph/grmgr"
 	mon "github.com/GoGraph/monitor"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
@@ -38,32 +39,39 @@ func (r *RootStmt) Execute() {
 	if len(result) == 0 {
 		return
 	}
+
 	var wgRoot sync.WaitGroup
+
 	stat := mon.Stat{Id: mon.Candidate, Value: len(result)}
 	mon.StatCh <- stat
 	stat2 := mon.Stat{Id: mon.TouchNode, Lvl: 0}
 
+	limiterRootSearch := grmgr.New("rootSearch", 2)
+
 	for _, v := range result {
 
+		limiterRootSearch.Ask()
+		<-limiterRootSearch.RespCh()
+
 		mon.StatCh <- stat2
-		//fmt.Printf("v.PKey: %s   v.Ty: %s   SortK: %s\n", v.PKey, v.Ty, v.SortK)
 		wgRoot.Add(1)
 		result := &rootResult{uid: v.PKey, tyS: v.Ty[strings.Index(v.Ty, "|")+1:], sortk: v.SortK, path: "root"}
 
-		//go r.filterRootResult(&wgRoot, result)
-		r.filterRootResult(&wgRoot, result)
+		go r.filterRootResult(&wgRoot, limiterRootSearch, result)
+		//r.filterRootResult(&wgRoot, result)
 
 	}
 	wgRoot.Wait()
+	limiterRootSearch.Unregister()
 
 }
 
-func (r *RootStmt) filterRootResult(wg *sync.WaitGroup, result *rootResult) {
+func (r *RootStmt) filterRootResult(wg *sync.WaitGroup, lmtr *grmgr.Limiter, result *rootResult) {
 	var (
 		err error
 		nc  *cache.NodeCache
 	)
-
+	defer lmtr.EndR()
 	defer wg.Done()
 	//
 	// save: filter-visit-node uid
@@ -239,12 +247,14 @@ func (r *RootStmt) filterRootResult(wg *sync.WaitGroup, result *rootResult) {
 							// 6        index into nds (uid array from parent )
 							//                      2.          3.     4.  5.        6
 							y.execNode(&wgNode, uuid.UID(uid), aty.Ty, 2, y.Name(), idx, result.uid, sortk)
+							//go y.execNode(&wgNode, uuid.UID(uid), aty.Ty, 2, y.Name(), idx, result.uid, sortk)
 						}
 					}
 				}
 			}
 		}
 	}
+
 	wgNode.Wait()
 
 }

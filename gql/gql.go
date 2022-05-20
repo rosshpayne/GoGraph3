@@ -11,7 +11,9 @@ import (
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/gql/ast"
 	"github.com/GoGraph/gql/parser"
+	"github.com/GoGraph/grmgr"
 	stat "github.com/GoGraph/monitor"
+	"github.com/GoGraph/run"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
@@ -105,23 +107,26 @@ func Execute(graph string, query string, tl ...*string) *ast.RootStmt {
 func Startup() {
 
 	var (
-		wpStart sync.WaitGroup
+		wpStart, wpEnd sync.WaitGroup
 	)
 	syslog("Startup...")
-	wpStart.Add(1)
+
+	wpStart.Add(2)
 	// check verify and saveNode have finished. Each goroutine is responsible for closing and waiting for all routines they spawn.
-	ctxEnd.Add(1)
-	// l := lexer.New(input)
-	// p := New(l)
-	//
-	// context - used to shutdown goroutines that are not part fo the pipeline
-	//
+	ctxEnd.Add(2)
+
+	// allocate a run id
+	runid := run.New2(logid)
+
 	ctx, cancel = context.WithCancel(context.Background())
 
 	go stat.PowerOn(ctx, &wpStart, &ctxEnd)
+	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, runid) // concurrent goroutine manager service
 
 	wpStart.Wait()
+
 	syslog(fmt.Sprintf("services started "))
+
 }
 
 func Shutdown() {
