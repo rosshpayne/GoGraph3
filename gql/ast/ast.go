@@ -691,6 +691,7 @@ func (r *RootStmt) getnodesc(uid uuid.UIDstring) (n ds.ClientNV, ok bool) {
 func (r *RootStmt) assignData(key uuid.UIDstring, nvc ds.ClientNV, idx index) ds.NVmap {
 	fmt.Printf("assignData to %s\n", key)
 	// create a NVmap
+
 	nvm := make(ds.NVmap)
 	for _, v := range nvc {
 		nvm[v.Name] = v

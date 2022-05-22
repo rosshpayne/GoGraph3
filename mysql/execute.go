@@ -450,8 +450,12 @@ func genSQLStatement(m *mut.Mutation) sqlStmt {
 	case mut.Delete:
 	// TODO: implement
 
+	case mut.TruncateTbl:
+		return sqlStmt{sql: "truncate " + m.GetTable()}
+	// TODO: implement
+
 	default:
-		panic(fmt.Errorf("db execute error: opr is no assigned"))
+		panic(fmt.Errorf("db execute error: opr is not assigned [%v]", m.GetOpr()))
 		return sqlStmt{}
 	}
 

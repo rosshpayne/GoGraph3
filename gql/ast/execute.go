@@ -31,7 +31,7 @@ type index struct {
 	i, j int
 }
 
-func (r *RootStmt) Execute() {
+func (r *RootStmt) Execute(concurrent *int) {
 	//
 	// execute root func - get back slice of unfiltered results
 	//
@@ -46,7 +46,7 @@ func (r *RootStmt) Execute() {
 	mon.StatCh <- stat
 	stat2 := mon.Stat{Id: mon.TouchNode, Lvl: 0}
 
-	limiterRootSearch := grmgr.New("rootSearch", 2)
+	limiterRootSearch := grmgr.New("rootSearch", *concurrent)
 
 	for _, v := range result {
 

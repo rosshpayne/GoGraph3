@@ -294,6 +294,17 @@ func IsScalarPred(pred string) bool { //TODO: pass in Type so uid-pred is checke
 	return false
 }
 
+func ScalarDT(pred string) string { //TODO: pass in Type so uid-pred is checked against type not whole data dictionary
+	for _, v := range TypeC.TyC {
+		for _, vv := range v {
+			if vv.Name == pred && len(vv.Ty) == 0 {
+				return vv.DT
+			}
+		}
+	}
+	return ""
+}
+
 func IsUidPred(pred string) bool { //TODO: pass in Type so uid-pred is checked against type not whole data dictionary
 
 	for _, v := range TypeC.TyC {

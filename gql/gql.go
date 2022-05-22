@@ -66,10 +66,10 @@ func init() {
 	fmt.Println("====================== STARTUP =====================")
 }
 
-func Execute(graph string, query string, tl ...*string) *ast.RootStmt {
+func Execute(graph string, query string, tbname *string, concurrent *int) *ast.RootStmt {
 
-	if len(tl) > 0 {
-		tbl.Set(*tl[0])
+	if len(*tbname) > 0 {
+		tbl.Set(*tbname)
 		//clear monitor stats
 		stat.ClearCh <- struct{}{}
 	}
@@ -90,7 +90,7 @@ func Execute(graph string, query string, tl ...*string) *ast.RootStmt {
 	param.DebugOn = true
 	//
 	t1 = time.Now()
-	stmt.Execute()
+	stmt.Execute(concurrent)
 	t2 = time.Now()
 
 	fmt.Printf("Duration:  Parse  %s  Execute: %s    \n", t1.Sub(t0), t2.Sub(t1))

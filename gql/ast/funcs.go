@@ -160,19 +160,29 @@ func Has(a FargI, value interface{}) ds.QResult {
 	}
 	//
 	// has(uid-pred) - all uid-preds/edges have a P_N entry (count of edges eminating from uid-predicate). If no edge exist then no entry. So GSI will list only nodes that have the uid-pred
-	// has(Actor.film) - nullable uid-pred (not all Person Type are actors)
-	// has(Director.film) - nullable uid-pred (because not all Person type are directors) - search for
+	// e.g. has(Actor.film) - nullable uid-pred (not all Person Type are actors)
+	// e.g. has(Director.film) - nullable uid-pred (because not all Person type are directors) - search for
 	//
-	// has(<scalar-pred>) - all scalars are indexed in P_N or P_S. If not present (null) in item then there is no index entry. So GSI will list only nodes that have the scalar defined.
-	// has(Address) - not-null scalar (everyone must have an address) - search on GSI (P_S) where P="Address" will find all candidates
-	// has(Age) - nullable scalar (not everyone gives their age) - search on GSI (P_S) where P="Age" will find all candidates
+	// has(<scalar-pred>) - all scalars are indexed in P_N,P_S,P_B. If not present (null) in item then there is no index entry. So GSI will list only nodes that have the scalar defined.
+	// e.g. has(Address) - not-null scalar (everyone must have an address) - search on GSI (P_S) where P="Address" will find all candidates
+	// e.g. has(Age) - nullable scalar (not everyone gives their age) - search on GSI (P_S) where P="Age" will find all candidates
 	//
 	switch x := a.(type) {
 
 	case ScalarPred:
 
-		// check P_S, P_N
-		result, err = GSIhas(x.Name())
+		switch types.ScalarDT(x.Name()) {
+		case "S":
+			result, err = GSIhasS(x.Name())
+		case "I":
+			result, err = GSIhasI(x.Name())
+		case "F":
+			result, err = GSIhasF(x.Name())
+		case "N":
+			result, err = GSIhasN(x.Name())
+		case "B":
+			result, err = GSIhasB(x.Name())
+		}
 		if err != nil {
 			panic(err)
 		}

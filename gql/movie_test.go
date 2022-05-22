@@ -6,9 +6,11 @@ import (
 	"time"
 )
 
-//  go test -run=Movie1d -v -tags="dynamodb filelog" -tbl "GoGraph.prd.3"
+//  go test -run=Movie1d -v -tags="dynamodb filelog" -tbl "GoGraph.prd.3" -c 2
 
+// test arguments
 var graphTable = flag.String("tbl", "GoGraph.dev", "Table containing graph data [default: GoGraph.dev]")
+var concurrent = flag.Int("c", 1, "Concurrent query execution on graph [default: 1]")
 
 func TestMoviex(t *testing.T) {
 
@@ -26,7 +28,7 @@ func TestMoviex(t *testing.T) {
 	expectedTouchLvl = []int{5, 19}
 	expectedTouchNodes = 24
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -50,7 +52,7 @@ func TestMovieCrusade(t *testing.T) {
 	expectedTouchLvl = []int{1, 4}
 	expectedTouchNodes = 5
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -74,7 +76,7 @@ func TestMovieEq(t *testing.T) {
 	expectedTouchLvl = []int{1, 7}
 	expectedTouchNodes = 8
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -98,7 +100,7 @@ func TestMovie1a(t *testing.T) {
 	expectedTouchLvl = []int{1, 30}
 	expectedTouchNodes = 31
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -121,7 +123,7 @@ func TestMovie1b(t *testing.T) {
 	expectedTouchLvl = []int{1, 3}
 	expectedTouchNodes = 4
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -145,7 +147,7 @@ func TestMovie1c(t *testing.T) {
 	expectedTouchLvl = []int{6, 78}
 	expectedTouchNodes = 84
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -169,7 +171,7 @@ func TestMovie1d(t *testing.T) {
 	expectedTouchLvl = []int{6, 6}
 	expectedTouchNodes = 12
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
 
@@ -196,7 +198,7 @@ func TestMovie1e(t *testing.T) {
 	expectedTouchLvl = []int{6, 84}
 	expectedTouchNodes = 90
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -224,7 +226,7 @@ func TestMovie1g(t *testing.T) {
 	expectedTouchLvl = []int{6, 20}
 	expectedTouchNodes = 26
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -256,7 +258,7 @@ func TestMoviePS0(t *testing.T) {
 	expectedTouchLvl = []int{1, 15, 45}
 	expectedTouchNodes = 61
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -286,7 +288,7 @@ func TestMoviePS2(t *testing.T) {
 	expectedTouchLvl = []int{1, 15, 15, 19}
 	expectedTouchNodes = 50
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -323,7 +325,7 @@ func TestMoviePS3a(t *testing.T) {
 
 	expectedTouchLvl = []int{1, 15, 15, 391, 744}
 	expectedTouchNodes = 1166
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t0 := time.Now()
 	result := stmt.MarshalJSON()
 	t1 := time.Now()
@@ -355,7 +357,7 @@ func TestMoviePS3b(t *testing.T) {
 	expectedTouchLvl = []int{1, 15, 15, 4}
 	expectedTouchNodes = 35
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -391,7 +393,7 @@ func TestMoviePS3c(t *testing.T) {
 	expectedTouchLvl = []int{1, 15, 45, 19}
 	expectedTouchNodes = 80
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -418,7 +420,7 @@ func TestMoviePS3d(t *testing.T) {
 	expectedTouchLvl = []int{1, 15, 15}
 	expectedTouchNodes = 31
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -451,7 +453,7 @@ func TestMoviePS3e(t *testing.T) {
 	expectedTouchLvl = []int{1, 15, 45}
 	expectedTouchNodes = 61
 
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t.Log(stmt.String())
 	result := stmt.MarshalJSON()
 	t.Log(stmt.String())
@@ -481,7 +483,7 @@ func TestMoviePS3e(t *testing.T) {
 // 	expectedTouchLvl = []int{1, 15, 15, 4}
 // 	expectedTouchNodes = 35
 
-// 	stmt := Execute("Movies", input, graphTable)
+// 	stmt := Execute("Movies", input, graphTable, concurrent)
 // 	t.Log(stmt.String())
 // 	result := stmt.MarshalJSON()
 // 	t.Log(stmt.String())
@@ -510,7 +512,7 @@ func TestMovieFilms(t *testing.T) {
 
 	expectedTouchLvl = []int{1, 8, 16}
 	expectedTouchNodes = 25
-	stmt := Execute("Movies", input, graphTable)
+	stmt := Execute("Movies", input, graphTable, concurrent)
 	t0 := time.Now()
 	result := stmt.MarshalJSON()
 	t1 := time.Now()

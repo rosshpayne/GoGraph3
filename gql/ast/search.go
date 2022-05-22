@@ -20,6 +20,24 @@ type AttrName = string
 
 var ctx context.Context = context.Background() //TODO: replace with actual ctx
 
+func RootCnt(attr string, cnt int, opr query.Equality) (ds.QResult, error) {
+
+	var (
+		err error
+		all ds.QResult
+	)
+	rc := tx.NewQuery2(ctx, "rootcnt", tbl.Graph, "P_N")
+	rc.Select(&all).Key("P", types.GraphSN()+"|"+attr).Key("N", cnt, opr) // .Filter("Ty", ty)
+
+	err = rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	return all, nil
+
+}
+
 func RootCnt2(ty string, cnt int, sk string, opr query.Equality) (ds.QResult, error) {
 
 	var (
@@ -38,9 +56,9 @@ func RootCnt2(ty string, cnt int, sk string, opr query.Equality) (ds.QResult, er
 	}
 
 	//ty_ := types.GraphSN() + "|" + tyLn
-	ty_ := types.GraphSN() + "|" + ty
+	//ty_ := types.GraphSN() + "|" + ty
 	c_ := sk[strings.Index(sk, ":")+1:]
-	fmt.Println("tyLn, c_ ", tyLn, c_)
+
 	for _, v := range types.TypeC.TyAttrC {
 		fmt.Printf("v: %#v \n", v)
 		//	if v.Ty == ty_ && v.DT == "Nd" && v.C == c_ {
@@ -54,30 +72,9 @@ func RootCnt2(ty string, cnt int, sk string, opr query.Equality) (ds.QResult, er
 	}
 
 	p := types.GraphSN() + "|" + nm
-	fmt.Println("p: ", p)
-	fmt.Printf("cnt:  %d  opr: %s\n", cnt, opr)
-	fmt.Printf("Ty: %s  %s\n", ty_, ty)
 
 	rc := tx.NewQuery2(ctx, "rootcnt", tbl.Graph, "P_N")
 	rc.Select(&all).Key("P", p).Key("N", cnt, opr) // .Filter("Ty", ty)
-
-	err = rc.Execute()
-	if err != nil {
-		return nil, err
-	}
-
-	return all, nil
-
-}
-
-func RootCnt(attr string, cnt int, opr query.Equality) (ds.QResult, error) {
-
-	var (
-		err error
-		all ds.QResult
-	)
-	rc := tx.NewQuery2(ctx, "rootcnt", tbl.Graph, "P_N")
-	rc.Select(&all).Key("P", types.GraphSN()+"|"+attr).Key("N", cnt, opr) // .Filter("Ty", ty)
 
 	err = rc.Execute()
 	if err != nil {
@@ -144,27 +141,82 @@ func GSIQueryS(attr AttrName, lv string, op query.Equality) (ds.QResult, error) 
 }
 
 func GSIhasS(attr AttrName) (ds.QResult, error) {
-	return nil, nil
+
+	var qresult ds.QResult
+
+	rc := tx.NewQuery2(ctx, "GSIhasS", tbl.Graph, "P_S")
+	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
+
+	err := rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+	return qresult, nil
 }
 
-func GSIhas(attr AttrName) (ds.QResult, error) {
-	return nil, nil
+func GSIhasB(attr AttrName) (ds.QResult, error) {
+
+	var qresult ds.QResult
+
+	rc := tx.NewQuery2(ctx, "GSIhasB", tbl.Graph, "P_B")
+	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
+
+	err := rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+	return qresult, nil
 }
 
 func GSIhasN(attr AttrName) (ds.QResult, error) {
-	return nil, nil
+	var qresult ds.QResult
+
+	rc := tx.NewQuery2(ctx, "GSIhasN", tbl.Graph, "P_N")
+	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
+
+	err := rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+	return qresult, nil
 }
 
 func GSIhasF(attr AttrName) (ds.QResult, error) {
-	return nil, nil
+	var qresult ds.QResult
+
+	rc := tx.NewQuery2(ctx, "GSIhasF", tbl.Graph, "P_F")
+	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
+
+	err := rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+	return qresult, nil
 }
 func GSIhasI(attr AttrName) (ds.QResult, error) {
-	return nil, nil
+	var qresult ds.QResult
+
+	rc := tx.NewQuery2(ctx, "GSIhasF", tbl.Graph, "P_I")
+	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
+
+	err := rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+	return qresult, nil
 }
 
 func GSIhasUpred(attr AttrName, ty string, sk string) (ds.QResult, error) {
+	var qresult ds.QResult
 
-	return nil, nil
+	rc := tx.NewQuery2(ctx, "GSIhasUpred", tbl.Graph, "P_N")
+	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
+
+	err := rc.Execute()
+	if err != nil {
+		return nil, err
+	}
+	return qresult, nil
 
 }
 
