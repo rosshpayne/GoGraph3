@@ -21,8 +21,10 @@ type DynamodbHandle struct {
 }
 
 var (
-	dbSrv      *dynamodb.DynamoDB
-	mu         sync.Mutex
+	dbSrv *dynamodb.DynamoDB
+	mu    sync.Mutex
+	// zero entry in dbRegistry is for default db.
+	// non-default db's use Register()
 	dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
 )
 
@@ -43,9 +45,6 @@ func init() {
 
 	var err error
 
-	mu.Lock()
-	defer mu.Unlock()
-
 	dbSrv, err = newService()
 	if err != nil {
 		logerr(err)
@@ -57,6 +56,7 @@ func init() {
 	// we are dealing with the default database, otherwise we would be forced to go through dbRegistry.
 }
 
+// Execute dml (see ExecuteQuery). TODO: make prepare a db.Option
 func (h DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api API, prepare bool, opt ...Option) error {
 
 	return execute(ctx, h.DynamoDB, bs, tag, api, opt...)

@@ -49,7 +49,8 @@ const (
 	//
 )
 
-// DataItem is used during the database fetch of node block data into memory (cache) -
+// DataItem  maps database attribute (and its associated type) to golang type.
+// Used during the database fetch of node block data into the memory cache.
 // ToStruct(<dataItem>) for Spanner and dynamodbattribute.UnmarshalListOfMaps(result.Items, &data) for dynamodb.
 // Data in then used to populate the NV.value attribute in the UnmarshalCache() ie. from []DataItem -> NV.value
 // via the DataItem Get methods
@@ -66,8 +67,9 @@ type DataItem struct {
 	//
 	// scalar types
 	//
-	F float64 // numbers are represented by strings and converted on the fly to dynamodb number
+	F float64
 	I int64
+	N int64 // edge cnt
 	//N []big.Rat      Spanner: if Numeric is chosen to store all F and I types
 	S  string
 	Bl bool
@@ -77,8 +79,7 @@ type DataItem struct {
 	// node type - listed in GSI so value can be associated with type for "has" operator
 	Ty string // type of node
 	// child node counters
-	N   float64 //int64 // attribute of UID-PRED (total of all child nodes embedded and in overflow)
-	ASZ int64   // attribute of  overflow batch UID-PRED.
+	ASZ int64 // attribute of  overflow batch UID-PRED.
 	//
 	// List (ordered set of any type but constrainted to a single type in DynaGraph)
 	//
@@ -150,19 +151,24 @@ func (dgv *DataItem) GetTy() string {
 	//	return dgv.Ty
 }
 
-func (dgv *DataItem) GetI() int64 {
-	//	return dgv.I // TODO: how to handle. SQL uses I & F no-SQL uses N. Maybe both SQL & non-SQL use I & F which are both Number type in no-SQL ???
-	return int64(dgv.N)
+// Dynamodb TODO: use compiler directives to use slightly differnt GetI()
+// func (dgv *DataItem) GetI() int64 {
+// 	//	return dgv.I // TODO: how to handle. SQL uses I & F no-SQL uses N. Maybe both SQL & non-SQL use I & F which are both Number type in no-SQL ???
+// 	return int64(dgv.N)
 
+// }
+
+// Spanner
+func (dgv *DataItem) GetI() int64 {
+	return dgv.I // TODO: how to handle. SQL uses I & F no-SQL uses N. Maybe both SQL & non-SQL use I & F which are both Number type in no-SQL ???
 }
 
 func (dgv *DataItem) GetF() float64 {
-	//return dgv.F
-	return dgv.N
+	return dgv.F
 }
 
 func (dgv *DataItem) GetN() int64 {
-	return int64(dgv.N)
+	return dgv.N
 }
 
 func (dgv *DataItem) GetDT() time.Time {

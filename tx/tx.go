@@ -453,6 +453,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 
 	h.TransactionStart = time.Now()
 
+	// TODO: make h.prepare a db.Option
 	err = h.dbHdl.Execute(h.ctx, h.batch, h.Tag, h.api, h.prepare, h.options...)
 
 	h.TransactionEnd = time.Now()

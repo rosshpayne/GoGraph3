@@ -173,9 +173,9 @@ func (e NoTypeDefined) Error() string {
 	return fmt.Sprintf("Type %q not defined", e.ty)
 }
 
-// genSortK, called from query component (execute.go) to determine how to best to query a node's data based on
-// the subsection of the statement's (represented by the NV) being executed.
-// It may produce more than on Sortk key requireing multiple datbase ios.
+// genSortK, called from query component (gql/execute.go) to generate an appropriate SortK value to minimise the number
+// of database requests to query a node's data based on the subsection of the GraphQL statement (represented by the NV).
+// It may produce more than on Sortk key requireing multiple database requests.
 func GenSortK(nvc ds.ClientNV, ty string) []string {
 	//genSortK := func(attr string) (string, bool) {
 	var (

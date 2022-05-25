@@ -526,6 +526,10 @@ func createDatabase(ctx context.Context, adminClient *database.DatabaseAdminClie
 				ErrMsg STRING(256),
 				) PRIMARY KEY(Puid,Sortk,Cuid)`,
 			`CREATE NULL_FILTERED INDEX EdgeChildStatus_ ON EdgeChild_(Status)`,
+			// Graph Table: Block + EOP + NodeScalar + ReverseEdge
+			// P: for Overflow block only. UID of parent node.
+			// IX: populated with X and then Null after bulk DP performed
+			// IsNode: Y for is graph node. Overflow blocks are not included.
 			`CREATE TABLE Block (
   				PKey BYTES(16) NOT NULL,
 				Graph STRING(8) NOT NULL,
@@ -536,6 +540,10 @@ func createDatabase(ctx context.Context, adminClient *database.DatabaseAdminClie
 				) PRIMARY KEY(PKey)`,
 			`CREATE NULL_FILTERED INDEX TyIX ON Block(Ty,IX,PKey)`, // Ty incudes GR
 			`CREATE NULL_FILTERED INDEX IsNode ON Block(IsNode)`,
+			// EOP: Edge-Overflow-Propagated data
+			//      Edge: UID-PRED Nd, Id, XF, N (total edge count)
+			//      Overflow: Nd, XBl, L*, ASZ (?)
+			//      Propagated: L*, XBl
 			`CREATE TABLE EOP (
 			PKey BYTES(16) NOT NULL,
 			SortK STRING(64) NOT NULL,
@@ -562,17 +570,17 @@ func createDatabase(ctx context.Context, adminClient *database.DatabaseAdminClie
 			SortK STRING(64) NOT NULL,
 			P STRING(32),
 			Bl BOOL,
-			N INT64, // rename I to N to keep the same as Dynamodb. Float use F
+			I INT64, 
 			F FLOAT64,
 			S STRING(MAX),
 			B BYTES(MAX),
 			DT TIMESTAMP,
-			 LS   ARRAY<STRING(MAX)>,
-			LI    ARRAY<INT64>,
-			LF    ARRAY<FLOAT64>,
-             LBl  ARRAY<BOOL>,
-             LB   ARRAY<BYTES(MAX)>,
-             LDT  ARRAY<TIMESTAMP>,
+			LS   ARRAY<STRING(MAX)>,
+			LI   ARRAY<INT64>,
+			LF   ARRAY<FLOAT64>,
+            LBl  ARRAY<BOOL>,
+            LB   ARRAY<BYTES(MAX)>,
+            LDT  ARRAY<TIMESTAMP>,
 			) PRIMARY KEY(PKey, SortK),
 			INTERLEAVE IN PARENT Block ON DELETE CASCADE`,
 			`CREATE NULL_FILTERED INDEX NodePredicateF ON NodeScalar(P,F)`,
