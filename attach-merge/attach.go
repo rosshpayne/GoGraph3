@@ -15,13 +15,14 @@ import (
 	"github.com/GoGraph/attach-merge/ds"
 	"github.com/GoGraph/attach-merge/execute"
 	"github.com/GoGraph/cache"
-	//"github.com/GoGraph/db"
+	"github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	"github.com/GoGraph/monitor"
+	"github.com/GoGraph/mysql"
 	"github.com/GoGraph/run"
 	"github.com/GoGraph/state"
 	slog "github.com/GoGraph/syslog"
@@ -110,6 +111,11 @@ func main() {
 			os.Exit(2)
 		}
 	}()
+
+	// register default database client
+	db.Init(ctx)
+	mysql.Init(ctx)
+
 	tstart = time.Now()
 
 	param.ReducedLog = false
@@ -222,7 +228,9 @@ func main() {
 		// into batches, one to accumulate, one to process
 		once sync.Once
 	)
-	// unprocessed edge batches (double buffer implementation)
+
+	// register default database client
+	db.Init(ctx)
 
 	slog.Log(logid, "Main: Started. Waiting on EdgeCh...")
 
@@ -231,9 +239,9 @@ func main() {
 	// allocate cache
 	cache.NewCache()
 
-	qetx := tx.NewQuery2(ctx, "EdgeChild", tblEdgeChild).DB("mysql-GoGraph").Prepare()
+	qetx := tx.NewQueryContext(ctx, "EdgeChild", tblEdgeChild).DB("mysql-GoGraph").Prepare()
 	defer qetx.Close()
-	qptx := tx.NewQuery2(ctx, "EdgeParent", tblEdge).DB("mysql-GoGraph").Prepare()
+	qptx := tx.NewQueryContext(ctx, "EdgeParent", tblEdge).DB("mysql-GoGraph").Prepare()
 	defer qptx.Close()
 
 	for {

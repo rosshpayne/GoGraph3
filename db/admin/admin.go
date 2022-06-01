@@ -121,11 +121,13 @@ func saveStats(final_ ...bool) {
 		stats.AggregateDurationStats()
 	}
 
+	ctx := context.Background()
+
 	runid := run.GetRunId()
 	tblRunStat := tbl.RunStat
 
 	//stx = tx.NewBatch(param.StatsSaveTag)
-	stx = tx.NewTx(param.StatsSaveTag) //.DB("mysql-GoGraph")
+	stx = tx.NewTxContext(ctx, param.StatsSaveTag) //.DB("mysql-GoGraph")
 
 	for k, v := range stats.DurTx {
 		var mm *stats.I64mmx

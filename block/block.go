@@ -385,8 +385,8 @@ type IndexBlock []*Index
 // type dictionary
 //
 type TyItem struct {
-	Nm   string   `json:"PKey"`  // type name
-	Atr  string   `json:"SortK"` // attribute name
+	Nm   string   `dynamodbav:"PKey"`  // type name
+	Atr  string   `dynamodbav:"SortK"` // attribute name
 	Ty   string   // DataType
 	F    []string // facets name#DataType#CompressedIdentifer
 	C    string   // short name for attribute

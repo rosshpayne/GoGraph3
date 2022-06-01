@@ -9,8 +9,7 @@ import (
 
 	"github.com/GoGraph/db"
 	"github.com/GoGraph/tx/query"
-
-	_ "github.com/go-sql-driver/mysql"
+	//_ "github.com/go-sql-driver/mysql"
 )
 
 var noDataFoundErr = errors.New("no rows in result set")
@@ -61,7 +60,7 @@ func closePrepStmt(client *sql.DB, q *query.QueryHandle) (err error) {
 	return nil
 }
 
-func executeQuery(client *sql.DB, q *query.QueryHandle, opt ...db.Option) error {
+func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt ...db.Option) error {
 
 	var (
 		// options
@@ -71,8 +70,6 @@ func executeQuery(client *sql.DB, q *query.QueryHandle, opt ...db.Option) error 
 		rows       *sql.Rows
 		prepStmt   *sql.Stmt
 	)
-
-	ctx := context.Background()
 
 	for _, o := range opt {
 		switch strings.ToLower(o.Name) {
@@ -119,7 +116,7 @@ func executeQuery(client *sql.DB, q *query.QueryHandle, opt ...db.Option) error 
 
 		if q.PrepStmt() == nil {
 
-			if q.Ctx() != nil {
+			if ctx != nil {
 				prepStmt, err = client.PrepareContext(ctx, s.String())
 			} else {
 				prepStmt, err = client.Prepare(s.String())
@@ -135,7 +132,7 @@ func executeQuery(client *sql.DB, q *query.QueryHandle, opt ...db.Option) error 
 		}
 
 		if oSingleRow {
-			if q.Ctx() != nil {
+			if ctx != nil {
 				row = prepStmt.QueryRowContext(ctx, whereVals...)
 			} else {
 				row = prepStmt.QueryRow(whereVals...)
@@ -153,7 +150,7 @@ func executeQuery(client *sql.DB, q *query.QueryHandle, opt ...db.Option) error 
 		// non-prepared
 
 		if oSingleRow {
-			if q.Ctx() != nil {
+			if ctx != nil {
 				row = client.QueryRowContext(ctx, s.String(), whereVals...)
 			} else {
 				row = client.QueryRow(s.String(), whereVals...)

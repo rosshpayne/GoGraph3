@@ -7,7 +7,6 @@ import (
 	blk "github.com/GoGraph/block"
 	param "github.com/GoGraph/dygparam"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/types/internal/db"
 )
 
 //
@@ -79,6 +78,8 @@ func GetAllTy() map[string]string {
 }
 
 func GetTyShortNm(longNm string) (string, bool) {
+	fmt.Println("GetTyShortNm for: ", longNm)
+	fmt.Printf("tyShortNm %#v\n", tyShortNm)
 	s, ok := tyShortNm[longNm]
 	return s, ok
 }
@@ -110,7 +111,7 @@ func SetGraph(graph_ string) error {
 	var err error
 
 	graph = graph_
-	graphSN, err = db.SetGraph(graph)
+	graphSN, err = setGraph(graph)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func SetGraph(graph_ string) error {
 	//
 	TypeC.AttrTy = make(AttrTyCache)
 	//
-	tynames, err := db.GetTypeShortNames()
+	tynames, err := GetTypeShortNames()
 	if err != nil {
 		panic(err)
 	}
@@ -143,7 +144,7 @@ func SetGraph(graph_ string) error {
 	// Load data dictionary (i.e ALL type info) - makes for concurrent safe FetchType()
 	//
 	{
-		dd, err := db.LoadDataDictionary() // type TyIBlock []TyItem
+		dd, err := LoadDataDictionary() // type TyIBlock []TyItem
 		if err != nil {
 			panic(err)
 		}

@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	blk "github.com/GoGraph/block"
@@ -35,7 +37,7 @@ import (
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
 
-	_ "github.com/GoGraph/mysql"
+	"github.com/GoGraph/mysql"
 )
 
 const (
@@ -119,6 +121,43 @@ func main() { //(f io.Reader) error { // S P O
 	// initialise channels with buffers
 	verifyCh = make(chan verifyNd, 3)
 	saveCh = make(chan savePayload, 12)
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// setup concurrent routine to capture OS signals.
+	appSignal := make(chan os.Signal, 3)
+	var (
+		wpStart, wpEnd sync.WaitGroup
+		ctxEnd         sync.WaitGroup
+		n              int // for loop counter
+		eof            bool
+		tstart         time.Time
+
+		terminate os.Signal = syscall.SIGTERM // os kill
+		interrupt os.Signal = syscall.SIGINT  // ctrl-C
+	)
+	signal.Notify(appSignal, terminate, interrupt) // TODO: add ctrl-C signal
+
+	// concurrent process to capture os process termination signals and call context cancel to release db resources.
+	go func() {
+		select {
+		case <-appSignal:
+			// broadcast kill switch to all context aware goroutines including mysql
+			cancel()
+			wpEnd.Wait()
+
+			tend := time.Now()
+			syslog(fmt.Sprintf("Terminated.....Duration: %s", tstart.Sub(tend).String()))
+			os.Exit(2)
+		}
+	}()
+
+	// register default database client
+	db.Init(ctx)
+	mysql.Init(ctx)
+
 	//
 	// if *showsql {
 	// 	param.ShowSQL = true
@@ -151,7 +190,7 @@ func main() { //(f io.Reader) error { // S P O
 		return
 	}
 	//defer run.Finish(err)
-	tstart := time.Now()
+	tstart = time.Now()
 
 	// set graph to use
 	if len(*graph) == 0 {
@@ -189,9 +228,10 @@ func main() { //(f io.Reader) error { // S P O
 	// set Graph and load types into memory - dependency on syslog
 	err = types.SetGraph(*graph)
 	if err != nil {
-		fmt.Println("Error in determining graph, may not exist")
+		fmt.Println("Error in determining graph, may not exist: Error: %s", err)
 		return
 	}
+
 	//
 	f, err := os.Open(*inputFile)
 	if err != nil {
@@ -225,17 +265,6 @@ func main() { //(f io.Reader) error { // S P O
 	// if err != nil {
 	// 	panic(err)
 	// }
-	//
-	// context - used to shutdown goroutines that are not part fo the pipeline
-	//
-	ctx, cancel := context.WithCancel(context.Background())
-	//
-	var (
-		wpStart, wpEnd sync.WaitGroup
-		ctxEnd         sync.WaitGroup
-		n              int // for loop counter
-		eof            bool
-	)
 	//
 	wpStart.Add(7)
 	// check verify and saveNode have finished. Each goroutine is responsible for closing and waiting for all routines they spawn.

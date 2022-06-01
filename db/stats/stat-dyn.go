@@ -15,7 +15,9 @@ import (
 	"github.com/GoGraph/tx/query"
 
 	hdr "github.com/HdrHistogram/hdrhistogram-go"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	//"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 //type StatId byte
@@ -91,7 +93,7 @@ type opItem struct {
 	Tag       Label
 	Src       Source // batchDelete, batchInsert, Transaction, SingleInsert, SingleUpdate, SingleDelete, Query, GetItem.
 	Acs       query.AccessTy
-	Tx        *dynamodb.ConsumedCapacity
+	Tx        *types.ConsumedCapacity
 	tblName   string
 	Retrieved int64
 	Scanned   int64
@@ -118,7 +120,7 @@ func syslog(s string) {
 }
 
 // query statistics, GetItem, Query, Scan
-func SaveQueryStat(src Source, tag string, cc *dynamodb.ConsumedCapacity, cnt int64, scnt int64, dur time.Duration) {
+func SaveQueryStat(src Source, tag string, cc *types.ConsumedCapacity, cnt int32, scnt int32, dur time.Duration) {
 	if !param.StatsSystem && tag == param.StatsSystemTag {
 		return
 	}
@@ -132,7 +134,7 @@ func SaveQueryStat(src Source, tag string, cc *dynamodb.ConsumedCapacity, cnt in
 }
 
 // all transaction mutations
-func SaveTransactStat(tag string, cc []*dynamodb.ConsumedCapacity, dur time.Duration, muts ...int) {
+func SaveTransactStat(tag string, cc []types.ConsumedCapacity, dur time.Duration, muts ...int) {
 	if !param.StatsSystem && tag == param.StatsSystemTag {
 		return
 	}
@@ -143,31 +145,32 @@ func SaveTransactStat(tag string, cc []*dynamodb.ConsumedCapacity, dur time.Dura
 	if len(muts) > 0 {
 		mutations = muts[0]
 	}
-	for _, v := range cc {
-		NewopItem(Transaction, tag, v, 0, 0, dur, mutations).Add()
+	for i := 0; i < len(cc); i++ {
+		NewopItem(Transaction, tag, &cc[i], 0, 0, dur, mutations).Add()
 	}
 }
 
 // Batched insert, delete
-func SaveBatchStat(src Source, tag string, cc []*dynamodb.ConsumedCapacity, dur time.Duration, muts int) {
+func SaveBatchStat(src Source, tag string, cc []types.ConsumedCapacity, dur time.Duration, muts int) {
 	if !param.StatsSystem && tag == param.StatsSystemTag {
 		return
 	}
 	if tag == param.StatsSaveTag {
 		return
 	}
-	for _, v := range cc {
-		s := NewopItem(src, tag, v, 0, 0, dur, muts)
+
+	for i := 0; i < len(cc); i++ {
+		s := NewopItem(src, tag, &cc[i], 0, 0, dur, muts)
 		s.Add()
 	}
 }
 
-func SaveSingleStat(src Source, tag string, cc *dynamodb.ConsumedCapacity, dur time.Duration) {
+func SaveSingleStat(src Source, tag string, cc *types.ConsumedCapacity, dur time.Duration) {
 	SaveStdStat(src, tag, cc, dur)
 }
 
 // Single item insert, update, delete
-func SaveStdStat(src Source, tag string, cc *dynamodb.ConsumedCapacity, dur time.Duration) {
+func SaveStdStat(src Source, tag string, cc *types.ConsumedCapacity, dur time.Duration) {
 	if !param.StatsSystem && tag == param.StatsSystemTag {
 		return
 	}
@@ -180,12 +183,12 @@ func SaveStdStat(src Source, tag string, cc *dynamodb.ConsumedCapacity, dur time
 }
 
 // NewopItem reformats the dynamodb.ConsumedCapacity based on indexes used.
-func NewopItem(source Source, tag Label, cc *dynamodb.ConsumedCapacity, cnt int64, scnt int64, dur time.Duration, m int) *opItem {
-	return &opItem{Tag: tag, Src: source, Tx: cc, Retrieved: cnt, Scanned: scnt, Duration: dur.Nanoseconds(), Mutations: m} //TableName: *cc.TableName, }
+func NewopItem(source Source, tag Label, cc *types.ConsumedCapacity, cnt int32, scnt int32, dur time.Duration, m int) *opItem {
+	return &opItem{Tag: tag, Src: source, Tx: cc, Retrieved: int64(cnt), Scanned: int64(scnt), Duration: dur.Nanoseconds(), Mutations: m} //TableName: *cc.TableName, }
 }
 
-func NewopItem2(source Source, tag Label, cc *dynamodb.ConsumedCapacity, cnt int64, scnt int64, dur time.Duration, m int) *opItem {
-	return &opItem{Tag: tag, Src: source, Tx: cc, Retrieved: cnt, Scanned: scnt, Duration: dur.Nanoseconds(), Mutations: m} //TableName: *cc.TableName, }
+func NewopItem2(source Source, tag Label, cc *types.ConsumedCapacity, cnt int32, scnt int32, dur time.Duration, m int) *opItem {
+	return &opItem{Tag: tag, Src: source, Tx: cc, Retrieved: int64(cnt), Scanned: int64(scnt), Duration: dur.Nanoseconds(), Mutations: m} //TableName: *cc.TableName, }
 }
 
 type opTxCapacity struct {
@@ -216,9 +219,9 @@ func (o *opTxCapacity) String() string {
 	return w.String()
 }
 
-func (o *opTxCapacity) update(c *dynamodb.Capacity) {
+func (o *opTxCapacity) update(c types.Capacity) {
 
-	if o == nil || c == nil {
+	if o == nil { //|| c == nil {
 		return
 	}
 	if c.CapacityUnits != nil {
@@ -244,7 +247,7 @@ func (o *opTxCapacity) update2(c *float64, r *float64, w *float64) {
 
 }
 
-func (o *opTxCapacity) initialise(c *dynamodb.Capacity) *opTxCapacity {
+func (o *opTxCapacity) initialise(c types.Capacity) *opTxCapacity {
 
 	initialise := func(v *float64) *mmx {
 		if v == nil {
@@ -256,9 +259,9 @@ func (o *opTxCapacity) initialise(c *dynamodb.Capacity) *opTxCapacity {
 	if o == nil {
 		return o
 	}
-	if c == nil {
-		return o
-	}
+	// if c == nil {
+	// 	return o
+	// }
 	o.CapacityUnits = initialise(c.CapacityUnits)
 	o.ReadCapacityUnits = initialise(c.ReadCapacityUnits)
 	o.WriteCapacityUnits = initialise(c.WriteCapacityUnits)
@@ -340,7 +343,7 @@ func (o *consumedCapacity) String() string {
 	//	w.WriteString(fmt.Sprintf("Elapsed: %v\n", o.duration))
 	return w.String()
 }
-func (o *consumedCapacity) update(c *dynamodb.ConsumedCapacity, r int64, s int64) {
+func (o *consumedCapacity) update(c *types.ConsumedCapacity, r int64, s int64) {
 
 	o.CapacityUnits.update(c.CapacityUnits)
 	o.ReadCapacityUnits.update(c.ReadCapacityUnits)
@@ -380,13 +383,13 @@ func (o *consumedCapacity) update(c *dynamodb.ConsumedCapacity, r int64, s int64
 		if tbl, ok := o.Table[*c.TableName]; !ok {
 			opTxc := &opTxCapacity{}
 			if c.Table != nil {
-				o.Table[*c.TableName] = opTxc.initialise(c.Table)
+				o.Table[*c.TableName] = opTxc.initialise(*c.Table)
 			} else {
 				o.Table[*c.TableName] = opTxc.initialise2(c.CapacityUnits, c.ReadCapacityUnits, c.WriteCapacityUnits)
 			}
 		} else {
 			if c.Table != nil {
-				tbl.update(c.Table)
+				tbl.update(*c.Table)
 			} else {
 				tbl.update2(c.CapacityUnits, c.ReadCapacityUnits, c.WriteCapacityUnits)
 			}
@@ -508,6 +511,12 @@ func (c *i64mmx) update(v int64) {
 }
 
 func newI64mmx(v int64) *i64mmx {
+
+	return &i64mmx{min: v, max: v, sum: v, cnt: 1}
+
+}
+
+func newI32mmx(v int64) *i64mmx {
 
 	return &i64mmx{min: v, max: v, sum: v, cnt: 1}
 
@@ -638,21 +647,6 @@ func Register(lbl Label, sampledur time.Duration, maxSam ...int) {
 // 	}
 // 	return t, saveit
 
-// }
-
-// type apiStats struct {
-// 	GetItem int64
-// 	Query   int64
-// 	Scan    int64
-// 	// Batch
-// 	BatchInsert int64
-// 	BatchDelete int64
-// 	// Transaction
-// 	Transaction int64
-// 	// Single
-// 	PutItem    int64
-// 	UpdateItem int64
-// 	Remove     int64
 // }
 
 type apiStats [_apiLimit_]int64
@@ -889,7 +883,7 @@ func add(s *opItem) {
 			}
 			o := &opTxCapacity{}
 			if cc.Table != nil {
-				opTx.Table[*cc.TableName] = o.initialise(cc.Table) // &opTxCapacity{CapacityUnits: c, ReadCapacityUnits: r, WriteCapacityUnits: w}
+				opTx.Table[*cc.TableName] = o.initialise(*cc.Table) // &opTxCapacity{CapacityUnits: c, ReadCapacityUnits: r, WriteCapacityUnits: w}
 			} else {
 				opTx.Table[*cc.TableName] = o.initialise2(cc.CapacityUnits, cc.ReadCapacityUnits, cc.WriteCapacityUnits)
 			}
@@ -950,13 +944,13 @@ func add(s *opItem) {
 		if tbl, ok := CapByTable[tblName]; !ok {
 			opTxc := &opTxCapacity{}
 			if s.Tx.Table != nil {
-				CapByTable[tblName] = opTxc.initialise(s.Tx.Table)
+				CapByTable[tblName] = opTxc.initialise(*s.Tx.Table)
 			} else {
 				CapByTable[tblName] = opTxc.initialise2(s.Tx.CapacityUnits, s.Tx.ReadCapacityUnits, s.Tx.WriteCapacityUnits)
 			}
 		} else {
 			if s.Tx.Table != nil {
-				tbl.update(s.Tx.Table)
+				tbl.update(*s.Tx.Table)
 			} else {
 				tbl.update2(s.Tx.CapacityUnits, s.Tx.ReadCapacityUnits, s.Tx.WriteCapacityUnits)
 			}

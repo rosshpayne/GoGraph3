@@ -22,6 +22,7 @@ const (
 type MySQL struct {
 	options  db.Options
 	trunctbl []tbl.Name
+	ctx      context.Context
 	*sql.DB
 }
 
@@ -38,13 +39,13 @@ func syslog(s string) {
 	slog.Log(logid, s)
 }
 
-func init() {
+func Init(ctx context.Context) {
 
 	client, err := newMySQL("admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	if err != nil {
 		logerr(err)
 	} else {
-		m := MySQL{DB: client}
+		m := MySQL{DB: client, ctx: ctx}
 		db.Register("mysql-GoGraph", m)
 	}
 }
@@ -121,15 +122,24 @@ func (h MySQL) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api
 // 	return nil
 // }
 
-func (h MySQL) ExecuteQuery(q *query.QueryHandle, o ...db.Option) error {
+func (h MySQL) ExecuteQuery(ctx context.Context, q *query.QueryHandle, o ...db.Option) error {
 
-	return executeQuery(h.DB, q, o...)
+	if ctx == nil {
+		ctx = h.ctx
+	}
+	return executeQuery(ctx, h.DB, q, o...)
 
 }
 
 func (h MySQL) Close(q *query.QueryHandle) error {
 
 	return closePrepStmt(h.DB, q)
+
+}
+
+func (h MySQL) Ctx() context.Context {
+
+	return h.ctx
 
 }
 

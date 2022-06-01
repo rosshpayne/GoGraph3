@@ -1,7 +1,6 @@
 package query
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 
@@ -97,7 +96,7 @@ type orderby struct {
 }
 type QueryHandle struct {
 	Tag string
-	ctx context.Context
+	//ctx context.Context
 	//stateId util.UID - id for maintaining state
 	attr     []Attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
 	tbl      tbl.Name
@@ -143,17 +142,24 @@ func New(tbl tbl.Name, label string, idx ...tbl.Name) *QueryHandle {
 	}
 	return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, css: true}
 }
-func NewCtx(ctx context.Context, tbl tbl.Name, label string, idx ...tbl.Name) *QueryHandle {
+
+func New2(label string, tbl tbl.Name, idx ...tbl.Name) *QueryHandle {
 	if len(idx) > 0 {
-		return &QueryHandle{Tag: label, ctx: ctx, tbl: tbl, accessTy: Null, idx: idx[0], css: true}
+		return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, idx: idx[0], css: true}
 	}
-	return &QueryHandle{Tag: label, ctx: ctx, tbl: tbl, accessTy: Null, css: true}
+	return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, css: true}
 }
+
+// func NewContext(ctx context.Context, tbl tbl.Name, label string, idx ...tbl.Name) *QueryHandle {
+// 	if len(idx) > 0 {
+// 		return &QueryHandle{Tag: label, ctx: ctx, tbl: tbl, accessTy: Null, idx: idx[0], css: true}
+// 	}
+// 	return &QueryHandle{Tag: label, ctx: ctx, tbl: tbl, accessTy: Null, css: true}
+// }
 
 func (q *QueryHandle) Duplicate() *QueryHandle {
 	d := QueryHandle{}
 	d.Tag = q.Tag
-	d.ctx = q.ctx
 	//stateId uuid.UID - id for maintaining state
 	d.attr = q.attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
 	d.tbl = q.tbl
@@ -218,9 +224,9 @@ func (q *QueryHandle) SetPrepStmt(p interface{}) {
 	q.prepStmt = p
 }
 
-func (q *QueryHandle) Ctx() context.Context {
-	return q.ctx
-}
+// func (q *QueryHandle) Ctx() context.Context {
+// 	return q.ctx
+// }
 
 func (q *QueryHandle) GetTag() string {
 	return q.Tag
@@ -674,14 +680,27 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 	case reflect.Slice:
 
 		st := s.Elem() // used in Query (multi row select)
-
+		fmt.Println("st ", st.Kind())
 		if st.Kind() == reflect.Slice {
 			st = st.Elem() // [][]rec - used for parallel scan
+			fmt.Println("st ", st.Kind())
 		}
-		for i := 0; i < st.NumField(); i++ {
-			v := st.Field(i)
-			at := Attr{name: v.Name, aty: IsFetch}
-			q.attr = append(q.attr, at)
+		if st.Kind() == reflect.Pointer {
+			st = st.Elem() // [][]rec - used for parallel scan
+			fmt.Println("st ", st.Kind())
+		}
+		if st.Kind() == reflect.Struct {
+			var name string
+			for i := 0; i < st.NumField(); i++ {
+				v := st.Field(i)
+				if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
+					name = v.Name
+				}
+				at := Attr{name: name, aty: IsFetch}
+				q.attr = append(q.attr, at)
+			}
+		} else {
+			panic(fmt.Errorf("QueryHandle Select(): expected a struct got %s", st.Kind()))
 		}
 	}
 

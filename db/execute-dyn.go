@@ -24,14 +24,78 @@ import (
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	// "github.com/aws/aws-sdk-go/aws"
+	// "github.com/aws/aws-sdk-go/aws/awserr"
+	// "github.com/aws/aws-sdk-go/service/dynamodb"
+	//"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	//"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 )
 
-func execute(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.Mutations, tag string, api API, opt ...Option) error {
+func syslog(s string) {
+	slog.Log(logid, s)
+}
+
+type Capacity_ struct {
+	*types.Capacity
+}
+
+func (c Capacity_) String() string {
+	var s strings.Builder
+
+	if c.CapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Total CUs:  %g ", c.CapacityUnits))
+	}
+	if c.ReadCapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Read CUs:  %g ", c.ReadCapacityUnits))
+	}
+	if c.WriteCapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Write CUs:  %g ", c.WriteCapacityUnits))
+	}
+	s.WriteByte('\n')
+
+	return s.String()
+}
+
+type ConsumedCapacity_ struct {
+	*types.ConsumedCapacity
+}
+
+func (w *ConsumedCapacity_) String() string {
+	var s strings.Builder
+
+	if w.CapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Total CUs: %g ", *w.CapacityUnits))
+	}
+	if w.TableName != nil {
+		s.WriteString(fmt.Sprintf(" Table: %s ", *w.TableName))
+	}
+	if w.Table != nil {
+		w_ := Capacity_{w.Table}
+		w_.String()
+	}
+	if w.WriteCapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Total Write CUs: %g \n", *w.WriteCapacityUnits))
+	}
+	for k, v := range w.GlobalSecondaryIndexes {
+		w_ := Capacity_{&v}
+		s.WriteString(fmt.Sprintf(" GIndex: %s  %s ", k, w_.String()))
+	}
+	for k, v := range w.LocalSecondaryIndexes {
+		w_ := Capacity_{&v}
+		s.WriteString(fmt.Sprintf(" LIndex: %s  %s ", k, w_.String()))
+	}
+	s.WriteByte('\n')
+
+	return s.String()
+
+}
+
+func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API, opt ...Option) error {
 
 	var err error
 
@@ -59,32 +123,34 @@ func execute(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.Mutations
 
 }
 
+// func XXX(expr expression.Expression) map[string]*dynamodb.AttributeValue {
+
+// 	var s strings.Builder
+// 	values := expr.Values()
+
 // convertBSet2List converts Binary Set to List because GoGraph expects a List type not a BS type
 // Dynamodb's expression pkg creates BS rather than L for binary array data.
 // As GoGraph had no user-defined types it is possible to hardwire in the affected attributes.
 // All types in GoGraph are known at compile time.
-func convertBSet2List(expr expression.Expression) map[string]*dynamodb.AttributeValue {
+func convertBSet2List(expr expression.Expression) map[string]types.AttributeValue {
 
 	var s strings.Builder
-	values := expr.Values()
+	values := expr.Values() // map[string]types.AttributeValue
 
-	for k, v := range expr.Names() {
-		switch *v {
+	for k, v := range expr.Names() { // map[string]string  [":0"]"PKey", [":2"]"SortK"
+		switch v {
 		//safe to hardwire in attribute name as all required List binaries are known at compile time.
 		case "Nd", "LB":
 			s.WriteByte(':')
 			s.WriteByte(k[1])
 			// check if BS is used and then convert if it is
-			var nl []*dynamodb.AttributeValue
 
-			for i, u := range values[s.String()].BS {
-				if i == 0 {
-					nl = make([]*dynamodb.AttributeValue, len(values[s.String()].BS), len(values[s.String()].BS))
+			if bs, ok := values[s.String()].(*types.AttributeValueMemberBS); ok {
+				nl := make([]types.AttributeValue, len(bs.Value), len(bs.Value))
+				for i, b := range bs.Value {
+					nl[i] = &types.AttributeValueMemberB{Value: b}
 				}
-				nl[i] = &dynamodb.AttributeValue{B: u}
-				if i == len(values[s.String()].BS)-1 {
-					values[s.String()] = &dynamodb.AttributeValue{L: nl} // this nils AttributeValue{B }
-				}
+				values[s.String()] = &types.AttributeValueMemberL{Value: nl}
 			}
 			s.Reset()
 		}
@@ -95,7 +161,7 @@ func convertBSet2List(expr expression.Expression) map[string]*dynamodb.Attribute
 // pkg db must support mutations, Insert, Update, Remove, Merge:
 // any other mutations (eg WithOBatchLimit) must be defined outside of DB and passed in (somehow)
 
-func txUpdate(m *mut.Mutation) (*dynamodb.TransactWriteItem, error) {
+func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 
 	var (
 		err error
@@ -215,14 +281,14 @@ func txUpdate(m *mut.Mutation) (*dynamodb.TransactWriteItem, error) {
 		return nil, newDBExprErr("txUpdate", "", "", err)
 	}
 
-	av := make(map[string]*dynamodb.AttributeValue)
+	av := make(map[string]types.AttributeValue)
 
 	// generate key AV
 	for _, v := range m.GetKeys() {
 		av[v.Name] = marshalAvUsingValue(v.Value)
 	}
 	//
-	update := &dynamodb.Update{
+	update := &types.Update{
 		Key:                       av,
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: convertBSet2List(expr),
@@ -231,29 +297,29 @@ func txUpdate(m *mut.Mutation) (*dynamodb.TransactWriteItem, error) {
 		TableName:                 aws.String(m.GetTable()),
 	}
 
-	twi := &dynamodb.TransactWriteItem{}
-	return twi.SetUpdate(update), nil
+	twi := &types.TransactWriteItem{Update: update}
+	return twi, nil
 
 }
 
-func txPut(m *mut.Mutation) (*dynamodb.TransactWriteItem, error) {
+func txPut(m *mut.Mutation) (*types.TransactWriteItem, error) {
 
 	av, err := marshalMutation(m)
 	if err != nil {
 		return nil, err
 	}
-	put := &dynamodb.Put{
+	put := &types.Put{
 		Item:      av,
 		TableName: aws.String(m.GetTable()),
 	}
 	//
-	twi := &dynamodb.TransactWriteItem{}
+	twi := &types.TransactWriteItem{Put: put}
 
-	return twi.SetPut(put), nil
+	return twi, nil
 
 }
 
-func crTx(m *mut.Mutation, opr mut.StdMut) ([]*dynamodb.TransactWriteItem, error) {
+func crTx(m *mut.Mutation, opr mut.StdMut) ([]types.TransactWriteItem, error) {
 
 	switch opr {
 
@@ -263,7 +329,7 @@ func crTx(m *mut.Mutation, opr mut.StdMut) ([]*dynamodb.TransactWriteItem, error
 		if err != nil {
 			return nil, err
 		}
-		return []*dynamodb.TransactWriteItem{upd}, nil
+		return []types.TransactWriteItem{*upd}, nil
 
 	case mut.Insert:
 
@@ -271,7 +337,7 @@ func crTx(m *mut.Mutation, opr mut.StdMut) ([]*dynamodb.TransactWriteItem, error
 		if err != nil {
 			return nil, err
 		}
-		return []*dynamodb.TransactWriteItem{put}, nil
+		return []types.TransactWriteItem{*put}, nil
 
 	case mut.Merge:
 		// use in Dynamodb only when list_append or mut.Add on an attribute is required, otherwise a PutItem will implement the merge as a single api call.
@@ -292,7 +358,7 @@ func crTx(m *mut.Mutation, opr mut.StdMut) ([]*dynamodb.TransactWriteItem, error
 		}
 		// attr (list type for appendList operation) does not exist - must be explicitly put
 
-		return []*dynamodb.TransactWriteItem{upd, put}, nil
+		return []types.TransactWriteItem{*upd, *put}, nil
 
 	default:
 		panic(fmt.Errorf("cannot mix a %q mutation with normal transaction based mutations ie. insert/update/remove/merge. Change to insert/delete or remove from current transaction.", opr))
@@ -304,25 +370,25 @@ func crTx(m *mut.Mutation, opr mut.StdMut) ([]*dynamodb.TransactWriteItem, error
 // execBatchMutations: note, all other mutations in this transaction must be either bulkinsert or bulkdelete.
 // cannot mix with non-bulk requests ie. insert/update/delete/merge/remove
 // NB: batch cannot make use of condition expressions
-func execBatchMutations(ctx context.Context, client *dynamodb.DynamoDB, bi mut.Mutations, tag string) error {
+func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mutations, tag string) error {
 
 	//type BatchWriteItemInput struct {
-	//             RequestItems map[string][]*dynamodb.WriteRequest
+	//             RequestItems map[string][]*types.WriteRequest
 	//             .. }
-	//type dynamodb.WriteRequest {
+	//type types.WriteRequest {
 	//            PutRequest *PutRequest
 	//            DeleteRequest *DeleteRequest
 	//                  }
 	//type PutRequest {
-	//             Item map[string]*dynamodb.AttributeValue
+	//             Item map[string]types.AttributeValue
 	//
 	var (
 		curTbl string
-		wrtreq *dynamodb.WriteRequest
+		wrtreq types.WriteRequest
 		api    stats.Source
 	)
 
-	muts := func(ri map[string][]*dynamodb.WriteRequest) int {
+	muts := func(ri map[string][]types.WriteRequest) int {
 		muts := 0
 		for _, v := range ri {
 			muts += len(v)
@@ -330,9 +396,9 @@ func execBatchMutations(ctx context.Context, client *dynamodb.DynamoDB, bi mut.M
 		return muts
 	}
 
-	//	var wrs []*dynamodb.WriteRequest
+	//	var wrs []*types.WriteRequest
 
-	reqi := make(map[string][]*dynamodb.WriteRequest)
+	reqi := make(map[string][]types.WriteRequest)
 	req := 0
 	for _, m := range bi {
 
@@ -343,10 +409,10 @@ func execBatchMutations(ctx context.Context, client *dynamodb.DynamoDB, bi mut.M
 		}
 		switch m.GetOpr() {
 		case mut.Insert:
-			wrtreq = &dynamodb.WriteRequest{PutRequest: &dynamodb.PutRequest{Item: av}}
+			wrtreq = types.WriteRequest{PutRequest: &types.PutRequest{Item: av}}
 			api = stats.BatchInsert
 		case mut.Delete:
-			wrtreq = &dynamodb.WriteRequest{DeleteRequest: &dynamodb.DeleteRequest{Key: av}}
+			wrtreq = types.WriteRequest{DeleteRequest: &types.DeleteRequest{Key: av}}
 			api = stats.BatchDelete
 		default:
 			panic(fmt.Errorf("Found %q amongst BulkInsert/BulkDelete requests. Do not mix bulk mutations with non-bulk requests", m.GetOpr()))
@@ -363,9 +429,10 @@ func execBatchMutations(ctx context.Context, client *dynamodb.DynamoDB, bi mut.M
 	}
 	{
 		t0 := time.Now()
-		out, err := client.BatchWriteItem(&dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: aws.String("INDEXES")})
+		out, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
 		t1 := time.Now()
 		stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(reqi))
+		//func SaveBatchStat(src Source, tag string, cc []types.ConsumedCapacity, dur time.Duration, muts int)
 		if err != nil {
 			return newDBSysErr("BatchWriteItem: ", "execBatchMutations", err)
 		}
@@ -383,7 +450,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.DynamoDB, bi mut.M
 				slog.Log("dbExecute: ", fmt.Sprintf("%s into %s: Elapsed: %s Unprocessed: %d of %d [retry: %d]", api, curTbl, t1.Sub(t0).String(), unProc, curTot, i+1))
 				curTot = unProc
 				t0 = time.Now()
-				out, err = client.BatchWriteItem(&dynamodb.BatchWriteItemInput{RequestItems: out.UnprocessedItems, ReturnConsumedCapacity: aws.String("INDEXES")})
+				out, err = client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: out.UnprocessedItems, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
 				t1 = time.Now()
 				stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(out.UnprocessedItems))
 				if err != nil {
@@ -413,7 +480,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.DynamoDB, bi mut.M
 	return nil
 }
 
-func execBatch(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.Mutations, tag string) error {
+func execBatch(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string) error {
 	// merge transaction
 
 	// generate statements for each mutation
@@ -435,7 +502,7 @@ func execBatch(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.Mutatio
 }
 
 // execOptim - bit silly. Runs Inserts as a batch and updates as transactional. Maybe illogical. Worth more of a think.
-func execOptim(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.Mutations, tag string) error {
+func execOptim(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string) error {
 
 	var (
 		in  mut.Mutations
@@ -480,7 +547,7 @@ type txWrite struct {
 	merge bool
 }
 
-func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.Mutations, tag string, api API) error {
+func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API) error {
 
 	// handle as a Transaction
 
@@ -499,8 +566,8 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 	//  Put {
 	//      ConditionExpression ,
 	//      ExpressionAttributeNames  map[string]*string
-	//      ExpressionAttributeValues map[string]*dynamodb.AttributeValue
-	//      Item                      map[string]*dynamodb.AttributeValue,
+	//      ExpressionAttributeValues map[string]types.AttributeValue
+	//      Item                      map[string]types.AttributeValue,
 	//      TableName *string
 	//
 	// generate mutation as Dynamodb Put or Update.
@@ -509,7 +576,7 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 		tx txWrite
 		//
 		btx       []txWrite
-		twi, twi2 []*dynamodb.TransactWriteItem
+		twi, twi2 []types.TransactWriteItem
 	)
 	// merge transaction
 	const (
@@ -552,7 +619,7 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 			}
 		}
 
-		tx = txWrite{txwii: [2]*dynamodb.TransactWriteItemsInput{&dynamodb.TransactWriteItemsInput{TransactItems: twi, ReturnConsumedCapacity: aws.String("INDEXES")}, &dynamodb.TransactWriteItemsInput{TransactItems: twi2, ReturnConsumedCapacity: aws.String("INDEXES")}}}
+		tx = txWrite{txwii: [2]*dynamodb.TransactWriteItemsInput{&dynamodb.TransactWriteItemsInput{TransactItems: twi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}, &dynamodb.TransactWriteItemsInput{TransactItems: twi2, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}}}
 		tx.merge = merge
 		// add transaction to the batch transactions
 		btx = append(btx, tx)
@@ -577,7 +644,7 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 			// 	fmt.Printf("Transaction stmts for Target UPred: #stmts %d   %#v\n", len(tx.txwii[0].TransactItems), tx.txwii[0].TransactItems)
 			// }
 			t0 = time.Now()
-			out, err := client.TransactWriteItems(tx.txwii[0])
+			out, err := client.TransactWriteItems(ctx, tx.txwii[0])
 			t1 = time.Now()
 			if err != nil {
 
@@ -585,12 +652,11 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 					panic(err)
 				}
 
-				switch t := err.(type) {
+				tce := &types.TransactionCanceledException{}
 
-				case *dynamodb.TransactionCanceledException:
+				if errors.As(err, &tce) {
 
-					// look for specific errors as code has bee designed to cater for these only
-					for _, e := range t.CancellationReasons {
+					for _, e := range tce.CancellationReasons {
 
 						switch *e.Code {
 
@@ -609,7 +675,7 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 							// insert triggered by update with "attribute_exists(PKEY)" condition expression.
 							// second transaction stream (idx 1) contains insert operations, as the second part of a merge operation.
 							t0 = time.Now()
-							out, err := client.TransactWriteItems(tx.txwii[1])
+							out, err := client.TransactWriteItems(ctx, tx.txwii[1])
 							t1 = time.Now()
 							if err != nil {
 								err := newDBSysErr("merge mutation: %q (part 2): %w", tag, err)
@@ -620,18 +686,15 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 
 						default:
 
-							return errors.New(*e.Message)
+							return err
 
 						}
 					}
 
-				default:
+				} else {
 
-					syslog(fmt.Sprintf("Transaction error. Not a TransactionCanceledException. Caught in default. %T %#v\n %#v\n", t, t, tx.txwii[0]))
-					var e awserr.Error
-					if errors.As(err, &e) {
-						syslog(fmt.Sprintf("e: Error: [%s]\n Code: [%s]\n Message: [%s] \n", e.Error(), e.Code(), e.Message()))
-					}
+					syslog(fmt.Sprintf("Transaction error: %s. %#v\n", err, tx.txwii[0]))
+
 					return newDBSysErr("DB default case...", "", err)
 
 				}
@@ -667,43 +730,41 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 							UpdateExpression:          op.Update.UpdateExpression,
 							ConditionExpression:       op.Update.ConditionExpression,
 							TableName:                 op.Update.TableName,
+							ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
 						}
-						uii.SetReturnConsumedCapacity("INDEXES")
-
+						fmt.Printf("UpdateItemInput: [%s]\n", dbUpdateItemInput{uii}.String())
 						t0 := time.Now()
-						uio, err := client.UpdateItem(uii)
+						if ctx != nil {
+							fmt.Println("ctx is not nil")
+						} else {
+							fmt.Println("ctx is nil")
+						}
+						fmt.Printf("")
+						uio, err := client.UpdateItem(ctx, uii)
 						t1 := time.Now()
 						if err != nil {
-							if aerr, ok := err.(awserr.Error); ok {
-								if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
 
-									// insert triggered by update with "attribute_exists(PKEY)" condition expression.
-									// second transaction stream (i=1) contains insert operations, as the second part of a "merge" operation.
-									idx += j
-									mergeContinue = true
-									// uio.ConsumedCapacity is nil for condition failures
-									cc := &dynamodb.ConsumedCapacity{TableName: op.Update.TableName}
-									stats.SaveStdStat(stats.UpdateItemCF, tag, cc, t1.Sub(t0))
-									break
-								}
-								fmt.Println("tbl: ", *op.Update.TableName)
-								fmt.Println("Key: ", op.Update.Key)
-								for k, v := range op.Update.Key {
-									if k == "PKey" {
-										fmt.Printf("Pkey: [%s]\n", uuid.UID(v.B))
-									} else {
-										fmt.Printf("%s: [%v]\n", k, v)
+							fmt.Printf("UpdateItem error: %s\n", err)
+
+							tce := &types.TransactionCanceledException{}
+
+							if errors.As(err, &tce) {
+
+								for _, e := range tce.CancellationReasons {
+
+									if *e.Code == "ConditionalCheckFailed" {
+
+										// insert triggered by update with "attribute_exists(PKEY)" condition expression.
+										// second transaction stream (i=1) contains insert operations, as the second part of a "merge" operation.
+										idx += j
+										mergeContinue = true
+										// uio.ConsumedCapacity is nil for condition failures
+										cc := &types.ConsumedCapacity{TableName: op.Update.TableName}
+										stats.SaveStdStat(stats.UpdateItemCF, tag, cc, t1.Sub(t0))
+										break
 									}
 								}
-								for k, v := range op.Update.ExpressionAttributeNames {
-									fmt.Println("Names: ", k, *v)
-								}
-								fmt.Println("updExp: ", *op.Update.UpdateExpression)
-								if op.Update.ConditionExpression != nil {
-									fmt.Println("Cond: ", *op.Update.ConditionExpression)
-								}
-
-								return newDBSysErr("Execute std api", "UpdateItem?", err)
+								return newDBSysErr("Execute std api", "UpdateItem - TransactionCanceledException", err)
 
 							} else {
 
@@ -714,25 +775,37 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 							stats.SaveStdStat(stats.UpdateItem, tag, uio.ConsumedCapacity, t1.Sub(t0))
 						}
 					}
+
 					if op.Put != nil {
+
 						pii := &dynamodb.PutItemInput{
-							Item:      op.Put.Item,
-							TableName: op.Put.TableName,
+							Item:                   op.Put.Item,
+							TableName:              op.Put.TableName,
+							ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes,
 						}
-						pii.SetReturnConsumedCapacity("INDEXES")
-						fmt.Println("PutITemINput : ", pii.String())
+
 						t0 := time.Now()
-						uio, err := client.PutItem(pii)
+						uio, err := client.PutItem(ctx, pii)
 						t1 := time.Now()
 						if err != nil {
-							if aerr, ok := err.(awserr.Error); ok {
-								if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-									// ignore condition check failures
-									cc := &dynamodb.ConsumedCapacity{TableName: op.Update.TableName}
-									stats.SaveStdStat(stats.PutItemCF, tag, cc, t1.Sub(t0))
-									break
+
+							tce := &types.TransactionCanceledException{}
+
+							if errors.As(err, &tce) {
+
+								for _, e := range tce.CancellationReasons {
+
+									if *e.Code == "ConditionalCheckFailed" {
+
+										// if aerr, ok := err.(awserr.Error); ok {
+										// 	if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
+										// ignore condition check failures
+										cc := &types.ConsumedCapacity{TableName: op.Update.TableName}
+										stats.SaveStdStat(stats.PutItemCF, tag, cc, t1.Sub(t0))
+										break
+									}
 								}
-								return newDBSysErr("Execute std api", "PutItem", err)
+								return newDBSysErr("Execute std api", "PutItem - TransactionCanceledException", err)
 
 							} else {
 
@@ -743,28 +816,40 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 							stats.SaveStdStat(stats.PutItem, tag, uio.ConsumedCapacity, t1.Sub(t0))
 						}
 					}
+
 					if op.Delete != nil {
+
 						dii := &dynamodb.DeleteItemInput{
 							Key:                       op.Delete.Key,
 							ExpressionAttributeNames:  op.Delete.ExpressionAttributeNames,
 							ExpressionAttributeValues: op.Delete.ExpressionAttributeValues,
 							ConditionExpression:       op.Delete.ConditionExpression,
 							TableName:                 op.Delete.TableName,
+							ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
 						}
-						dii.SetReturnConsumedCapacity("INDEXES")
 
 						t0 := time.Now()
-						uio, err := client.DeleteItem(dii)
+						uio, err := client.DeleteItem(ctx, dii)
 						t1 := time.Now()
 						if err != nil {
-							if aerr, ok := err.(awserr.Error); ok {
-								if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-									// ignore condition check failures
-									cc := &dynamodb.ConsumedCapacity{TableName: op.Update.TableName}
-									stats.SaveStdStat(stats.DeleteItemCF, tag, cc, t1.Sub(t0))
-									break
+
+							tce := &types.TransactionCanceledException{}
+
+							if errors.As(err, &tce) {
+
+								for _, e := range tce.CancellationReasons {
+
+									if *e.Code == "ConditionalCheckFailed" {
+
+										// if aerr, ok := err.(awserr.Error); ok {
+										// 	if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
+										// ignore condition check failures
+										cc := &types.ConsumedCapacity{TableName: op.Update.TableName}
+										stats.SaveStdStat(stats.DeleteItemCF, tag, cc, t1.Sub(t0))
+										break
+									}
 								}
-								return newDBSysErr("Execute std api", "DeleteItem", err)
+								return newDBSysErr("Execute std api", "DeleteItem - TransactionCanceledException", err)
 
 							} else {
 
@@ -793,14 +878,14 @@ func execTransaction(ctx context.Context, client *dynamodb.DynamoDB, bs []*mut.M
 //
 //
 
-func genKeyAV(q *query.QueryHandle) (map[string]*dynamodb.AttributeValue, error) {
+func genKeyAV(q *query.QueryHandle) (map[string]types.AttributeValue, error) {
 
 	var (
 		err error
-		av  map[string]*dynamodb.AttributeValue
+		av  map[string]types.AttributeValue
 	)
 
-	av = make(map[string]*dynamodb.AttributeValue)
+	av = make(map[string]types.AttributeValue)
 
 	// generate key AV
 	for _, v := range q.GetAttr() {
@@ -840,14 +925,13 @@ func crProjectionExpr(q *query.QueryHandle) *expression.ProjectionBuilder {
 
 }
 
-func executeQuery(q *query.QueryHandle, opt ...Option) error {
+func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) error {
 
 	var (
 		// options
 		err error
 	)
 
-	ctx := q.Ctx()
 	for _, o := range opt {
 		switch strings.ToLower(o.Name) {
 		default:
@@ -923,8 +1007,8 @@ func executeQuery(q *query.QueryHandle, opt ...Option) error {
 
 }
 
-//func exGetItem(q *query.QueryHandle, av []*dynamodb.AttributeValue) error {
-func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, av map[string]*dynamodb.AttributeValue, proj *expression.ProjectionBuilder) error {
+//func exGetItem(q *query.QueryHandle, av []types.AttributeValue) error {
+func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, av map[string]types.AttributeValue, proj *expression.ProjectionBuilder) error {
 
 	//fmt.Println("=== GetItem ===")
 	if proj == nil {
@@ -934,16 +1018,19 @@ func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle,
 	if err != nil {
 		return newDBExprErr("exGetItem", "", "", err)
 	}
+
 	input := &dynamodb.GetItemInput{
 		Key:                      av,
 		ProjectionExpression:     expr.Projection(),
 		ExpressionAttributeNames: expr.Names(),
+		TableName:                aws.String(string(q.GetTable())),
+		ReturnConsumedCapacity:   types.ReturnConsumedCapacityIndexes,
+		ConsistentRead:           aws.Bool(q.ConsistentMode()),
 	}
-	input = input.SetTableName(string(q.GetTable())).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(q.ConsistentMode())
 	//
 	//syslog(fmt.Sprintf("GetItem: %#v\n", input))
 	t0 := time.Now()
-	result, err := client.GetItem(input)
+	result, err := client.GetItem(ctx, input)
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exGetItem", "GetItem", err)
@@ -951,18 +1038,19 @@ func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle,
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exGetItem:consumed capacity for GetItem  %s. Duration: %s", result.ConsumedCapacity.String(), dur_))
+		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+		syslog(fmt.Sprintf("exGetItem:consumed capacity for GetItem  %s. Duration: %s", cc_.String(), dur_))
 	}
 	//
 	if len(result.Item) == 0 {
 		return query.NoDataFoundErr
 	}
-	err = dynamodbattribute.UnmarshalMap(result.Item, q.GetFetch())
+	err = attributevalue.UnmarshalMap(result.Item, q.GetFetch())
 	if err != nil {
 		return newDBUnmarshalErr("xGetItem", "", "", "UnmarshalMap", err)
 	}
 	// save query statistics
-	stats.SaveQueryStat(stats.GetItem, q.Tag, result.ConsumedCapacity, int64(len(result.Item)), 0, dur)
+	stats.SaveQueryStat(stats.GetItem, q.Tag, result.ConsumedCapacity, 1, 0, dur)
 
 	return nil
 }
@@ -977,7 +1065,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	// pagination
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
-		// parse contents into map[string]*dynamodb.AttributeValue
+		// parse contents into map[string]types.AttributeValue
 		syslog(fmt.Sprintf("exQuery: restart"))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId())))
 		q.SetRestart(false)
@@ -1072,29 +1160,32 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 		ProjectionExpression:      expr.Projection(),
+		TableName:                 aws.String(string(q.GetTable())),
+		ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
+		ConsistentRead:            aws.Bool(q.ConsistentMode()),
 	}
-	input = input.SetTableName(string(q.GetTable())).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(q.ConsistentMode())
+
 	if q.IndexSpecified() {
-		input = input.SetIndexName(string(q.GetIndex()))
+		input.IndexName = aws.String(string(q.GetIndex()))
 	}
 	if l := q.GetLimit(); l > 0 {
-		input = input.SetLimit(int64(l))
+		input.Limit = aws.Int32(int32(l))
 	}
 	if lk := q.PgStateValI(); lk != nil {
-		input = input.SetExclusiveStartKey(lk.(map[string]*dynamodb.AttributeValue))
+		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
 	}
 
 	if q.SKset() {
-		input = input.SetScanIndexForward(q.IsScanForwardSet())
+		input.ScanIndexForward = aws.Bool(q.IsScanForwardSet())
 	}
 	//
 	t0 := time.Now()
-	result, err := client.Query(input)
+	result, err := client.Query(ctx, input)
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exQuery", "Query", err)
 	}
-
+	fmt.Println("exQuery: rows returned: ", len(result.Items), result.Count)
 	// pagination cont....
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
@@ -1112,20 +1203,21 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", result.ConsumedCapacity.String(), len(result.Items), dur_))
+		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur_))
 	}
 	//
-	if int(*result.Count) == 0 {
+	if result.Count == 0 {
 		return query.NoDataFoundErr
 	}
 
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, q.GetFetch())
+	err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
 	if err != nil {
 		return newDBUnmarshalErr("exQuery", "", "", "UnmarshalListOfMaps", err)
 	}
 
 	// save query statistics
-	stats.SaveQueryStat(stats.Query, q.Tag, result.ConsumedCapacity, *result.Count, *result.ScannedCount, dur)
+	stats.SaveQueryStat(stats.Query, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
 
 	return nil
 }
@@ -1151,7 +1243,7 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
-		// parse contents into map[string]*dynamodb.AttributeValue
+		// parse contents into map[string]types.AttributeValue
 		syslog(fmt.Sprintf("exSingleScan: restart"))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId())))
 		q.SetRestart(false)
@@ -1178,7 +1270,10 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	for i, n := range q.GetFilter() {
 
 		if i == 0 {
+
 			switch q.GetFilterComparOpr(n) {
+			case query.BEGINSWITH:
+				flt = expression.BeginsWith(expression.Name(n), q.GetFilterValue(n).(string))
 			case query.GT:
 				flt = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
 			case query.LT:
@@ -1194,6 +1289,8 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 		} else {
 
 			switch q.GetFilterComparOpr(n) {
+			case query.BEGINSWITH:
+				f = expression.BeginsWith(expression.Name(n), q.GetFilterValue(n).(string))
 			case query.GT:
 				f = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
 			case query.LT:
@@ -1228,27 +1325,31 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 		FilterExpression:          expr.Filter(),
-		Select:                    aws.String("SPECIFIC_ATTRIBUTES"),
+		Select:                    types.SelectSpecificAttributes, // aws.String("SPECIFIC_ATTRIBUTES"),
+		TableName:                 aws.String(string(q.GetTable())),
+		ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
+		ConsistentRead:            aws.Bool(q.ConsistentMode()),
 	}
 
-	input = input.SetTableName(string(q.GetTable())).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(q.ConsistentMode())
 	if q.IndexSpecified() {
-		input = input.SetIndexName(string(q.GetIndex()))
+		input.IndexName = aws.String(string(q.GetIndex()))
 	}
+
+	// fmt.Println(dbScanInput{input}.String())
+
 	if l := q.GetLimit(); l > 0 {
-		input = input.SetLimit(int64(l))
+		input.Limit = aws.Int32(int32(l))
 	}
 
 	if lk := q.PgStateValI(); lk != nil {
 		//	q.FetchState()
-		input = input.SetExclusiveStartKey(lk.(map[string]*dynamodb.AttributeValue))
-		syslog(fmt.Sprintf("exSingleScan: SetExclusiveStartKey %s", input.String()))
-
+		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
+		//	syslog(fmt.Sprintf("exSingleScan: SetExclusiveStartKey %s", input.String()))
 	}
 	//fmt.Print("input: ", input.String(), "\n")
 	//
 	t0 := time.Now()
-	result, err := client.Scan(input)
+	result, err := client.Scan(ctx, input)
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exSingleScan", "Scan", err)
@@ -1270,14 +1371,15 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exSingleScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", result.ConsumedCapacity.String(), len(result.Items), dur_))
+		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+		syslog(fmt.Sprintf("exSingleScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur_))
 	}
 	//
 	syslog(fmt.Sprintf("exSingleScan: thread: %d  len(result.Items)  %d", q.Worker(), len(result.Items)))
 
 	if len(result.Items) > 0 {
 
-		err = dynamodbattribute.UnmarshalListOfMaps(result.Items, q.GetFetch())
+		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
 		if err != nil {
 			return newDBUnmarshalErr("exSingleScan", "", "", "UnmarshalListOfMaps", err)
 		}
@@ -1302,7 +1404,7 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	}
 
 	//save query statistics
-	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, *result.Count, *result.ScannedCount, dur)
+	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
 
 	return nil
 }
@@ -1314,7 +1416,7 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	fmt.Sprintf("exWorkerScan: thread %d totalSegments %d", q.Worker(), q.GetParallel())
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
-		// parse contents into map[string]*dynamodb.AttributeValue
+		// parse contents into map[string]types.AttributeValue
 		syslog(fmt.Sprintf("exWorkerScan: restart"))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId(), q.Worker())))
 		q.SetRestart(false)
@@ -1390,26 +1492,26 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 		FilterExpression:          expr.Filter(),
-		Select:                    aws.String("SPECIFIC_ATTRIBUTES"),
+		Select:                    types.SelectSpecificAttributes,
+		TableName:                 aws.String(string(q.GetTable())),
+		ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
+		ConsistentRead:            aws.Bool(q.ConsistentMode()),
 	}
-
-	input = input.SetTableName(string(q.GetTable())).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(q.ConsistentMode())
 	if q.IndexSpecified() {
-		input = input.SetIndexName(string(q.GetIndex()))
+		input.IndexName = aws.String(string(q.GetIndex()))
 	}
 	if lk := q.PgStateValI(); lk != nil {
 		//	q.FetchState()
-		input = input.SetExclusiveStartKey(lk.(map[string]*dynamodb.AttributeValue))
-		syslog(fmt.Sprintf("exWorkerScan: SetExclusiveStartKey %s", input.String()))
-
+		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
+		//syslog(fmt.Sprintf("exWorkerScan: SetExclusiveStartKey %s", input.String()))
 	}
 
-	input = input.SetSegment(int64(q.Worker()))
-	input = input.SetTotalSegments(int64(q.GetParallel()))
-	syslog(fmt.Sprintf("exWorkerScan: thread %d  input: %s", q.Worker(), input.String()))
+	input.Segment = aws.Int32(int32(q.Worker()))            //int64(q.Worker())
+	input.TotalSegments = aws.Int32(int32(q.GetParallel())) //int64(q.GetParallel())
+	//syslog(fmt.Sprintf("exWorkerScan: thread %d  input: %s", q.Worker(), input.String()))
 	//
 	t0 := time.Now()
-	result, err := client.Scan(input)
+	result, err := client.Scan(ctx, input)
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exWorkerScan", "Scan", err)
@@ -1430,14 +1532,15 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", result.ConsumedCapacity.String(), len(result.Items), dur_))
+		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+		syslog(fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur_))
 	}
 	//
 	syslog(fmt.Sprintf("exWorkerScan: thread: %d  len(result.Items)  %d", q.Worker(), len(result.Items)))
 
 	if len(result.Items) > 0 {
 
-		err = dynamodbattribute.UnmarshalListOfMaps(result.Items, q.GetFetch())
+		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
 		if err != nil {
 			return newDBUnmarshalErr("exWorkerScan", "", "", "UnmarshalListOfMaps", err)
 		}
@@ -1462,26 +1565,33 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	}
 
 	//save query statistics
-	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, *result.Count, *result.ScannedCount, dur)
+	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
 
 	return nil
 }
 
-func stringifyPgState(d map[string]*dynamodb.AttributeValue) string {
+func stringifyPgState(d map[string]types.AttributeValue) string {
 	var lek strings.Builder
 	lek.WriteString(strconv.Itoa(len(d)))
 	for k, v := range d {
 		lek.WriteByte('{')
 		lek.WriteString(k)
 		lek.WriteString(" : ")
-		if len(v.B) != 0 {
+		if b, ok := v.(*types.AttributeValueMemberB); ok {
 			lek.WriteString("{ B : ")
 			lek.WriteByte('"')
-			lek.WriteString(uuid.UID(v.B).String())
+			lek.WriteString(uuid.UID(b.Value).String())
 			lek.WriteString(`" }`)
 		} else {
-			lek.WriteString(v.GoString())
+			switch x := v.(type) {
+			case *types.AttributeValueMemberS:
+				lek.WriteString("{ S : ")
+				lek.WriteByte('"')
+				lek.WriteString(x.Value)
+				lek.WriteString(`" }`)
+			}
 		}
+
 		lek.WriteString(" }")
 	}
 	return lek.String()
@@ -1503,7 +1613,7 @@ func savePgState(ctx context.Context, client DynamodbHandle, id uuid.UID, val st
 	mt := mut.Mutations([]dbs.Mutation{m})
 	bs := []*mut.Mutations{&mt}
 
-	return execTransaction(ctx, client.DynamoDB, bs, "internal-state", StdAPI)
+	return execTransaction(ctx, client.Client, bs, "internal-state", StdAPI)
 
 }
 
@@ -1522,10 +1632,10 @@ func getPgState(ctx context.Context, id uuid.UID, worker ...int) string {
 	}
 	var val Val
 
-	q := query.NewCtx(ctx, "pgState", "getPgState")
+	q := query.New("pgState", "getPgState")
 	q.Select(&val).Key("Id", id).Key("Name", state)
 
-	err := executeQuery(q)
+	err := executeQuery(ctx, q)
 	if err != nil {
 		panic(err)
 	}
@@ -1533,14 +1643,14 @@ func getPgState(ctx context.Context, id uuid.UID, worker ...int) string {
 
 }
 
-func unmarshalPgState(in string) map[string]*dynamodb.AttributeValue {
+// unmarshalPgState takes scan state data from bundles it into map[string]types.AttributeValue
+//	4{S : {  S: "17 June 1986"} }{PKey : {  B: "WbjVdFJGTWGpqRpUTEPcPg==" } }{SortK : { S: "r|A#A#:D"} }{P : {  S: "r|DOB"} }
+func unmarshalPgState(in string) map[string]types.AttributeValue {
 	var (
 		attr string
 		tok  string
 	)
-	mm := make(map[string]*dynamodb.AttributeValue)
-
-	//	4{S : {  S: "17 June 1986"} }{PKey : {  B: "WbjVdFJGTWGpqRpUTEPcPg==" } }{SortK : { S: "r|A#A#:D"} }{P : {  S: "r|DOB"} }
+	mm := make(map[string]types.AttributeValue)
 
 	fmt.Println("in: ", in)
 	var s scanner.Scanner
@@ -1552,8 +1662,7 @@ func unmarshalPgState(in string) map[string]*dynamodb.AttributeValue {
 	}
 	var j int64
 	for j = 0; j < elements; j++ {
-		var av dynamodb.AttributeValue
-		fmt.Println("loop: ", j)
+		var av types.AttributeValue
 		s.Scan()
 		if s.TokenText() != "{" {
 
@@ -1576,16 +1685,16 @@ func unmarshalPgState(in string) map[string]*dynamodb.AttributeValue {
 		switch tok {
 		case "S":
 			s := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
-			av = dynamodb.AttributeValue{S: aws.String(s)}
+			av = &types.AttributeValueMemberS{Value: s}
 		case "B":
 			u := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
-			av = dynamodb.AttributeValue{B: uuid.FromString(u)}
+			av = &types.AttributeValueMemberB{Value: []byte(u)}
 		case "N":
 			n := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
-			av = dynamodb.AttributeValue{N: aws.String(n)}
+			av = &types.AttributeValueMemberN{Value: n}
 		}
 
-		mm[attr] = &av
+		mm[attr] = av
 
 		for i := 0; i < 2; i++ {
 			s.Scan()

@@ -121,6 +121,9 @@ func NewTx(tag string, m ...*mut.Mutation) *TxHandle {
 // NewCTx transacational API with context
 func NewTxContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 
+	if ctx == nil {
+		syslog("NewTxContext() Error : ctx argument is nil")
+	}
 	tx := &TxHandle{Tag: tag, ctx: ctx, m: new(mut.Mutations), api: db.TransactionAPI, maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
 	if tag == param.StatsSystemTag {
@@ -144,6 +147,12 @@ func NewSingle(tag string) *TxHandle {
 
 }
 
+func NewSingleContext(ctx context.Context, tag string) *TxHandle {
+
+	return NewContext(ctx, tag)
+
+}
+
 // New - default represents standard api
 func New(tag string, m ...*mut.Mutation) *TxHandle {
 
@@ -164,6 +173,10 @@ func New(tag string, m ...*mut.Mutation) *TxHandle {
 
 // NewC - default represents standard api with context
 func NewContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
+
+	if ctx == nil {
+		syslog("NewContext() Error : ctx argument is nil")
+	}
 
 	tx := &TxHandle{Tag: tag, ctx: ctx, api: db.StdAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
@@ -200,6 +213,10 @@ func NewBatch(tag string, m ...*mut.Mutation) *TxHandle {
 
 // NewBatch -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
 func NewBatchContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
+
+	if ctx == nil {
+		syslog("NewBatchContext() Error : ctx argument is nil")
+	}
 
 	tx := &TxHandle{Tag: tag, ctx: ctx, api: db.BatchAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
@@ -454,6 +471,9 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 	h.TransactionStart = time.Now()
 
 	// TODO: make h.prepare a db.Option
+	// context.Context at two levels: 1) at tx 2) at dhHdl (based on db.Init(ctx)
+	// tx overrides dhHdl context.
+
 	err = h.dbHdl.Execute(h.ctx, h.batch, h.Tag, h.api, h.prepare, h.options...)
 
 	h.TransactionEnd = time.Now()
@@ -475,6 +495,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 type QHandle struct {
 	dbHdl              db.Handle            // mysql handle, [default: either, spanner spanner.NewClient, dynamodb dynamodb.New]
 	options            db.Options           // []db.Option
+	ctx                context.Context      // moved from QueryHandle.ctx. As set in tx.NewQuery*
 	*query.QueryHandle                      // GoGraph query handle - single thread
 	workers            []*query.QueryHandle // GoGraph query handle's for parallel scans - one per parallel thread
 }
@@ -493,7 +514,7 @@ func NewQuery(tbln tbl.Name, label string, idx ...tbl.Name) *QHandle {
 	return &QHandle{QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
 }
 
-func NewQuery2(ctx context.Context, label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
+func NewQuery2(label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
 	if err := tbl.IsRegistered(tbln); err != nil {
 		panic(err)
 	}
@@ -502,9 +523,23 @@ func NewQuery2(ctx context.Context, label string, tbln tbl.Name, idx ...tbl.Name
 		if err := tbl.IsRegistered(idx[0]); err != nil {
 			panic(err)
 		}
-		return &QHandle{QueryHandle: query.NewCtx(ctx, tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
+		return &QHandle{QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
 	}
-	return &QHandle{QueryHandle: query.NewCtx(ctx, tbln, label), dbHdl: db.GetDefaultDBHdl()}
+	return &QHandle{QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
+}
+
+func NewQueryContext(ctx context.Context, label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
+	if err := tbl.IsRegistered(tbln); err != nil {
+		panic(err)
+	}
+
+	if len(idx) > 0 {
+		if err := tbl.IsRegistered(idx[0]); err != nil {
+			panic(err)
+		}
+		return &QHandle{ctx: ctx, QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
+	}
+	return &QHandle{ctx: ctx, QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
 }
 
 func (h *QHandle) DB(s string, opt ...db.Option) *QHandle {
@@ -556,12 +591,17 @@ func (h *QHandle) Workers() []*query.QueryHandle {
 }
 
 func (h *QHandle) Execute(w ...int) error {
+	// NewQueryContext takes precedence over dbHdl.ctx
+	ctx := h.ctx
+	if ctx == nil {
+		ctx = h.dbHdl.Ctx()
+	}
 
 	switch len(w) {
 	case 0:
-		return h.dbHdl.ExecuteQuery(h.QueryHandle, h.options...)
+		return h.dbHdl.ExecuteQuery(ctx, h.QueryHandle, h.options...)
 	default:
-		return h.dbHdl.ExecuteQuery(h.workers[w[0]], h.options...)
+		return h.dbHdl.ExecuteQuery(ctx, h.workers[w[0]], h.options...)
 	}
 
 }

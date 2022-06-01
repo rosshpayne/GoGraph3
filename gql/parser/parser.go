@@ -397,7 +397,7 @@ func (p *Parser) parseFunction(s *ast.RootStmt) *Parser {
 	rf = &s.RootFunc
 	rf.AssignName(p.curToken.Literal, p.curToken.Loc)
 
-	// parse (func:
+	// parse (func: has()
 	for _, v := range []token.TokenType{token.LPAREN, token.FUNC, token.COLON} {
 		if p.curToken.Type != v {
 			p.addErr(fmt.Sprintf(`Expected a %s got %s instead`, v, p.curToken.Literal))

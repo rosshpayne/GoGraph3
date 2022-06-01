@@ -1,6 +1,7 @@
 package run
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -26,7 +27,7 @@ func New(logid string, program string) (uuid.UID, error) {
 	runid, _ = uuid.MakeUID()
 	status := "R"
 	param.RunId = runid.String()
-	rtx := tx.NewSingle(param.StatsSystemTag)
+	rtx := tx.New(param.StatsSystemTag)
 	m := rtx.NewInsert(tbl.Monrun).AddMember("run", runid).AddMember("sortk", "AA", mut.IsKey).AddMember("start", "$CURRENT_TIMESTAMP$").AddMember("program", program).AddMember("status", status)
 	m.AddMember("logfile", param.LogFile)
 	rtx.Add(m)
@@ -50,7 +51,10 @@ func New2(logid string) (runid uuid.UID) {
 
 func Finish(err error) {
 
-	rtx := tx.NewSingle(param.StatsSystemTag)
+	ctx := context.Background()
+
+	// use Context version as cancel() may have been called which makes dbHdl context ineffective.
+	rtx := tx.NewSingleContext(ctx, param.StatsSystemTag)
 	status := "C"
 	if err != nil {
 		status = "E"

@@ -15,20 +15,22 @@ import (
 
 type SpannerHandle struct {
 	opt Options
+	ctx context.Context
 	*spanner.Client
 }
 
 var (
-	dbSrv *spanner.Client
-	mu    sync.Mutex
+	client *spanner.Client
+	// main ctx context
+	ctx context.Context
+	mu  sync.Mutex
 	// zero entry in dbRegistry is for default db.
 	// non-default db's use Register()
 	dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "Spanner", Default: true}}
 )
 
-func newService() (*spanner.Client, error) {
+func newService(ctx context.Context) (*spanner.Client, error) {
 	// Note: NewClient does not error if instance is not available. Error is generated when db is accessed in type.graphShortName
-	ctx := context.Background()
 	client, err := spanner.NewClient(ctx, "projects/banded-charmer-310203/instances/test-instance/databases/test-sdk-db")
 	if err != nil {
 		logerr(err)
@@ -37,14 +39,15 @@ func newService() (*spanner.Client, error) {
 	return client, nil
 }
 
-func init() {
+func Init(ctx_ context.Context) {
 
 	var err error
 
+	ctx = ctx_
 	mu.Lock()
 	defer mu.Unlock()
 
-	dbSrv, err = newService()
+	dbSrv, err := newService(ctx)
 	if err != nil {
 		logerr(err)
 	}
@@ -69,6 +72,10 @@ func (h SpannerHandle) ExecuteQuery(qh *query.QueryHandle, o ...Option) error {
 func (h SpannerHandle) Close(q *query.QueryHandle) error {
 
 	return nil
+}
+
+func (h SpannerHandle) Ctx() context.Context {
+	return h.ctx
 }
 
 func (h SpannerHandle) CloseTx(m []*mut.Mutations) {}

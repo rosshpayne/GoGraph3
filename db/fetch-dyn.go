@@ -4,6 +4,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -14,10 +15,15 @@ import (
 	//"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/uuid"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	//"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
+	// "github.com/aws/aws-sdk-go/service/dynamodb"
+	// "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	// "github.com/aws/aws-sdk-go/service/dynamodb/expression"
 )
 
 //  ItemCache struct is the transition between Dynamodb types and the actual attribute type defined in the DD.
@@ -28,6 +34,8 @@ import (
 //   DD:   datetime    conversion: string -> time.Time
 //  all the other datatypes do not need to be converted.
 
+var logid = "DB: "
+
 func logerr(e error, panic_ ...bool) {
 
 	if len(panic_) > 0 && panic_[0] {
@@ -35,10 +43,6 @@ func logerr(e error, panic_ ...bool) {
 		panic(e)
 	}
 	slog.Log("DB: ", e.Error())
-}
-
-func syslog(s string) {
-	slog.Log("DB: ", s)
 }
 
 //  NOTE: tyShortNm is duplicated in cache pkg. It exists in in db package only to support come code in rdfload.go that references the db version rather than the cache which it cannot access
@@ -115,6 +119,69 @@ type PKey struct {
 // }
 
 // FetchNode performs a Query with KeyBeginsWidth on the SortK value, so all item belonging to the SortK are fetched.
+func FetchNodeContext(ctx_ context.Context, uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
+
+	var sortk string
+	if len(subKey) > 0 {
+		sortk = subKey[0]
+		//		slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.String(), sortk))
+	} else {
+		sortk = "A#"
+		// slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.String(), sortk))
+	}
+
+	keyC := expression.KeyEqual(expression.Key("PKey"), expression.Value(uid)).And(expression.KeyBeginsWith(expression.Key("SortK"), sortk))
+	expr, err := expression.NewBuilder().WithKeyCondition(keyC).Build()
+	if err != nil {
+		return nil, newDBExprErr("FetchTNode", uid.String(), sortk, err)
+	}
+	//
+	input := &dynamodb.QueryInput{
+		KeyConditionExpression:    expr.KeyCondition(),
+		FilterExpression:          expr.Filter(),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		TableName:                 aws.String(string(tbl.TblName)),
+		ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
+		ConsistentRead:            aws.Bool(true),
+	}
+	//input = input.SetTableName(string(tbl.TblName)).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(true)
+	//	fmt.Println("FetchNode: input: ", input.String())
+	//
+	// Query
+	//
+	t0 := time.Now()
+	result, err := dbSrv.Query(ctx_, input)
+	t1 := time.Now()
+	if err != nil {
+		return nil, newDBSysErr("DB FetchNode", "Query", err)
+	}
+	dur := t1.Sub(t0)
+	cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+	syslog(fmt.Sprintf("FetchNode:consumed capacity for Query  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur.String()))
+	//
+	if result.Count == 0 {
+		return nil, newDBNoItemFound("FetchNode", uid.String(), "", "Query")
+	}
+	data := make(blk.NodeBlock, result.Count)
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &data)
+	if err != nil {
+		return nil, newDBUnmarshalErr("FetchNode", uid.String(), "", "UnmarshalListOfMaps", err)
+	}
+	//
+	// update stats
+	//
+	// fmt.Printf("monitor capacity: %#v %#v\n", result.ConsumedCapacity, result.ConsumedCapacity.Table)
+	// v := mon.Fetch{CapacityUnits: *result.ConsumedCapacity.CapacityUnits, Items: len(result.Items), Duration: dur}
+	// stat := mon.Stat{Id: mon.DBFetch, Value: &v}
+	// mon.StatCh <- stat
+	// save query statistics
+	stats.SaveQueryStat(stats.Query, "FetchNode", result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
+
+	return data, nil
+}
+
+// FetchNode performs a Query with KeyBeginsWidth on the SortK value, so all item belonging to the SortK are fetched.
 func FetchNode(uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
 
 	var sortk string
@@ -137,26 +204,30 @@ func FetchNode(uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
 		FilterExpression:          expr.Filter(),
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
+		TableName:                 aws.String(string(tbl.TblName)),
+		ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
+		ConsistentRead:            aws.Bool(true),
 	}
-	input = input.SetTableName(string(tbl.TblName)).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(true)
+	//input = input.SetTableName(string(tbl.TblName)).SetReturnConsumedCapacity("INDEXES").SetConsistentRead(true)
 	//	fmt.Println("FetchNode: input: ", input.String())
 	//
 	// Query
 	//
 	t0 := time.Now()
-	result, err := dbSrv.Query(input)
+	result, err := dbSrv.Query(context.Background(), input)
 	t1 := time.Now()
 	if err != nil {
 		return nil, newDBSysErr("DB FetchNode", "Query", err)
 	}
 	dur := t1.Sub(t0)
-	syslog(fmt.Sprintf("FetchNode:consumed capacity for Query  %s. ItemCount %d  Duration: %s", result.ConsumedCapacity.String(), len(result.Items), dur.String()))
+	cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+	syslog(fmt.Sprintf("FetchNode:consumed capacity for Query  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur.String()))
 	//
-	if int(*result.Count) == 0 {
+	if int(result.Count) == 0 {
 		return nil, newDBNoItemFound("FetchNode", uid.String(), "", "Query")
 	}
-	data := make(blk.NodeBlock, *result.Count)
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &data)
+	data := make(blk.NodeBlock, result.Count)
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &data)
 	if err != nil {
 		return nil, newDBUnmarshalErr("FetchNode", uid.String(), "", "UnmarshalListOfMaps", err)
 	}
@@ -168,7 +239,7 @@ func FetchNode(uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
 	// stat := mon.Stat{Id: mon.DBFetch, Value: &v}
 	// mon.StatCh <- stat
 	// save query statistics
-	stats.SaveQueryStat(stats.Query, "FetchNode", result.ConsumedCapacity, *result.Count, *result.ScannedCount, dur)
+	stats.SaveQueryStat(stats.Query, "FetchNode", result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
 
 	return data, nil
 }
@@ -186,35 +257,36 @@ func FetchNodeItem(uid uuid.UID, sortk string) (blk.NodeBlock, error) {
 	// TODO: remove encoding when load of data via cli is not used.
 	syslog(fmt.Sprintf("FetchNodeItem: uid: %s   sortk: sortk"))
 	pkey := PKey{PKey: []byte(uid), SortK: sortk}
-	av, err := dynamodbattribute.MarshalMap(&pkey)
+	av, err := attributevalue.MarshalMap(&pkey)
 	if err != nil {
 		return nil, newDBMarshalingErr("FetchNodeItem", "", sortk, "MarshalMap", err)
 	}
 	//
 	input := &dynamodb.GetItemInput{
-		Key: av,
-		// ProjectionExpression:     expr.Projection(),
-		// ExpressionAttributeNames: expr.Names(),
+		Key:            av,
+		TableName:      aws.String(string(tbl.TblName)),
+		ConsistentRead: aws.Bool(true),
 	}
-	input = input.SetTableName(string(tbl.TblName)).SetReturnConsumedCapacity("TOTAL")
+	//input = input.SetTableName(string(tbl.TblName)).SetReturnConsumedCapacity("TOTAL")
 	//
 	// GetItem
 	//
 	t0 := time.Now()
-	result, err := dbSrv.GetItem(input)
+	result, err := dbSrv.GetItem(context.Background(), input)
 	t1 := time.Now()
 	dur := t1.Sub(t0)
 	if err != nil {
 		return nil, newDBSysErr("FetchNodeItem", "GetItem", err)
 	}
-	syslog(fmt.Sprintf("FetchNodeItem:consumed capacity for GetItem  %s. Duration: %s", result.ConsumedCapacity.String(), t1.Sub(t0)))
+	cc_ := ConsumedCapacity_{result.ConsumedCapacity}
+	syslog(fmt.Sprintf("FetchNodeItem:consumed capacity for GetItem  %s. Duration: %s", cc_.String(), t1.Sub(t0)))
 	//
 	if len(result.Item) == 0 {
 		return nil, newDBNoItemFound("FetchNodeItem", "", sortk, "GetItem")
 	}
 	//
 	var di blk.DataItem
-	err = dynamodbattribute.UnmarshalMap(result.Item, &di)
+	err = attributevalue.UnmarshalMap(result.Item, &di)
 	if err != nil {
 		return nil, newDBUnmarshalErr("FetchNodeItem", "", sortk, "UnmarshalMap", err)
 	}
@@ -224,7 +296,7 @@ func FetchNodeItem(uid uuid.UID, sortk string) (blk.NodeBlock, error) {
 	// v := mon.Fetch{CapacityUnits: *result.ConsumedCapacity.CapacityUnits, Items: len(result.Item), Duration: dur}
 	// stat := mon.Stat{Id: mon.DBFetch, Value: &v}
 	// mon.StatCh <- stat
-	stats.SaveQueryStat(stats.GetItem, "FetchNodeItem", result.ConsumedCapacity, int64(len(result.Item)), 0, dur)
+	stats.SaveQueryStat(stats.GetItem, "FetchNodeItem", result.ConsumedCapacity, 1, 0, dur)
 	return nb, nil
 	//
 }

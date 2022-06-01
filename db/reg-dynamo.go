@@ -5,51 +5,55 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"sync"
 
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	// "github.com/aws/aws-sdk-go/aws"
+	// "github.com/aws/aws-sdk-go/aws/session"
+	// "github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type DynamodbHandle struct {
 	opt Options
-	*dynamodb.DynamoDB
+	ctx context.Context
+	*dynamodb.Client
 }
 
 var (
-	dbSrv *dynamodb.DynamoDB
+	dbSrv *dynamodb.Client
 	mu    sync.Mutex
 	// zero entry in dbRegistry is for default db.
 	// non-default db's use Register()
 	dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
 )
 
-func newService() (*dynamodb.DynamoDB, error) {
+func newService(ctx_ context.Context) *dynamodb.Client {
 
-	var err error
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1"),
-	})
+	// Using the SDK's default configuration, loading additional config
+	// and credentials values from the environment variables, shared
+	// credentials, and shared configuration files
+	cfg, err := config.LoadDefaultConfig(ctx_, config.WithRegion("us-east-1"))
 	if err != nil {
-		logerr(err, true)
-		return nil, err
+		log.Fatalf("unable to load SDK config, %v", err)
 	}
-	return dynamodb.New(sess, aws.NewConfig()), nil
+
+	return dynamodb.NewFromConfig(cfg)
 }
 
-func init() {
+func Init(ctx_ context.Context) {
 
-	var err error
-
-	dbSrv, err = newService()
-	if err != nil {
-		logerr(err)
+	dbSrv = newService(ctx_)
+	if dbSrv == nil {
+		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}
-	dbRegistry[DefaultDB].Handle = DynamodbHandle{DynamoDB: dbSrv}
+
+	dbRegistry[DefaultDB].Handle = DynamodbHandle{Client: dbSrv, ctx: ctx_}
 
 	// define dbSrv used by db package (dynamodb specific) internals - not ideal solution, would rather
 	// source from dbRegistry but this could be expensive at runtime. This works only because
@@ -59,17 +63,25 @@ func init() {
 // Execute dml (see ExecuteQuery). TODO: make prepare a db.Option
 func (h DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api API, prepare bool, opt ...Option) error {
 
-	return execute(ctx, h.DynamoDB, bs, tag, api, opt...)
+	// ctx as set in tx.NewQuery*
+	if ctx == nil {
+		ctx = h.ctx // initiated context
+	}
+	return execute(ctx, h.Client, bs, tag, api, opt...)
 }
 
-func (h DynamodbHandle) ExecuteQuery(qh *query.QueryHandle, o ...Option) error {
+func (h DynamodbHandle) ExecuteQuery(ctx context.Context, qh *query.QueryHandle, o ...Option) error {
 
-	return executeQuery(qh, o...)
+	return executeQuery(ctx, qh, o...)
 }
 
 func (h DynamodbHandle) Close(q *query.QueryHandle) error {
 
 	return nil
+}
+
+func (h DynamodbHandle) Ctx() context.Context {
+	return h.ctx
 }
 
 func (h DynamodbHandle) CloseTx(m []*mut.Mutations) {}

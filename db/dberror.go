@@ -102,7 +102,7 @@ func newDBSysErr(rt string, api string, err error) error {
 	// }
 	syserr := &DBSysErr{routine: rt, api: api, err: err}
 	//  panic for Sys errors in logerr
-	logerr(syserr, true)
+	//logerr(syserr, true)
 	return syserr
 }
 

@@ -20,9 +20,10 @@ type Options []Option
 
 type DBHandle interface {
 	Execute(context.Context, []*mut.Mutations, string, API, bool, ...Option) error
-	ExecuteQuery(*query.QueryHandle, ...Option) error
+	ExecuteQuery(context.Context, *query.QueryHandle, ...Option) error
 	Close(*query.QueryHandle) error
 	CloseTx([]*mut.Mutations)
+	Ctx() context.Context
 	String() string
 }
 

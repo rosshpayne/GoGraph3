@@ -10,7 +10,7 @@ import (
 
 // test arguments
 var graphTable = flag.String("tbl", "GoGraph.dev", "Table containing graph data [default: GoGraph.dev]")
-var concurrent = flag.Int("c", 1, "Concurrent query execution on graph [default: 1]")
+var concurrent = flag.Int("c", "1", "Concurrent query execution on graph [default: 1]")
 
 func TestMoviex(t *testing.T) {
 

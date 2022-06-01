@@ -70,6 +70,7 @@ func init() {
 	keys = keyMap{
 		TblName: key{"PKey", "SortK"},
 		Block:   key{"PKey", "SortK"},
+		Type:    key{"PKey", "SortK"},
 		// EOP:        key{"PKey", "SortK"},
 		// NodeScalar: key{"PKey", "SortK"},
 		Event: key{"eid", "id"},
