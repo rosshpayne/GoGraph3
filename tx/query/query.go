@@ -654,8 +654,14 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 	if q.err != nil {
 		return q
 	}
+
 	if q.select_ && !q.prepare {
 		panic(fmt.Errorf("Select already specified. Only one Select permitted."))
+	}
+
+	if q.select_ && q.prepare {
+		// Select already processed...
+		return q
 	}
 	q.select_ = true
 
@@ -680,14 +686,12 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 	case reflect.Slice:
 
 		st := s.Elem() // used in Query (multi row select)
-		fmt.Println("st ", st.Kind())
+
 		if st.Kind() == reflect.Slice {
 			st = st.Elem() // [][]rec - used for parallel scan
-			fmt.Println("st ", st.Kind())
 		}
 		if st.Kind() == reflect.Pointer {
 			st = st.Elem() // [][]rec - used for parallel scan
-			fmt.Println("st ", st.Kind())
 		}
 		if st.Kind() == reflect.Struct {
 			var name string

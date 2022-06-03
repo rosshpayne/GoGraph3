@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	param "github.com/GoGraph/dygparam"
 	elog "github.com/GoGraph/errlog"
@@ -92,7 +93,9 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 			}
 			IntSliceR(cnt).Sort()
 
-			etx := tx.New("edge").DB("mysql-GoGraph")
+			slog.Log(LogId, "Start Edge save...")
+			t0 := time.Now()
+			etx := tx.New("edge").DB("mysql-GoGraph").Prepare()
 			//etx := tx.NewTx("edge")
 
 			for _, v := range cnt {
@@ -110,7 +113,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 							elog.Add("Edge: ", fmt.Errorf("Error in bulk insert %w", err))
 							panic(err)
 						}
-						etx = tx.New("edge").DB("mysql-GoGraph")
+						etx = tx.New("edge").DB("mysql-GoGraph").Prepare()
 						//etx = tx.NewTx("edge")
 						bi = 0
 					}
@@ -127,6 +130,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 			if err != nil {
 				slog.Log(param.Logid, err.Error())
 			}
+			slog.Log(LogId, fmt.Sprintf("End Edge Save, Duration: %s", time.Now().Sub(t0)))
 
 		case <-ctx.Done():
 			slog.Log(LogId, "Shutdown.")

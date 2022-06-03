@@ -43,7 +43,7 @@ type TxHandle struct {
 	maxMuts int       // depending on database driver. -1 or param.MaxMutations
 	options db.Options
 	//
-	prepare bool // reuest to prepare all mutations or not.
+	prepare bool
 	//
 	i        int // batch counter ???
 	mergeMut bool
@@ -255,9 +255,9 @@ func (h *TxHandle) new(m ...*mut.Mutation) *TxHandle {
 	return h
 }
 
-func (h *TxHandle) Prepare() *TxHandle {
-	h.prepare = true
-	return h
+func (q *TxHandle) Prepare() *TxHandle {
+	q.prepare = true
+	return q
 }
 
 // Add exists to support legacy tx. It has been replaced by New* implemenations below

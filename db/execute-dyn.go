@@ -40,61 +40,6 @@ func syslog(s string) {
 	slog.Log(logid, s)
 }
 
-type Capacity_ struct {
-	*types.Capacity
-}
-
-func (c Capacity_) String() string {
-	var s strings.Builder
-
-	if c.CapacityUnits != nil {
-		s.WriteString(fmt.Sprintf("Total CUs:  %g ", c.CapacityUnits))
-	}
-	if c.ReadCapacityUnits != nil {
-		s.WriteString(fmt.Sprintf("Read CUs:  %g ", c.ReadCapacityUnits))
-	}
-	if c.WriteCapacityUnits != nil {
-		s.WriteString(fmt.Sprintf("Write CUs:  %g ", c.WriteCapacityUnits))
-	}
-	s.WriteByte('\n')
-
-	return s.String()
-}
-
-type ConsumedCapacity_ struct {
-	*types.ConsumedCapacity
-}
-
-func (w *ConsumedCapacity_) String() string {
-	var s strings.Builder
-
-	if w.CapacityUnits != nil {
-		s.WriteString(fmt.Sprintf("Total CUs: %g ", *w.CapacityUnits))
-	}
-	if w.TableName != nil {
-		s.WriteString(fmt.Sprintf(" Table: %s ", *w.TableName))
-	}
-	if w.Table != nil {
-		w_ := Capacity_{w.Table}
-		w_.String()
-	}
-	if w.WriteCapacityUnits != nil {
-		s.WriteString(fmt.Sprintf("Total Write CUs: %g \n", *w.WriteCapacityUnits))
-	}
-	for k, v := range w.GlobalSecondaryIndexes {
-		w_ := Capacity_{&v}
-		s.WriteString(fmt.Sprintf(" GIndex: %s  %s ", k, w_.String()))
-	}
-	for k, v := range w.LocalSecondaryIndexes {
-		w_ := Capacity_{&v}
-		s.WriteString(fmt.Sprintf(" LIndex: %s  %s ", k, w_.String()))
-	}
-	s.WriteByte('\n')
-
-	return s.String()
-
-}
-
 func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API, opt ...Option) error {
 
 	var err error
@@ -431,12 +376,11 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 		t0 := time.Now()
 		out, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
 		t1 := time.Now()
-		stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(reqi))
 		//func SaveBatchStat(src Source, tag string, cc []types.ConsumedCapacity, dur time.Duration, muts int)
 		if err != nil {
 			return newDBSysErr("BatchWriteItem: ", "execBatchMutations", err)
 		}
-
+		stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(reqi))
 		// handle unprocessed items
 		unProc := muts(out.UnprocessedItems)
 		if unProc > 0 {
@@ -444,7 +388,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 			retries := param.UnprocessedRetries
 			curTot := len(bi)
 			for i := 0; i < retries; i++ {
-				// deloay retry
+				// delay retry
 				time.Sleep(time.Duration(delay) * time.Millisecond)
 				//
 				slog.Log("dbExecute: ", fmt.Sprintf("%s into %s: Elapsed: %s Unprocessed: %d of %d [retry: %d]", api, curTbl, t1.Sub(t0).String(), unProc, curTot, i+1))
@@ -452,10 +396,10 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 				t0 = time.Now()
 				out, err = client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: out.UnprocessedItems, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
 				t1 = time.Now()
-				stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(out.UnprocessedItems))
 				if err != nil {
 					return newDBSysErr("Unprocessed Item", "execBatchMutations", err)
 				}
+				stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(out.UnprocessedItems))
 				unProc = muts(out.UnprocessedItems)
 				if unProc == 0 {
 					break
@@ -1038,8 +982,7 @@ func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle,
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
-		syslog(fmt.Sprintf("exGetItem:consumed capacity for GetItem  %s. Duration: %s", cc_.String(), dur_))
+		syslog(fmt.Sprintf("exGetItem:consumed capacity for GetItem  %s. Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), dur_))
 	}
 	//
 	if len(result.Item) == 0 {
@@ -1203,8 +1146,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
-		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur_))
+		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), len(result.Items), dur_))
 	}
 	//
 	if result.Count == 0 {
@@ -1532,8 +1474,7 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
-		syslog(fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur_))
+		syslog(fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), len(result.Items), dur_))
 	}
 	//
 	syslog(fmt.Sprintf("exWorkerScan: thread: %d  len(result.Items)  %d", q.Worker(), len(result.Items)))
@@ -1709,4 +1650,59 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 	syslog(fmt.Sprintf("exScan: unmarshalPgState  %s", stringifyPgState(mm)))
 
 	return mm
+}
+
+type Capacity_ struct {
+	*types.Capacity
+}
+
+func (c Capacity_) String() string {
+	var s strings.Builder
+
+	if c.CapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Total CUs:  %g ", c.CapacityUnits))
+	}
+	if c.ReadCapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Read CUs:  %g ", c.ReadCapacityUnits))
+	}
+	if c.WriteCapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Write CUs:  %g ", c.WriteCapacityUnits))
+	}
+	s.WriteByte('\n')
+
+	return s.String()
+}
+
+type ConsumedCapacity_ struct {
+	*types.ConsumedCapacity
+}
+
+func (w ConsumedCapacity_) String() string {
+	var s strings.Builder
+
+	if w.CapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Total CUs: %g ", *w.CapacityUnits))
+	}
+	if w.TableName != nil {
+		s.WriteString(fmt.Sprintf(" Table: %s ", *w.TableName))
+	}
+	if w.Table != nil {
+		w_ := Capacity_{w.Table}
+		w_.String()
+	}
+	if w.WriteCapacityUnits != nil {
+		s.WriteString(fmt.Sprintf("Total Write CUs: %g \n", *w.WriteCapacityUnits))
+	}
+	for k, v := range w.GlobalSecondaryIndexes {
+		w_ := Capacity_{&v}
+		s.WriteString(fmt.Sprintf(" GIndex: %s  %s ", k, w_.String()))
+	}
+	for k, v := range w.LocalSecondaryIndexes {
+		w_ := Capacity_{&v}
+		s.WriteString(fmt.Sprintf(" LIndex: %s  %s ", k, w_.String()))
+	}
+	s.WriteByte('\n')
+
+	return s.String()
+
 }

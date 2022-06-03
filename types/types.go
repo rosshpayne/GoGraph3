@@ -78,8 +78,6 @@ func GetAllTy() map[string]string {
 }
 
 func GetTyShortNm(longNm string) (string, bool) {
-	fmt.Println("GetTyShortNm for: ", longNm)
-	fmt.Printf("tyShortNm %#v\n", tyShortNm)
 	s, ok := tyShortNm[longNm]
 	return s, ok
 }

@@ -55,16 +55,12 @@ func setGraph(graph_ string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("short Names: ", tynames)
 	//
 	// populate type short name cache. This cache is conccurent safe as it is readonly from now on.
 	//
 	tyShortNm = make(map[string]string)
 	for _, v := range tynames {
 		tyShortNm[v.LongNm] = v.ShortNm
-	}
-	for k, v := range tyShortNm {
-		fmt.Println("ShortNames: ", k, v)
 	}
 
 	return gId, nil
@@ -89,7 +85,6 @@ func getSrv() db.DynamodbHandle {
 func LoadDataDictionary() (blk.TyIBlock, error) {
 
 	//dynSrv = getSrv()
-	fmt.Println("gId: ", gId)
 	var dd blk.TyIBlock
 
 	ldd := tx.NewQuery2("LoadDataDictionary", tbl.Name(typesTblN))
@@ -99,10 +94,7 @@ func LoadDataDictionary() (blk.TyIBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("LoadDataDictionary: ", len(dd))
-	for _, v := range dd {
-		fmt.Printf("dd: %#v\n", v)
-	}
+
 	return dd, nil
 
 }
@@ -144,7 +136,6 @@ func getGraphId(graphNm string) (string, error) {
 	if len(sk) > 1 {
 		return "", newDBUnmarshalErr("getGraphId", "", "", "More than one item found in database", err)
 	}
-	fmt.Println("getGraphId: ", sk[0].SortK+".")
 	return sk[0].SortK + ".", nil
 
 }

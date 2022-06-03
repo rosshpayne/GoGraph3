@@ -340,15 +340,15 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 
 			//m.SetOpr(mut.Merge)
 			// convert node blank name to UID
-			xf := make([]int64, 1, 1)
-			xf[0] = blk.ChildUID
-			id := make([]int, 1, 1)
-			id[0] = 0
+			// xf := make([]int64, 1, 1)
+			// xf[0] = blk.ChildUID
+			// id := make([]int, 1, 1)
+			// id[0] = 0
 			if f, ok := nv.Value.([]string); ok {
 				// populate with dummy item to establish LIST
-				uid := make([][]byte, len(f), len(f))
-				xf := make([]int64, len(f), len(f))
-				id := make([]int64, len(f), len(f))
+				// uid := make([][]byte, len(f), len(f))
+				// xf := make([]int64, len(f), len(f))
+				// id := make([]int64, len(f), len(f))
 				for i, n := range f {
 					request := uuid.Request{SName: n, RespCh: localCh}
 					//syslog(fmt.Sprintf("UID Nd request  : %#v", request))
@@ -357,9 +357,9 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 
 					UID := <-localCh
 
-					uid[i] = []byte(UID)
-					xf[i] = blk.ChildUID
-					id[i] = 0
+					// uid[i] = []byte(UID)
+					// xf[i] = blk.ChildUID
+					// id[i] = 0
 
 				}
 				//NdUid = UID // save to use to create a Type item

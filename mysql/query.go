@@ -60,6 +60,8 @@ func closePrepStmt(client *sql.DB, q *query.QueryHandle) (err error) {
 	return nil
 }
 
+// executeQuery handles one stmt per tx.NewQuery*()
+// the idea of multiple queries to a tx needs to be considered so tx has []QueryHandle
 func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt ...db.Option) error {
 
 	var (

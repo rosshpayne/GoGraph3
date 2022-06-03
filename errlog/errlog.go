@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoGraph/run"
+	//"github.com/GoGraph/run" removed as it caused import cycle error
 	slog "github.com/GoGraph/syslog"
 )
 
@@ -85,12 +85,13 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 		case pld = <-addCh:
 
-			errmsg.WriteString("syslog - Error in ")
+			errmsg.WriteString("Error in ")
 			errmsg.WriteString(pld.Id)
-			errmsg.WriteString(".  Msg: [")
+			errmsg.WriteString(".  Error Msg: [")
 			errmsg.WriteString(pld.Err.Error())
 			errmsg.WriteByte(']')
-			slog.Log(pld.Id, errmsg.String())
+			// log to log file or CW logs
+			slog.LogErr(pld.Id, errmsg.String())
 			errmsg.Reset()
 
 			errCnt[pld.Id] += 1
@@ -100,7 +101,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				for _, e := range errors {
 					fmt.Println(e.Err.Error())
 				}
-				run.Panic()
+				//	run.Panic()
 				panic(fmt.Errorf("Number of errors exceeds limit of %d", errLimit))
 			}
 			fmt.Println(pld.Err.Error())

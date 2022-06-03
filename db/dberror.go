@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
-
 	"github.com/aws/aws-sdk-go/aws/awserr"
 )
 
@@ -102,7 +102,8 @@ func newDBSysErr(rt string, api string, err error) error {
 	// }
 	syserr := &DBSysErr{routine: rt, api: api, err: err}
 	//  panic for Sys errors in logerr
-	//logerr(syserr, true)
+	errlog.Add("DBExecute", syserr)
+
 	return syserr
 }
 

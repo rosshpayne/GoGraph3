@@ -75,7 +75,7 @@ const (
 	SampleDurWaits = "500ms"
 	MaxSampleSet   = 10000 // maximum number of samples to keep for analysis
 
-	// Batch insert/delete operations
+	// Dynamodb Batch insert/delete retries
 	UnprocessedRetries = 6
 
 	// goroutine concurrency - multipler to apply to number of saveRDF goroutines to determine number of ES load goroutines

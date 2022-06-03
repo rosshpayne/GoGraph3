@@ -20,9 +20,8 @@ type sqlStmt struct {
 	params []interface{}
 }
 
-// execute executes DML only (see ExecuteQuery).
-// all unique statements are prepared once  executed once for each associated mutation
-// many statements can be prepared within a execution.
+// execute handles DML only (see ExecuteQuery).
+// if prepare() specified in tx, all unique statements (mutations) are prepared once executed multiple times
 func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag string, cTx *sql.Tx, prepare bool, opt ...db.Option) error {
 
 	// type (
@@ -43,9 +42,10 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 		prepStmt   *sql.Stmt
 	)
 
-	// prepare mutations phase - if requested
+	mutM = make(map[sqlHashValT]*sql.Stmt)
 
-	// prepare all unique mutations
+	// prepare all mutations if tx.prepare() specified
+	// note a mutation maybe represented more than once in a tx, which is the usual case ie. execute the same mutation multiple times in a tx.
 	for _, j := range bs {
 		for _, m := range *j {
 
@@ -54,9 +54,10 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 			sqlstmt := genSqlStmt(m)
 
 			if prepare {
-				// generate hash of the sql and save to map
-				// could use the mutation label instead of hashing but label may not be unique (no constraint) ie. used in multiple mutations
+				// designed to have multiple dml stmts per tx.
 				h := sha256.New()
+				// generate hash of the sql and save to mutation map
+				// could use the mutation label instead of hashing but label may not be unique (no constraint) ie. used in multiple mutations
 				h.Write([]byte(sqlstmt.sql))
 				sqlHashVal = sqlHashValT(fmt.Sprintf("%x", h.Sum(nil)))
 
@@ -81,6 +82,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 		}
 	}
 
+	// execute the mutations using either the sql or the prepared version
 	for _, j := range bs {
 		for _, m := range *j {
 

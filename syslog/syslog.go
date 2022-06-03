@@ -122,6 +122,26 @@ func Log(prefix string, s string, panic ...bool) {
 
 }
 
+func LogErr(prefix string, s string, panic ...bool) {
+
+	var ok bool
+	// get a logger from the map for the particular prefix
+	logWRm.Lock()
+	logr, ok = logrMap[prefix]
+
+	if !ok {
+		fmt.Println("create new logr for prefix: ", prefix)
+		// create new logger and save to map
+		logr = newLogr(prefix)
+		logrMap[prefix] = logr
+	}
+	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
+	// which is either a os.File or Cloudwatch Logs.
+	logr.Print(s)
+	logWRm.Unlock()
+
+}
+
 // func Logf(prefix string, format string, v ...interface{}) {
 
 // 	var ok bool

@@ -26,6 +26,7 @@ import (
 	//"github.com/GoGraph/rdf/dp"
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
+	"github.com/GoGraph/mysql"
 	"github.com/GoGraph/rdf/ds"
 	"github.com/GoGraph/rdf/edge"
 	"github.com/GoGraph/rdf/reader"
@@ -36,8 +37,6 @@ import (
 	//"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
-
-	"github.com/GoGraph/mysql"
 )
 
 const (
@@ -92,7 +91,7 @@ func init() {
 }
 
 var (
-	tblgraph   = flag.String("table", "GoGraph.Dev", `Table name containing graph data [default GoGraph.Dev]`)
+	tblgraph   = flag.String("tbl", "GoGraph.Dev", `Table name containing graph data [default GoGraph.Dev]`)
 	stats      = flag.Int("stats", 0, `Show system stats [1: enable 0: disable (default)`)
 	environ    = flag.String("env", "dev", "Environment [ dev: Development] prd: production")
 	inputFile  = flag.String("f", "rdf_test.rdf", "RDF Filename: ")
