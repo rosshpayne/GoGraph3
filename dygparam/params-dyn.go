@@ -76,7 +76,10 @@ const (
 	MaxSampleSet   = 10000 // maximum number of samples to keep for analysis
 
 	// Dynamodb Batch insert/delete retries
-	UnprocessedRetries = 6
+	// unprocessed batch items retries
+	MaxUnprocRetries = 10
+	// operation error retries
+	MaxOperRetries = 5
 
 	// goroutine concurrency - multipler to apply to number of saveRDF goroutines to determine number of ES load goroutines
 	ESgrMultipler = 1

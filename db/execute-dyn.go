@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/GoGraph/db/stats"
 	"github.com/GoGraph/dbs"
-	//	"github.com/GoGraph/dbConn"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/uuid"
@@ -25,10 +25,12 @@ import (
 	"github.com/GoGraph/tx/query"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	// "github.com/aws/aws-sdk-go/aws"
 	// "github.com/aws/aws-sdk-go/aws/awserr"
 	// "github.com/aws/aws-sdk-go/service/dynamodb"
@@ -66,6 +68,45 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 	}
 	return err
 
+}
+
+// retry determines whether the database operation that caused the error can be retried, based on the type of error.
+// All http 500 status codes can be retried whereas only a handful of 400 status codes can be.
+func retryAfter(err error) bool {
+	//
+	re := &awshttp.ResponseError{}
+	if errors.As(err, &re) {
+
+		switch re.Response.StatusCode {
+		case 500:
+			return true
+
+		case 400:
+			// these are the only errors that the application can retry after receiving
+			icsle := &types.ItemCollectionSizeLimitExceededException{}
+			if errors.As(err, &icsle) {
+				return true
+			}
+			lee := &types.LimitExceededException{}
+			if errors.As(err, &lee) {
+				return true
+			}
+			ptee := &types.ProvisionedThroughputExceededException{}
+			if errors.As(err, &ptee) {
+				return true
+			}
+			rle := &types.RequestLimitExceeded{}
+			if errors.As(err, &rle) {
+				return true
+			}
+
+			//Message: Rate of requests exceeds the allowed throughput.
+			//Message: The Access Key ID or security token is invalid.
+		}
+	} else {
+		panic(fmt.Errorf("retry: expected a ResponseError"))
+	}
+	return false
 }
 
 // func XXX(expr expression.Expression) map[string]*dynamodb.AttributeValue {
@@ -328,13 +369,16 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 	//             Item map[string]types.AttributeValue
 	//
 	var (
-		curTbl string
-		wrtreq types.WriteRequest
-		api    stats.Source
+		//curTbl string
+		t0, t1         time.Time
+		wrtreq         types.WriteRequest
+		api            stats.Source
+		unProcRetryCnt int
 	)
 
 	muts := func(ri map[string][]types.WriteRequest) int {
 		muts := 0
+		// sum all writerequests across all tables
 		for _, v := range ri {
 			muts += len(v)
 		}
@@ -345,6 +389,8 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 	reqi := make(map[string][]types.WriteRequest)
 	req := 0
+
+	// bundle mutations into a batch of RequestItems
 	for _, m := range bi {
 
 		m := m.(*mut.Mutation)
@@ -352,6 +398,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 		if err != nil {
 			return newDBSysErr("genBatchInsert", "", err)
 		}
+
 		switch m.GetOpr() {
 		case mut.Insert:
 			wrtreq = types.WriteRequest{PutRequest: &types.PutRequest{Item: av}}
@@ -362,63 +409,115 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 		default:
 			panic(fmt.Errorf("Found %q amongst BulkInsert/BulkDelete requests. Do not mix bulk mutations with non-bulk requests", m.GetOpr()))
 		}
+
 		wrs := reqi[m.GetTable()]
 		wrs = append(wrs, wrtreq)
+		reqi[m.GetTable()] = wrs
 		req++
+
 		if req > param.MaxMutations {
 			panic(fmt.Errorf("BulkMutations: exceeds %q items in a batch write. This should not happen as it should be caught in New*/Add operation", param.MaxMutations))
 		}
-		reqi[m.GetTable()] = wrs
-		curTbl = m.GetTable()
-		reqi[curTbl] = wrs
 	}
+
+	// execute batch, checking for no-execution errors or unprocessed items
 	{
-		t0 := time.Now()
-		out, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
-		t1 := time.Now()
-		//func SaveBatchStat(src Source, tag string, cc []types.ConsumedCapacity, dur time.Duration, muts int)
-		if err != nil {
-			return newDBSysErr("BatchWriteItem: ", "execBatchMutations", err)
+		var (
+			operRetryCnt int
+			retryErr     error
+			out          *dynamodb.BatchWriteItemOutput
+			err          error
+		)
+
+		for {
+			fmt.Println("operRetryCnt: ", operRetryCnt)
+			if operRetryCnt == param.MaxOperRetries {
+				return newDBSysErr2("execBatchMutations", fmt.Sprintf("Exceed max retries [%d] on operation error", param.MaxOperRetries), MaxOperRetries, "", retryErr)
+			}
+			t0 = time.Now()
+			out, err = client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
+			t1 = time.Now()
+
+			rleErr := &types.RequestLimitExceeded{Message: aws.String("request limit on table GoGraph exceeded...")}
+			httpResp := &http.Response{StatusCode: 400}
+			smResp := &smithyhttp.Response{httpResp}
+			smRespErr := &smithyhttp.ResponseError{Response: smResp, Err: rleErr}
+			awsRespErr := &awshttp.ResponseError{ResponseError: smRespErr, RequestID: "my-request-id"}
+			err = fmt.Errorf("my error : %w", awsRespErr)
+
+			if err != nil {
+				if !retryAfter(err) {
+					return newDBSysErr2("BatchWriteItem", "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, "", err)
+				}
+				// wait 3 seconds before processing again...
+				time.Sleep(3 * time.Second)
+				operRetryCnt++
+				retryErr = err
+				continue
+			}
+			retryErr = nil
+			stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(reqi))
+			break
 		}
-		stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(reqi))
 		// handle unprocessed items
+
 		unProc := muts(out.UnprocessedItems)
+
 		if unProc > 0 {
-			delay := 100 // expotential backoff time (ms)
-			retries := param.UnprocessedRetries
-			curTot := len(bi)
-			for i := 0; i < retries; i++ {
-				// delay retry
+
+			delay := 100 // base expotential backoff time (ms)
+			curUnProc := len(bi)
+
+			// execute unprocessed items, checking for no-execution errors or unprocessed items in batch
+			for {
+
+				slog.Log("dbExecute: ", fmt.Sprintf("BatchWriteItem: %s, tag: %s: Elapsed: %s Unprocessed: %d of %d [retry: %d]", api, tag, t1.Sub(t0).String(), unProc, curUnProc, unProcRetryCnt+1))
+
+				if unProcRetryCnt == param.MaxUnprocRetries {
+					nerr := UnprocessedErr{Remaining: muts(out.UnprocessedItems), Total: curUnProc, Retries: unProcRetryCnt}
+					return newDBSysErr2("BatchWriteItem", fmt.Sprintf("Failed to process all unprocessed batched items after %d retries", unProcRetryCnt), MaxUnprocRetries, "", nerr)
+				}
+				if operRetryCnt == param.MaxOperRetries {
+					return newDBSysErr2("BatchWriteItem", fmt.Sprintf("Exceed max retries [%d] on operation error ", operRetryCnt), MaxOperRetries, "", retryErr)
+				}
+				// retry backoff delay
 				time.Sleep(time.Duration(delay) * time.Millisecond)
 				//
-				slog.Log("dbExecute: ", fmt.Sprintf("%s into %s: Elapsed: %s Unprocessed: %d of %d [retry: %d]", api, curTbl, t1.Sub(t0).String(), unProc, curTot, i+1))
-				curTot = unProc
 				t0 = time.Now()
 				out, err = client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: out.UnprocessedItems, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
 				t1 = time.Now()
+
 				if err != nil {
-					return newDBSysErr("Unprocessed Item", "execBatchMutations", err)
+					retryErr = err
+					if !retryAfter(err) {
+						return newDBSysErr2("BatchWriteItem", "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, "", err)
+					}
+					// wait n seconds before reprocessing...
+					time.Sleep(1 * time.Second)
+					delay *= 2
+					operRetryCnt++
+					continue
 				}
+
 				stats.SaveBatchStat(api, tag, out.ConsumedCapacity, t1.Sub(t0), muts(out.UnprocessedItems))
 				unProc = muts(out.UnprocessedItems)
 				if unProc == 0 {
 					break
 				}
+				// some items still remain to be processed. Retry...
+				curUnProc = unProc
+				unProcRetryCnt++
+				// increase backoff delay
 				delay *= 2
 			}
-			if unProc != 0 {
-				nerr := UnprocessedErr{Remaining: muts(out.UnprocessedItems), Total: curTot, Retries: retries}
-				return newDBSysErr(fmt.Sprintf("Failure to process all unprocessed Items after %d retries", retries), "execBatchMutations", nerr)
-			}
-			slog.Log("dbExecute:", fmt.Sprintf("%s [tbl: %s]: Processed all unprocessed items. Mutations %d  Elapsed: %s", api, curTot, unProc, t1.Sub(t0).String()))
-			return nil
 		}
+		slog.Log("dbExecute:", fmt.Sprintf("%s : Processed all unprocessed items. Mutations %d  Elapsed: %s", api, len(bi), t1.Sub(t0).String()))
+	}
 
-		// log 30% of activity
-		dur := t1.Sub(t0).String()
-		if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54 || dur[dot+3] == 55) {
-			slog.Log("dbExecute:", fmt.Sprintf("Bulk Insert [tbl: %s]: mutations %d  Elapsed: %s", curTbl, len(bi), dur))
-		}
+	// log 30% of activity
+	dur := t1.Sub(t0).String()
+	if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54 || dur[dot+3] == 55) {
+		slog.Log("dbExecute:", fmt.Sprintf("Bulk Insert [tag: %s]: mutations %d  Unprocessed Retries: %d  Elapsed: %s", tag, len(bi), unProcRetryCnt, dur))
 	}
 
 	return nil

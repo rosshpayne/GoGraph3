@@ -1,14 +1,16 @@
 // build+ dynamodb
 
+// db package defines common and generic database errors. Each occurrance is written to the syslog.
+// Errors are not added to the errlog - this is left the application. The aplication can also add any data identifiers
+// to help identify the actual data impacted by the error.
 package db
 
 import (
 	"errors"
 	"fmt"
 
-	"github.com/GoGraph/errlog"
+	//"github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 )
 
 // var (
@@ -18,6 +20,12 @@ import (
 // 	MarshalingErr   = errors.New("DB marshaling error")
 // 	UnmarshalingErr = errors.New("DB unmarshaling error")
 // )
+
+const (
+	MaxOperRetries   = "MaxOperationRetries"
+	MaxUnprocRetries = "MaxUnprocesssedRetries"
+	NonRetryOperErr  = "CriticalOperationErr"
+)
 
 type UnprocessedErr struct {
 	Remaining int
@@ -77,32 +85,50 @@ func (e *DBSysErr) Unwrap() error {
 func (e *DBSysErr) Error() string {
 	return fmt.Sprintf("DB system error in %s of %s. %s", e.api, e.routine, e.err.Error())
 }
+
 func newDBSysErr(rt string, api string, err error) error {
 
-	var aerr awserr.Error
-
-	// log the dynamodb error
-	if errors.As(err, &aerr) {
-		slog.Log("DBExecute: ", fmt.Sprintf("Error: %s %s", aerr.Code(), aerr.Error()))
-	} else {
-		slog.Log("DBExecute: ", fmt.Sprintf("Error: %s", err.Error()))
-	}
-	// if errors.As(err, &aerr) {
-	// 	switch aerr.Code() {
-	// 	case "ConditionalCheckFailedException":
-	// 		err = ErrConditionalCheckFailed
-	// 	}
-	// 	switch aerr.Message() {
-	// 	case "Item size has exceeded the maximum allowed size":
-	// 		// item size has exceeded the Dynamodb 400K limit. This limit is nolonger used as a trigger point to create a new UID target item for propagation.
-	// 		err = ErrItemSizeExceeded
-	// 	case "The provided expression refers to an attribute that does not exist in the item":
-	// 		err = ErrAttributeDoesNotExist
-	// 	}
-	// }
 	syserr := &DBSysErr{routine: rt, api: api, err: err}
-	//  panic for Sys errors in logerr
-	errlog.Add("DBExecute", syserr)
+	slog.LogErr("DBExecute: ", syserr.Error())
+	//errlog.Add("DBExecute", syserr)
+
+	return syserr
+}
+
+type DBSysErr2 struct {
+	routine string
+	reason  string // DB statement
+	code    string
+	data    string
+	err     error // aws database error
+}
+
+func (e *DBSysErr2) Unwrap() error {
+	return e.err
+}
+
+func (e *DBSysErr2) Error() string {
+	return fmt.Sprintf("Error in %s: %s [%s], %s", e.routine, e.reason, e.code, e.err.Error())
+}
+
+func (e *DBSysErr2) ErrorCode() string {
+	return e.code
+}
+
+func (e *DBSysErr2) ErrorReason() string {
+	return e.reason
+}
+
+func (e *DBSysErr2) ErrorData() string {
+	return e.data
+}
+
+func newDBSysErr2(rt string, reason string, code string, data string, err error) error {
+
+	syserr := &DBSysErr2{routine: rt, reason: reason, code: code, data: data, err: err}
+
+	slog.LogErr("DBExecute: ", syserr.Error())
+	//errlog.Add("DBExecute", syserr)
 
 	return syserr
 }
@@ -139,6 +165,9 @@ func NewDBNoItemFound(rt string, pk string, sk string, api string) error {
 
 	e := &DBNoItemFound{routine: rt, pkey: pk, sortk: sk, api: api}
 	e.err = NoDataFound
+	slog.LogErr("DBExecute: ", e.Error())
+	//errlog.Add("DBExecute", e)
+
 	return e
 }
 
@@ -160,7 +189,8 @@ type DBMarshalingErr struct {
 
 func newDBMarshalingErr(rt string, pk string, sk string, api string, err error) error {
 	e := &DBMarshalingErr{routine: rt, pkey: pk, sortk: sk, api: api, err: err}
-	logerr(e)
+	slog.LogErr("DBExecute: ", fmt.Sprintf("Error: %s", e.Error()))
+	//	errlog.Add("DBExecute", e)
 	return e
 }
 
@@ -185,7 +215,8 @@ type DBUnmarshalErr struct {
 
 func newDBUnmarshalErr(rt string, pk string, sk string, api string, err error) error {
 	e := &DBUnmarshalErr{routine: rt, pkey: pk, sortk: sk, api: api, err: err}
-	logerr(e)
+	slog.LogErr("DBExecute: ", e.Error())
+	//errlog.Add("DBExecute", e)
 	return e
 }
 

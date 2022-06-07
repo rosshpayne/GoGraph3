@@ -331,7 +331,7 @@ func main() { //(f io.Reader) error { // S P O
 	// and wait for them to exit
 	wpEnd.Wait()
 
-	printErrors()
+	elog.PrintErrors()
 	// Save edge data to db.
 	edge.Persist()
 
@@ -362,20 +362,6 @@ func main() { //(f io.Reader) error { // S P O
 	admin.Persist()
 
 	return
-}
-
-func printErrors() {
-
-	elog.ReqErrCh <- struct{}{}
-	errs := <-elog.RequestCh
-	syslog(fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errs)))
-	fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errs))
-	if len(errs) > 0 {
-		for _, e := range errs {
-			syslog(fmt.Sprintf(" %s:  %s", e.Id, e.Err))
-			fmt.Println(e.Id, e.Err)
-		}
-	}
 }
 
 // verify is a goroutine (aka service_ started when program is instantiated.

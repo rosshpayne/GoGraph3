@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	blk "github.com/GoGraph/block"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
@@ -56,8 +55,9 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 	defer lmtr.EndR()
 
 	var (
-		aTy string // attribute type assigned to attributes of type S, I, F, B. Stored in GSI also.
-		err error
+		aTy   string // attribute type assigned to attributes of type S, I, F, B. Stored in GSI also.
+		err   error
+		sortk string
 	)
 
 	//
@@ -96,9 +96,10 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 		sk.WriteString(types.GraphSN())
 		sk.WriteByte('|')
 		sk.WriteString(nv.Sortk)
+		sortk = sk.String()
 
 		//m := mut.NewMutation(tbl.NodeScalar, UID, nv.Sortk, mut.Insert)
-		m := mut.NewInsert(tbl.NodeScalar).AddMember("PKey", UID).AddMember("SortK", sk.String())
+		m := mut.NewInsert(tbl.NodeScalar).AddMember("PKey", UID).AddMember("SortK", sortk)
 
 		// include graph (short) name with attribute name in index
 		var ga strings.Builder
@@ -349,13 +350,13 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 				// uid := make([][]byte, len(f), len(f))
 				// xf := make([]int64, len(f), len(f))
 				// id := make([]int64, len(f), len(f))
-				for i, n := range f {
+				for _, n := range f {
 					request := uuid.Request{SName: n, RespCh: localCh}
 					//syslog(fmt.Sprintf("UID Nd request  : %#v", request))
 
 					uuid.ReqCh <- request
-
-					UID := <-localCh
+					<-localCh
+					//UID := <-localCh
 
 					// uid[i] = []byte(UID)
 					// xf[i] = blk.ChildUID
@@ -388,10 +389,7 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 	err = txh.Execute()
 
 	if err != nil {
-		//syslog(fmt.Sprintf("Errored for %s: [%s]", sname, err.Error()))
-		errlog.Add(logid, err)
-	} else {
-		syslog(fmt.Sprintf("Finished successfully for %s", sname))
+		errlog.Add("saveRDF: ", fmt.Errorf("Failed to save: PKey: %s  SortK: %s : %s", UID.Base64(), sortk, err))
 	}
 	//
 	// expand Set and List types into individual S# entries to be indexed// TODO: what about SN, LN

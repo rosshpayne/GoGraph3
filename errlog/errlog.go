@@ -22,15 +22,16 @@ const (
 )
 
 var (
-	addCh        chan *payload
-	ListCh       chan error
-	ClearCh      chan struct{}
-	checkLimit   chan chan bool
-	RequestCh    chan Errors
-	ReqErrCh     chan struct{}
-	ErrCntByIdCh chan string
-	ErrCntRespCh chan int
-	ResetCntCh   chan string
+	addCh           chan *payload
+	ListCh          chan error
+	ClearCh         chan struct{}
+	checkLimit      chan chan bool
+	RequestCh       chan Errors
+	PrintCh         chan struct{}
+	PrintFinishedCh chan struct{}
+	ErrCntByIdCh    chan string
+	ErrCntRespCh    chan int
+	ResetCntCh      chan string
 )
 
 func CheckLimit(lc chan bool) bool {
@@ -39,12 +40,24 @@ func CheckLimit(lc chan bool) bool {
 }
 
 func Add(logid string, err error) {
+
+	if logid[len(logid)-2:] != ": " {
+		logid = strings.TrimRight(logid, " ")
+		logid = strings.TrimRight(logid, ":")
+		logid = logid + ": "
+	}
 	addCh <- &payload{logid, err}
+}
+
+func PrintErrors() {
+	PrintCh <- struct{}{}
+	<-PrintFinishedCh
 }
 
 func RunErrored() bool {
 
-	ReqErrCh <- struct{}{}
+	PrintCh <- struct{}{}
+	<-PrintFinishedCh
 	errs := <-RequestCh
 
 	if len(errs) > 0 {
@@ -66,7 +79,8 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	errCnt := make(map[string]int) // count errors by Id
 
 	addCh = make(chan *payload)
-	ReqErrCh = make(chan struct{}, 1)
+	PrintCh = make(chan struct{})
+	PrintFinishedCh = make(chan struct{})
 	//	Add = make(chan error)
 	ClearCh = make(chan struct{})
 	checkLimit = make(chan chan bool)
@@ -78,21 +92,19 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	wpStart.Done()
 	slog.Log(logid, "Powering up...")
 
-	var errmsg strings.Builder
 	for {
 
 		select {
 
 		case pld = <-addCh:
 
-			errmsg.WriteString("Error in ")
+			var errmsg strings.Builder
+			errmsg.WriteString("error in ")
 			errmsg.WriteString(pld.Id)
-			errmsg.WriteString(".  Error Msg: [")
+			errmsg.WriteString(" ")
 			errmsg.WriteString(pld.Err.Error())
-			errmsg.WriteByte(']')
 			// log to log file or CW logs
-			slog.LogErr(pld.Id, errmsg.String())
-			errmsg.Reset()
+			slog.LogErr(pld.Id, "from addCh: "+errmsg.String())
 
 			errCnt[pld.Id] += 1
 			errors = append(errors, pld)
@@ -104,7 +116,6 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				//	run.Panic()
 				panic(fmt.Errorf("Number of errors exceeds limit of %d", errLimit))
 			}
-			fmt.Println(pld.Err.Error())
 
 		case lc = <-checkLimit:
 
@@ -124,11 +135,15 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				errCnt[id] = 0
 			}
 
-		case <-ReqErrCh:
+		case <-PrintCh:
 
-			// request can only be performed in zero concurrency otherwise
-			// a copy of errors should be performed
-			RequestCh <- errors
+			slog.LogErr(logid, fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errors)))
+			fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errors))
+			for _, e := range errors {
+				slog.LogErr(logid, fmt.Sprintf(" %s %s", e.Id, e.Err))
+				fmt.Println(e.Id, e.Err)
+			}
+			PrintFinishedCh <- struct{}{}
 
 		case <-ctx.Done():
 			slog.Log(logid, "Shutdown.")

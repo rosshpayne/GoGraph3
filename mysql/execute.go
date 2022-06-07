@@ -45,7 +45,9 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 	mutM = make(map[sqlHashValT]*sql.Stmt)
 
 	// prepare all mutations if tx.prepare() specified
-	// note a mutation maybe represented more than once in a tx, which is the usual case ie. execute the same mutation multiple times in a tx.
+	// note there is typically multiple instances of the same dml in a tx, each represented as a separate mutation
+	// a hash is taken of the dml to identify its uniqueness and so only parse it once. All subsequent identical mutations will
+	// use that parsed version stoed in the mutation struct.
 	for _, j := range bs {
 		for _, m := range *j {
 
@@ -75,7 +77,9 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 					prepStmt = mhash
 				}
 				m.SetPrepStmt(prepStmt)
+
 			} else {
+
 				m.SetText(sqlstmt.sql)
 			}
 			m.SetParams(sqlstmt.params)

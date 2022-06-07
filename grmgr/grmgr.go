@@ -400,7 +400,7 @@ func report(snap map[string][]int, runid uuid.UID, snapInterval, snapReportInter
 
 		err := mtx.Execute()
 		if err != nil {
-			elog.Add("grmgrRep:", err)
+			elog.Add("grmgrRep", err)
 		}
 
 	} else {
@@ -415,7 +415,7 @@ func report(snap map[string][]int, runid uuid.UID, snapInterval, snapReportInter
 			}
 			err := mtx.Execute()
 			if err != nil {
-				elog.Add("grmgrRep:", err)
+				elog.Add("grmgrRep", err)
 			}
 		}
 

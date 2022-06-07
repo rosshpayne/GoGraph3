@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.4.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.13.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.15.5 // indirect
+	github.com/aws/smithy-go v1.11.2 // indirect
 	github.com/elastic/go-elasticsearch/v7 v7.6.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/satori/go.uuid v1.2.0
