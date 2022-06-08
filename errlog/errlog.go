@@ -22,16 +22,15 @@ const (
 )
 
 var (
-	addCh           chan *payload
-	ListCh          chan error
-	ClearCh         chan struct{}
-	checkLimit      chan chan bool
-	RequestCh       chan Errors
-	PrintCh         chan struct{}
-	PrintFinishedCh chan struct{}
-	ErrCntByIdCh    chan string
-	ErrCntRespCh    chan int
-	ResetCntCh      chan string
+	addCh        chan *payload
+	ListCh       chan error
+	ClearCh      chan struct{}
+	checkLimit   chan chan bool
+	RequestCh    chan Errors
+	PrintCh      chan chan struct{}
+	ErrCntByIdCh chan string
+	ErrCntRespCh chan int
+	ResetCntCh   chan string
 )
 
 func CheckLimit(lc chan bool) bool {
@@ -50,14 +49,15 @@ func Add(logid string, err error) {
 }
 
 func PrintErrors() {
-	PrintCh <- struct{}{}
-	<-PrintFinishedCh
+	respCh := make(chan struct{})
+	PrintCh <- respCh
+	<-respCh
 }
 
 func RunErrored() bool {
-
-	PrintCh <- struct{}{}
-	<-PrintFinishedCh
+	respCh := make(chan struct{})
+	PrintCh <- respCh
+	<-respCh
 	errs := <-RequestCh
 
 	if len(errs) > 0 {
@@ -79,8 +79,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	errCnt := make(map[string]int) // count errors by Id
 
 	addCh = make(chan *payload)
-	PrintCh = make(chan struct{})
-	PrintFinishedCh = make(chan struct{})
+	PrintCh = make(chan chan struct{})
 	//	Add = make(chan error)
 	ClearCh = make(chan struct{})
 	checkLimit = make(chan chan bool)
@@ -99,12 +98,11 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		case pld = <-addCh:
 
 			var errmsg strings.Builder
-			errmsg.WriteString("error in ")
 			errmsg.WriteString(pld.Id)
 			errmsg.WriteString(" ")
 			errmsg.WriteString(pld.Err.Error())
 			// log to log file or CW logs
-			slog.LogErr(pld.Id, "from addCh: "+errmsg.String())
+			slog.LogErr(pld.Id, errmsg.String())
 
 			errCnt[pld.Id] += 1
 			errors = append(errors, pld)
@@ -135,7 +133,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				errCnt[id] = 0
 			}
 
-		case <-PrintCh:
+		case respch := <-PrintCh:
 
 			slog.LogErr(logid, fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errors)))
 			fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errors))
@@ -143,7 +141,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				slog.LogErr(logid, fmt.Sprintf(" %s %s", e.Id, e.Err))
 				fmt.Println(e.Id, e.Err)
 			}
-			PrintFinishedCh <- struct{}{}
+			respch <- struct{}{}
 
 		case <-ctx.Done():
 			slog.Log(logid, "Shutdown.")

@@ -1,8 +1,8 @@
 // build+ dynamodb
 
 // db package defines common and generic database errors. Each occurrance is written to the syslog.
-// Errors are not added to the errlog - this is left the application. The aplication can also add any data identifiers
-// to help identify the actual data impacted by the error.
+// Errors are not added to the errlog - this is left to the application. The aplication can also add any relevent data values
+// to identify the data impacted by the error.
 package db
 
 import (
@@ -97,9 +97,9 @@ func newDBSysErr(rt string, api string, err error) error {
 
 type DBSysErr2 struct {
 	routine string
+	tag     string
 	reason  string // DB statement
 	code    string
-	data    string
 	err     error // aws database error
 }
 
@@ -108,7 +108,7 @@ func (e *DBSysErr2) Unwrap() error {
 }
 
 func (e *DBSysErr2) Error() string {
-	return fmt.Sprintf("Error in %s: %s [%s], %s", e.routine, e.reason, e.code, e.err.Error())
+	return fmt.Sprintf("Error in routine %s [tag: %s]: %s [%s], %s", e.routine, e.tag, e.reason, e.code, e.err.Error())
 }
 
 func (e *DBSysErr2) ErrorCode() string {
@@ -119,13 +119,9 @@ func (e *DBSysErr2) ErrorReason() string {
 	return e.reason
 }
 
-func (e *DBSysErr2) ErrorData() string {
-	return e.data
-}
+func newDBSysErr2(rt string, tag string, reason string, code string, err error) error {
 
-func newDBSysErr2(rt string, reason string, code string, data string, err error) error {
-
-	syserr := &DBSysErr2{routine: rt, reason: reason, code: code, data: data, err: err}
+	syserr := &DBSysErr2{routine: rt, tag: tag, reason: reason, code: code, err: err}
 
 	slog.LogErr("DBExecute: ", syserr.Error())
 	//errlog.Add("DBExecute", syserr)

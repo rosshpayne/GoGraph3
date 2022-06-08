@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
+	//"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,7 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
+	//	smithyhttp "github.com/aws/smithy-go/transport/http"
 	// "github.com/aws/aws-sdk-go/aws"
 	// "github.com/aws/aws-sdk-go/aws/awserr"
 	// "github.com/aws/aws-sdk-go/service/dynamodb"
@@ -114,11 +114,11 @@ func retryAfter(err error) bool {
 // 	var s strings.Builder
 // 	values := expr.Values()
 
-// convertBSet2List converts Binary Set to List because GoGraph expects a List type not a BS type
+// convertBS2List converts Binary Set to List because GoGraph expects a List type not a BS type
 // Dynamodb's expression pkg creates BS rather than L for binary array data.
 // As GoGraph had no user-defined types it is possible to hardwire in the affected attributes.
 // All types in GoGraph are known at compile time.
-func convertBSet2List(expr expression.Expression) map[string]types.AttributeValue {
+func convertBS2List(expr expression.Expression) map[string]types.AttributeValue {
 
 	var s strings.Builder
 	values := expr.Values() // map[string]types.AttributeValue
@@ -277,7 +277,7 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 	update := &types.Update{
 		Key:                       av,
 		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: convertBSet2List(expr),
+		ExpressionAttributeValues: convertBS2List(expr),
 		UpdateExpression:          expr.Update(),
 		ConditionExpression:       expr.Condition(),
 		TableName:                 aws.String(m.GetTable()),
@@ -432,25 +432,25 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 		for {
 			fmt.Println("operRetryCnt: ", operRetryCnt)
 			if operRetryCnt == param.MaxOperRetries {
-				return newDBSysErr2("execBatchMutations", fmt.Sprintf("Exceed max retries [%d] on operation error", param.MaxOperRetries), MaxOperRetries, "", retryErr)
+				return newDBSysErr2("execBatchMutations", tag, fmt.Sprintf("Exceed max retries [%d] on operation error", param.MaxOperRetries), MaxOperRetries, retryErr)
 			}
 			t0 = time.Now()
 			out, err = client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
 			t1 = time.Now()
 
-			rleErr := &types.RequestLimitExceeded{Message: aws.String("request limit on table GoGraph exceeded...")}
-			httpResp := &http.Response{StatusCode: 400}
-			smResp := &smithyhttp.Response{httpResp}
-			smRespErr := &smithyhttp.ResponseError{Response: smResp, Err: rleErr}
-			awsRespErr := &awshttp.ResponseError{ResponseError: smRespErr, RequestID: "my-request-id"}
-			err = fmt.Errorf("my error : %w", awsRespErr)
+			// rleErr := &types.RequestLimitExceeded{Message: aws.String("request limit on table GoGraph exceeded...")}
+			// httpResp := &http.Response{StatusCode: 400}
+			// smResp := &smithyhttp.Response{httpResp}
+			// smRespErr := &smithyhttp.ResponseError{Response: smResp, Err: rleErr}
+			// awsRespErr := &awshttp.ResponseError{ResponseError: smRespErr, RequestID: "my-request-id"}
+			// err = fmt.Errorf("my error : %w", awsRespErr)
 
 			if err != nil {
 				if !retryAfter(err) {
-					return newDBSysErr2("BatchWriteItem", "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, "", err)
+					return newDBSysErr2("BatchWriteItem", tag, "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, err)
 				}
-				// wait 3 seconds before processing again...
-				time.Sleep(3 * time.Second)
+				// wait 1 seconds before processing again...
+				time.Sleep(1 * time.Second)
 				operRetryCnt++
 				retryErr = err
 				continue
@@ -475,10 +475,10 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 				if unProcRetryCnt == param.MaxUnprocRetries {
 					nerr := UnprocessedErr{Remaining: muts(out.UnprocessedItems), Total: curUnProc, Retries: unProcRetryCnt}
-					return newDBSysErr2("BatchWriteItem", fmt.Sprintf("Failed to process all unprocessed batched items after %d retries", unProcRetryCnt), MaxUnprocRetries, "", nerr)
+					return newDBSysErr2("BatchWriteItem", tag, fmt.Sprintf("Failed to process all unprocessed batched items after %d retries", unProcRetryCnt), MaxUnprocRetries, nerr)
 				}
 				if operRetryCnt == param.MaxOperRetries {
-					return newDBSysErr2("BatchWriteItem", fmt.Sprintf("Exceed max retries [%d] on operation error ", operRetryCnt), MaxOperRetries, "", retryErr)
+					return newDBSysErr2("BatchWriteItem", tag, fmt.Sprintf("Exceed max retries [%d] on operation error ", operRetryCnt), MaxOperRetries, retryErr)
 				}
 				// retry backoff delay
 				time.Sleep(time.Duration(delay) * time.Millisecond)
@@ -490,7 +490,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 				if err != nil {
 					retryErr = err
 					if !retryAfter(err) {
-						return newDBSysErr2("BatchWriteItem", "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, "", err)
+						return newDBSysErr2("BatchWriteItem", tag, "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, err)
 					}
 					// wait n seconds before reprocessing...
 					time.Sleep(1 * time.Second)
@@ -511,7 +511,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 				delay *= 2
 			}
 		}
-		slog.Log("dbExecute:", fmt.Sprintf("%s : Processed all unprocessed items. Mutations %d  Elapsed: %s", api, len(bi), t1.Sub(t0).String()))
+		slog.Log("dbExecute:", fmt.Sprintf("%s : Batch processed all items [tag: %s]. Mutations %d  Elapsed: %s", api, tag, len(bi), t1.Sub(t0).String()))
 	}
 
 	// log 30% of activity
@@ -682,16 +682,12 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 		for _, tx := range btx {
 
-			// if tag == "Target UPred" {
-			// 	//fmt.Printf("btx %d: %#v\n", i, tx.txwii[0])
-			// 	fmt.Printf("Transaction stmts for Target UPred: #stmts %d   %#v\n", len(tx.txwii[0].TransactItems), tx.txwii[0].TransactItems)
-			// }
 			t0 = time.Now()
 			out, err := client.TransactWriteItems(ctx, tx.txwii[0])
 			t1 = time.Now()
 			if err != nil {
 
-				if tag == "Target UPred" {
+				if tag == "Target UPred" { // TODO: ??? remove
 					panic(err)
 				}
 
@@ -711,25 +707,28 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 							// switch *e.Message {
 							// case "The provided expression refers to an attribute that does not exist in the item":
 
-							return fmt.Errorf("Transaction Validaation error %w. Item: %#v", errors.New(*e.Message), e.Item)
+							return fmt.Errorf("Transaction Validaation error [tag: %s] %w. Item: %#v", tag, errors.New(*e.Message), e.Item)
 
 						case "ConditionalCheckFailed":
 
-							// insert triggered by update with "attribute_exists(PKEY)" condition expression.
-							// second transaction stream (idx 1) contains insert operations, as the second part of a merge operation.
+							//  triggered by update with "attribute_exists(PKEY)" condition expression. Update will fail if PKEY attribute does not exist in db.
+							// second transaction stream (idx 1) contains insert/put operation, as the second part of a merge operation.
 							t0 = time.Now()
 							out, err := client.TransactWriteItems(ctx, tx.txwii[1])
 							t1 = time.Now()
 							if err != nil {
-								err := newDBSysErr("merge mutation: %q (part 2): %w", tag, err)
-								return err
+								return newDBSysErr2("TransactionAPI (merge part 2)", tag, "", "TxMergeP2", err)
 							}
 							stats.SaveTransactStat(tag, out.ConsumedCapacity, t1.Sub(t0), len(tx.txwii[1].TransactItems))
 							// return nil
+							dur := t1.Sub(t0).String()
+							if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54) { //|| dur[dot+3] == 55) {
+								slog.Log("dbExecute: ", fmt.Sprintf("TransactionAPI (merge part2): mutations %d  Elapsed: %s ", len(tx.txwii[1].TransactItems), dur))
+							}
 
 						default:
 
-							return err
+							return newDBSysErr2("TransactionAPI (merge part 2)", tag, "", "TxMergeP2", err)
 
 						}
 					}
@@ -738,18 +737,20 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 					syslog(fmt.Sprintf("Transaction error: %s. %#v\n", err, tx.txwii[0]))
 
-					return newDBSysErr("DB default case...", "", err)
+					return newDBSysErr2("TransactionAPI", tag, "Not a TransactionCanceledException error in TransactWriteItems", "", err)
 
 				}
 
 			} else {
+				// no error, save statistics
 				stats.SaveTransactStat(tag, out.ConsumedCapacity, t1.Sub(t0), len(tx.txwii[0].TransactItems))
+
+				dur := t1.Sub(t0).String()
+				if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54) { //|| dur[dot+3] == 55) {
+					slog.Log("dbExecute: ", fmt.Sprintf("TransactionAPI: mutations %d  Elapsed: %s ", len(tx.txwii[0].TransactItems), dur))
+				}
+
 			}
-
-			// if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54) { //|| dur[dot+3] == 55) {
-			// 	slog.Log("dbExecute: ", fmt.Sprintf("Transaction: mutations %d  Elapsed: %s ", len(tx.txwii[0].TransactItems), dur))
-			// }
-
 		}
 
 	case StdAPI, OptimAPI:
@@ -775,14 +776,8 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 							TableName:                 op.Update.TableName,
 							ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
 						}
-						fmt.Printf("UpdateItemInput: [%s]\n", dbUpdateItemInput{uii}.String())
+
 						t0 := time.Now()
-						if ctx != nil {
-							fmt.Println("ctx is not nil")
-						} else {
-							fmt.Println("ctx is nil")
-						}
-						fmt.Printf("")
 						uio, err := client.UpdateItem(ctx, uii)
 						t1 := time.Now()
 						if err != nil {
@@ -807,14 +802,18 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 										break
 									}
 								}
-								return newDBSysErr("Execute std api", "UpdateItem - TransactionCanceledException", err)
+								if !mergeContinue {
+									return newDBSysErr2("Standard API", tag, "UpdateItem - TransactionCanceledException", "", err)
+								}
 
 							} else {
 
-								return newDBSysErr("Execute std api", "UpdateItem", err)
+								return newDBSysErr2("Standard API", tag, "UpdateItem Error", "", err)
+
 							}
+
 						} else {
-							//syslog(fmt.Sprintf("Execute std:consumed capacity for UpdateItem %s.  Duration: %s", uio.ConsumedCapacity, t1.Sub(t0)))
+
 							stats.SaveStdStat(stats.UpdateItem, tag, uio.ConsumedCapacity, t1.Sub(t0))
 						}
 					}
@@ -836,23 +835,11 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 							if errors.As(err, &tce) {
 
-								for _, e := range tce.CancellationReasons {
-
-									if *e.Code == "ConditionalCheckFailed" {
-
-										// if aerr, ok := err.(awserr.Error); ok {
-										// 	if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-										// ignore condition check failures
-										cc := &types.ConsumedCapacity{TableName: op.Update.TableName}
-										stats.SaveStdStat(stats.PutItemCF, tag, cc, t1.Sub(t0))
-										break
-									}
-								}
-								return newDBSysErr("Execute std api", "PutItem - TransactionCanceledException", err)
+								return newDBSysErr2("Execute std api", tag, "PutItem - TransactionCanceledException", "", err)
 
 							} else {
 
-								return newDBSysErr("Execute std api", "PutItem", err)
+								return newDBSysErr2("Execute std api", tag, "PutItem Error", "", err)
 							}
 						} else {
 							//syslog(fmt.Sprintf("Execute std api:consumed capacity for PutItem %s.  Duration: %s", uio.ConsumedCapacity, t1.Sub(t0)))
@@ -880,34 +867,24 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 							if errors.As(err, &tce) {
 
-								for _, e := range tce.CancellationReasons {
-
-									if *e.Code == "ConditionalCheckFailed" {
-
-										// if aerr, ok := err.(awserr.Error); ok {
-										// 	if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-										// ignore condition check failures
-										cc := &types.ConsumedCapacity{TableName: op.Update.TableName}
-										stats.SaveStdStat(stats.DeleteItemCF, tag, cc, t1.Sub(t0))
-										break
-									}
-								}
-								return newDBSysErr("Execute std api", "DeleteItem - TransactionCanceledException", err)
+								return newDBSysErr2("Execute std api", tag, "DeleteItem - TransactionCanceledException", "", err)
 
 							} else {
 
-								return newDBSysErr("Execute std api", "DeleteItem", err)
+								return newDBSysErr2("Execute std api", tag, "DeleteItem", "", err)
 							}
 						} else {
-							//syslog(fmt.Sprintf("Execute std api:consumed capacity for DeleteItem %s.  Duration: %s", uio.ConsumedCapacity, t1.Sub(t0)))
+
 							stats.SaveStdStat(stats.DeleteItem, tag, uio.ConsumedCapacity, t1.Sub(t0))
 						}
 					}
-				}
+				} // for
+
 				if !mergeContinue {
 					break
 				}
-			}
+
+			} // for
 		}
 	}
 	return nil

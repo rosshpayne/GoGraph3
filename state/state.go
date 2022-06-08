@@ -30,6 +30,7 @@ func getState(state string) string {
 
 func Set(state string, value interface{}) error {
 
+	syslog.Log("state", fmt.Sprintf("set state data for %s", getState(state)))
 	// perform as non-transactional (single)
 	stx := tx.NewTx("stateSet").DB("mysql-GoGraph") // was NewSingle()
 	// either a dynamodb insert or update will perform a merge like operation ie. an update will insert if item
@@ -71,7 +72,7 @@ func Get(state string) (string, error) {
 	qtx := tx.NewQuery(tbl.State, "State").DB("mysql-gograph", db.Options{db.Option{Name: "singlerow", Val: true}}...)
 
 	qtx.Select(result).Key("Name", getState(state))
-	syslog.Log("state: ", fmt.Sprintf("get state data for %s", getState(state)))
+	syslog.Log("state", fmt.Sprintf("get state data for %s", getState(state)))
 	fmt.Sprintf("get state data Name =  %q", getState(state))
 
 	err = qtx.Execute()

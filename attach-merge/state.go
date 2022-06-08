@@ -18,7 +18,7 @@ var startingup bool = true
 
 func initState() {
 	var err error
-	var logid = "initState: "
+	var logid = "initState"
 	//
 	// get state
 	//

@@ -659,10 +659,6 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 		panic(fmt.Errorf("Select already specified. Only one Select permitted."))
 	}
 
-	if q.select_ && q.prepare {
-		// Select already processed...
-		return q
-	}
 	q.select_ = true
 
 	f := reflect.TypeOf(a)
@@ -767,6 +763,9 @@ func (q *QueryHandle) Split() []interface{} { // )
 
 			bind = append(bind, p)
 		}
+	}
+	for i, v := range bind {
+		slog.Log("Split: ", fmt.Sprintf("bind: %d   %#v\n", i, v))
 	}
 	return bind
 }

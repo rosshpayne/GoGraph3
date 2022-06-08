@@ -137,6 +137,8 @@ func main() {
 			param.DebugOn = true
 		} else {
 			for _, v := range strings.Split(*debug, ",") {
+				v = strings.TrimRight(v, " ")
+				v = strings.TrimLeft(v, " ")
 				param.LogServices = append(param.LogServices, v)
 			}
 		}
@@ -256,6 +258,9 @@ func main() {
 			wg.Add(1)
 
 			edges += int64(len(e))
+			// if len(e) == 0 {
+
+			// }
 			execute.AttachNodeEdges(ctx, e, &wg, limiterAttach, checkMode, nextBatchCh, &once)
 
 		}
@@ -279,7 +284,7 @@ func main() {
 	// print monitor report
 	monitor.Report()
 
-	printErrors()
+	elog.PrintErrors()
 	// send cancel to all registered goroutines
 	cancel()
 	wpEnd.Wait()
@@ -298,7 +303,7 @@ func main() {
 // from previous processBatch run which have been accumulated in the bat argument.
 func nodeEdges(qetx, qptx *tx.QHandle) <-chan []*ds.Edge {
 
-	//fmt.Println("=========================. processBatch ========================== ")
+	fmt.Println("=========================. processBatch ========================== ")
 	edgeCh := make(chan []*ds.Edge) //, 10)
 
 	go scanForEdges(qetx, qptx, edgeCh)
@@ -310,13 +315,14 @@ func nodeEdges(qetx, qptx *tx.QHandle) <-chan []*ds.Edge {
 
 func scanForEdges(qptx, qetx *tx.QHandle, edgeCh chan<- []*ds.Edge) { //, abortCh chan<- struct){}) {
 
+	const log_id = "scanForEdges"
 	// read a batch worth of Puids. Initial value of Batch, bid, is source from state table.
 	// Fetch Cuid for each Puid and send all in channel
 	// when batch finished close channel - which will initiate a New scanForEdges
 	if pnodes := fetchParentNode(qptx); len(pnodes) > 0 {
 
 		for _, n := range pnodes { // in batches of 150
-
+			slog.Log("scanForEdges", fmt.Sprintf("Puid: %s", n.Puid.Base64()))
 			edges, err := fetchChildEdges(qetx, n.Puid) // returns all child nodes for parent puid
 			if err != nil {
 				if errors.Is(err, query.NoDataFoundErr) {
@@ -324,9 +330,10 @@ func scanForEdges(qptx, qetx *tx.QHandle, edgeCh chan<- []*ds.Edge) { //, abortC
 					// due to dynamodb reasons it can return no row due to either
 					// a limit (value 1) or a synchronisation issue
 					slog.Log(logid, "Warning: fetchChildEdge returned no item. Logically this should not happen .")
-					continue
+					panic(fmt.Errorf("Child edges returns 0 rows - should be > 0"))
 				}
-				elog.Add(logid, fmt.Errorf("fetchChildEdge: %w", err))
+				slog.Log(logid, fmt.Sprintf("fetchChildEdge errored %s", err))
+				elog.Add(logid, fmt.Errorf("fetch: %w", err))
 				break
 			}
 
@@ -350,7 +357,7 @@ type pNodeBid struct {
 // fetchParentNode reads a bid's worth of parent node UID's in edge Cnt descending order.
 func fetchParentNode(qtx *tx.QHandle) []pNodeBid {
 
-	const logid = "ChildEdge: "
+	const logid = "fetchParentNode"
 
 	// type PuidS []uuid.UID
 
@@ -415,17 +422,24 @@ func fetchChildEdges(qtx *tx.QHandle, puid uuid.UID) ([]*ds.Edge, error) {
 	// query operation - limited to 1 item
 	//
 	result := []ds.EdgeChild{}
-
+	slog.Log("fetchChildEdges", fmt.Sprintf("for Puid: %s", puid.Base64()))
+	//	qtx := tx.NewQueryContext(ctx, "EdgeChild", tblEdgeChild).DB("mysql-GoGraph")
 	qtx.Select(&result).Key("Puid", puid).Filter("Status", "X")
 
 	err = qtx.Execute()
 	if err != nil {
+		slog.Log("fetchChildEdges", fmt.Sprintf("Errored..Query returns : %d, Error: %s", len(result), err))
 		if errors.Is(err, query.NoDataFoundErr) {
 			panic(err)
 		}
 		return nil, err
 	}
 
+	slog.Log("fetchChildEdges", fmt.Sprintf("Query returns : %d", len(result)))
+
+	// if len(result) == 0 {
+
+	// }
 	edges := make([]*ds.Edge, len(result), len(result))
 
 	for i, _ := range result {
@@ -435,18 +449,4 @@ func fetchChildEdges(qtx *tx.QHandle, puid uuid.UID) ([]*ds.Edge, error) {
 
 	}
 	return edges, nil
-}
-
-func printErrors() {
-
-	errlog.ReqErrCh <- struct{}{}
-	errs := <-errlog.RequestCh
-	syslog(fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errs)))
-	fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errs))
-	if len(errs) > 0 {
-		for _, e := range errs {
-			syslog(fmt.Sprintf(" %s:  %s", e.Id, e.Err))
-			fmt.Println(e.Id, e.Err)
-		}
-	}
 }

@@ -202,6 +202,8 @@ func main() { //(f io.Reader) error { // S P O
 			param.DebugOn = true
 		} else {
 			for _, v := range strings.Split(*debug, ",") {
+				v = strings.TrimRight(v, " ")
+				v = strings.TrimLeft(v, " ")
 				param.LogServices = append(param.LogServices, v)
 			}
 		}

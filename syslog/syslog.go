@@ -30,6 +30,12 @@ var (
 	logWRm      sync.RWMutex
 )
 
+func init() {
+
+	logrMap = make(map[string]*log.Logger)
+
+}
+
 // Start called from main after runid is created.
 func Start() error {
 	logrMap = make(map[string]*log.Logger)
@@ -56,32 +62,25 @@ func newLogr(prefix string) *log.Logger {
 
 	fmt.Printf("*** create new logr for prefix: [%s]\n", prefix)
 
-	logr := log.New(iow, prefix, logrFlags)
+	logr := log.New(iow, prefix+": ", logrFlags)
 	logr.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	if logrMap == nil {
-		logrMap = make(map[string]*log.Logger)
-	}
+
 	return logr
 }
 
 // Log is the main function for logging text to the underlying storage system either an os file or AWS Cloudwatch logs. TODO: implement Google equivalent
 func Log(prefix string, s string, panic ...bool) {
 
-	logWRm.Lock()
-	defer logWRm.Unlock()
-
-	if prefix[len(prefix)-2:] != ": " {
-		prefix = strings.TrimRight(prefix, " ")
-		prefix = strings.TrimRight(prefix, ":")
-		prefix = prefix + ": "
-	}
-	sprefix := prefix[:len(prefix)-2]
-
+	prefix = strings.TrimRight(prefix, " :")
+	fmt.Println("syslog: ", prefix)
 	// check if prefix is on the must log services. These will be logged even if parameter logging is false.
 	var logit bool
 	if !param.DebugOn {
 		for _, s := range param.LogServices {
-			if strings.HasPrefix(sprefix, s) {
+			fmt.Println("syslog: ", prefix, s)
+			//         HasPrefix(dest (logid),source (parameter) - dest has prefix s
+			if strings.HasPrefix(prefix, s) {
+				fmt.Println("logit: ", prefix, s)
 				logit = true
 				break
 			}
@@ -89,6 +88,7 @@ func Log(prefix string, s string, panic ...bool) {
 	}
 	// abandon logging if any of these conditions are false
 	if !logit && !param.DebugOn {
+		fmt.Println("syslog: return...")
 		return
 	}
 	//
@@ -111,16 +111,19 @@ func Log(prefix string, s string, panic ...bool) {
 	var ok bool
 	// get a logger from the map for the particular prefix
 
-	logr, ok = logrMap[sprefix]
+	logWRm.RLock()
+	logr, ok = logrMap[prefix]
+	logWRm.RUnlock()
 
 	if !ok {
-
 		// create new logger and save to map
 		logr = newLogr(prefix)
 		if logr == nil {
 			fmt.Println("logr is nil")
 		}
-		logrMap[sprefix] = logr
+		logWRm.Lock()
+		logrMap[prefix] = logr
+		logWRm.Unlock()
 	}
 	if len(panic) > 0 && panic[0] {
 		logr.Panic(s)
@@ -135,26 +138,26 @@ func Log(prefix string, s string, panic ...bool) {
 
 func LogErr(prefix string, s string, panic ...bool) {
 
-	logWRm.Lock()
-	defer logWRm.Unlock()
-
-	if prefix[len(prefix)-2:] != ": " {
-		prefix = strings.TrimRight(prefix, " ")
-		prefix = strings.TrimRight(prefix, ":")
-		prefix = prefix + ": "
-	}
-	sprefix := prefix[:len(prefix)-2]
+	// if prefix[len(prefix)-2:] != ": " {
+	// 	prefix = strings.TrimRight(prefix, " ")
+	// 	prefix = strings.TrimRight(prefix, ":")
+	// 	prefix = prefix + ": "
+	// }
+	// prefix := prefix[:len(prefix)-2]
 
 	var ok bool
 
 	// get a logger from the map for the particular prefix
-	logr, ok = logrMap[sprefix]
-
+	logWRm.RLock()
+	logr, ok = logrMap[prefix]
+	logWRm.RUnlock()
 	if !ok {
 		fmt.Println("create new logr for prefix: ", prefix)
 		// create new logger and save to map
 		logr = newLogr(prefix)
-		logrMap[sprefix] = logr
+		logWRm.Lock()
+		logrMap[prefix] = logr
+		logWRm.Unlock()
 	}
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
 	// which is either a os.File or Cloudwatch Logs.
