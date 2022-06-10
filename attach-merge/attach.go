@@ -416,26 +416,25 @@ func fetchParentNode(qtx *tx.QHandle) []pNodeBid {
 // FetchEdge fetches a parent-child edge given a parent with status unprocessed.
 func fetchChildEdges(qtx *tx.QHandle, puid uuid.UID) ([]*ds.Edge, error) {
 
-	const logid = "ChildEdge: "
+	const logid = "ChildEdges"
 	var err error
 	//
 	// query operation - limited to 1 item
 	//
 	result := []ds.EdgeChild{}
-	slog.Log("fetchChildEdges", fmt.Sprintf("for Puid: %s", puid.Base64()))
-	//	qtx := tx.NewQueryContext(ctx, "EdgeChild", tblEdgeChild).DB("mysql-GoGraph")
+
 	qtx.Select(&result).Key("Puid", puid).Filter("Status", "X")
 
 	err = qtx.Execute()
 	if err != nil {
-		slog.Log("fetchChildEdges", fmt.Sprintf("Errored..Query returns : %d, Error: %s", len(result), err))
+		slog.Log(logid, fmt.Sprintf("Errored..Query returns : %d, Error: %s", len(result), err))
 		if errors.Is(err, query.NoDataFoundErr) {
 			panic(err)
 		}
 		return nil, err
 	}
 
-	slog.Log("fetchChildEdges", fmt.Sprintf("Query returns : %d", len(result)))
+	slog.Log(logid, fmt.Sprintf("Query returns : %d  for Puid: %s", len(result), puid.Base64()))
 
 	// if len(result) == 0 {
 

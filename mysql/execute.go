@@ -66,6 +66,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 				if mhash, ok := mutM[sqlHashVal]; !ok {
 
 					if cTx != nil {
+						syslog(fmt.Sprintf("1 cTx.Prepare( %s", sqlstmt.sql))
 						prepStmt, err = cTx.Prepare(sqlstmt.sql)
 					} else {
 						prepStmt, err = client.Prepare(sqlstmt.sql)
@@ -97,8 +98,10 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 				prepStmt := m.PrepStmt().(*sql.Stmt)
 
 				if ctx != nil {
+					syslog(fmt.Sprintf("2 cTx.ExecContext( %d", len(m.Params())))
 					_, err = prepStmt.ExecContext(ctx, m.Params()...)
 				} else {
+					syslog(fmt.Sprintf("2 ctx is nil cTx.Exec( %d", len(m.Params())))
 					_, err = prepStmt.Exec(m.Params()...)
 				}
 
@@ -125,6 +128,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 
 	if err != nil {
 		if cTx != nil {
+			syslog(fmt.Sprintf("error: %s", err.Error()))
 			errR := cTx.Rollback()
 			if errR != nil {
 				return fmt.Errorf("Rollback failed with error %s. Original error: %w", errR, err)

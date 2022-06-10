@@ -72,23 +72,19 @@ func newLogr(prefix string) *log.Logger {
 func Log(prefix string, s string, panic ...bool) {
 
 	prefix = strings.TrimRight(prefix, " :")
-	fmt.Println("syslog: ", prefix)
 	// check if prefix is on the must log services. These will be logged even if parameter logging is false.
 	var logit bool
 	if !param.DebugOn {
 		for _, s := range param.LogServices {
-			fmt.Println("syslog: ", prefix, s)
 			//         HasPrefix(dest (logid),source (parameter) - dest has prefix s
 			if strings.HasPrefix(prefix, s) {
-				fmt.Println("logit: ", prefix, s)
 				logit = true
 				break
 			}
 		}
 	}
-	// abandon logging if any of these conditions are false
+	// abandon logging if both of these conditions are false
 	if !logit && !param.DebugOn {
-		fmt.Println("syslog: return...")
 		return
 	}
 	//
@@ -127,7 +123,6 @@ func Log(prefix string, s string, panic ...bool) {
 	}
 	if len(panic) > 0 && panic[0] {
 		logr.Panic(s)
-		//	logWRm.RUnlock()
 		return
 	}
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
@@ -137,13 +132,6 @@ func Log(prefix string, s string, panic ...bool) {
 }
 
 func LogErr(prefix string, s string, panic ...bool) {
-
-	// if prefix[len(prefix)-2:] != ": " {
-	// 	prefix = strings.TrimRight(prefix, " ")
-	// 	prefix = strings.TrimRight(prefix, ":")
-	// 	prefix = prefix + ": "
-	// }
-	// prefix := prefix[:len(prefix)-2]
 
 	var ok bool
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +67,32 @@ func main() {
 		runid          uuid.UID
 	)
 
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// setup concurrent routine to capture OS signals.
+	appSignal := make(chan os.Signal, 3)
+	var (
+		terminate os.Signal = syscall.SIGTERM // os kill
+		interrupt os.Signal = syscall.SIGINT  // ctrl-C
+	)
+	signal.Notify(appSignal, terminate, interrupt) // TODO: add ctrl-C signal
+
+	// concurrent process to capture os process termination signals and call context cancel to release db resources.
+	go func() {
+		select {
+		case <-appSignal:
+			// broadcast kill switch to all context aware goroutines including mysql
+			cancel()
+			wpEnd.Wait()
+
+			tend := time.Now()
+			syslog(fmt.Sprintf("Terminated.....Duration: %s", tstart.Sub(tend).String()))
+			os.Exit(2)
+		}
+	}()
+
 	// allocate a run id
 	// allocate a run id
 
@@ -80,6 +108,8 @@ func main() {
 			param.DebugOn = true
 		} else {
 			for _, v := range strings.Split(*debug, ",") {
+				v = strings.TrimRight(v, " ")
+				v = strings.TrimLeft(v, " ")
 				param.LogServices = append(param.LogServices, v)
 			}
 		}
@@ -208,6 +238,9 @@ func main() {
 
 	// allocate cache for node data
 	cache.NewCache()
+
+	// register default database client
+	db.Init(ctx)
 
 	t0 := time.Now()
 	for ty, _ := range dpTy {

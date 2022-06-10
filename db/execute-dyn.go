@@ -430,7 +430,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 		)
 
 		for {
-			fmt.Println("operRetryCnt: ", operRetryCnt)
+
 			if operRetryCnt == param.MaxOperRetries {
 				return newDBSysErr2("execBatchMutations", tag, fmt.Sprintf("Exceed max retries [%d] on operation error", param.MaxOperRetries), MaxOperRetries, retryErr)
 			}
@@ -1204,7 +1204,6 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	if err != nil {
 		return newDBSysErr("exQuery", "Query", err)
 	}
-	fmt.Println("exQuery: rows returned: ", len(result.Items), result.Count)
 	// pagination cont....
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 

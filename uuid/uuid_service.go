@@ -43,7 +43,6 @@ type Key struct {
 func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 
 	defer wgEnd.Done()
-	wp.Done()
 
 	var (
 		ok  bool
@@ -52,6 +51,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 	)
 
 	slog.Log(param.Logid, "uuid: Powering up...")
+	wp.Done()
 
 	for {
 

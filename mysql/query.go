@@ -85,7 +85,6 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 			}
 		}
 	}
-	slog.Log("executeQuery", fmt.Sprintf("Enter.. len(opt) %d", len(opt)))
 	if q.GetError() != nil {
 		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %s", q.GetError()))
 	}
@@ -117,11 +116,9 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 
 	if q.Prepare() {
 
-		slog.Log("executeQuery", fmt.Sprintf("Prepared..."))
+		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))
 
 		if q.PrepStmt() == nil {
-
-			slog.Log("executeQuery", fmt.Sprintf("PrepStmt is nil"))
 
 			if ctx != nil {
 				prepStmt, err = client.PrepareContext(ctx, s.String())
@@ -131,40 +128,31 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 			if err != nil {
 				return err
 			}
-			slog.Log("executeQuery", fmt.Sprintf("SetPrepStmt ..."))
 			q.SetPrepStmt(prepStmt)
 
 		} else {
 
 			prepStmt = q.PrepStmt().(*sql.Stmt)
-			slog.Log("executeQuery", fmt.Sprintf("GetPrepStmt() ...%#v", prepStmt))
 		}
 
 		if oSingleRow {
-			slog.Log("executeQuery", "oSingleRow..")
 			if ctx != nil {
 				row = prepStmt.QueryRowContext(ctx, whereVals...)
 			} else {
 				row = prepStmt.QueryRow(whereVals...)
 			}
 		} else {
-			for _, v := range whereVals {
-				slog.Log("executeQuery", fmt.Sprintf("About to execute prepared stmt with value: %T, %#T", v, v))
-			}
-
 			if ctx != nil {
 				rows, err = prepStmt.QueryContext(ctx, whereVals...)
 			} else {
 				rows, err = prepStmt.Query(whereVals...)
 			}
-			slog.Log("executeQuery", "not oSingleRow..")
 		}
 
 	} else {
 
 		// non-prepared
-		slog.Log("executeQuery", fmt.Sprintf("Not prepared..."))
-
+		slog.Log("executeQuery", fmt.Sprintf("Non-prepared query"))
 		if oSingleRow {
 			if ctx != nil {
 				row = client.QueryRowContext(ctx, s.String(), whereVals...)
@@ -191,17 +179,13 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 			}
 		}
 	} else {
-		slog.Log("executeQuery", fmt.Sprintf("About to execute rows.Next() "))
 		for i := 0; rows.Next(); i++ {
-			slog.Log("executeQuery", fmt.Sprintf("rows.Next() i = %d", i))
 			// split struct fields into individual bind vars
 			if err = rows.Scan(q.Split()...); err != nil {
-				slog.Log("executeQuery", fmt.Sprintf("Error rows.Next() "))
 				logerr(err)
 			}
 		}
 		if err := rows.Err(); err != nil {
-			slog.Log("executeQuery", fmt.Sprintf("Error rows.Next()  2"))
 			logerr(err)
 		}
 	}
@@ -211,7 +195,6 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	}
 
 	if q.Prepare() {
-		slog.Log("executeQuery", fmt.Sprintf("q.Reset()..."))
 		q.Reset()
 	}
 	return nil

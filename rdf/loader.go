@@ -100,6 +100,7 @@ var (
 	graph      = flag.String("g", "", "Graph: ")
 	showsql    = flag.Int("sql", 0, "Show generated SQL [1: enable 0: disable]")
 	reduceLog  = flag.Int("rlog", 1, "Reduced Logging [1: enable 0: disable]")
+	bypassLoad = flag.Int("noLoad", 0, "Bypass db load operation:  [1: yes 0: no]")
 )
 
 func main() { //(f io.Reader) error { // S P O
@@ -109,14 +110,15 @@ func main() { //(f io.Reader) error { // S P O
 	fmt.Printf("Argument: table: %s\n", *tblgraph)
 	fmt.Printf("Argument: env: %s\n", *environ)
 	fmt.Printf("Argument: stats: %d\n", *stats)
-	fmt.Printf("Argument: env: %s\n", *environ)
 	fmt.Printf("Argument: inputfile: %s\n", *inputFile)
 	fmt.Printf("Argument: concurrent: %d\n", *concurrent)
 	fmt.Printf("Argument: showsql: %v\n", *showsql)
 	fmt.Printf("Argument: debug: %v\n", *debug)
 	fmt.Printf("Argument: graph: %s\n", *graph)
 	fmt.Printf("Argument: reduced logging: %v\n", *reduceLog)
+	fmt.Printf("Argument: bypass db load: %d\n", *bypassLoad)
 	//
+
 	// initialise channels with buffers
 	verifyCh = make(chan verifyNd, 3)
 	saveCh = make(chan savePayload, 12)
@@ -241,13 +243,16 @@ func main() { //(f io.Reader) error { // S P O
 	}
 
 	// dump program parameters to syslog
-	// syslog(fmt.Sprintf("Argument: tblgraph: %d", *tblgraph))
-	// syslog(fmt.Sprintf("Argument: stats: %d", *stats))
-	// syslog(fmt.Sprintf("Argument: concurrency: %d", *concurrent))
-	// syslog(fmt.Sprintf("Argument: showsql: %v", *showsql))
-	// syslog(fmt.Sprintf("Argument: debug: %v", *debug))
-	// syslog(fmt.Sprintf("Argument: graph: %s", *graph))
-	// syslog(fmt.Sprintf("Argument: reduced logging: %v", *reduceLog))
+	syslog(fmt.Sprintf("Argument: table: %d", *tblgraph))
+	syslog(fmt.Sprintf("Argument: env: %s\n", *environ))
+	syslog(fmt.Sprintf("Argument: stats: %d", *stats))
+	syslog(fmt.Sprintf("Argument: inputfile: %s\n", *inputFile))
+	syslog(fmt.Sprintf("Argument: concurrency: %d", *concurrent))
+	syslog(fmt.Sprintf("Argument: showsql: %v", *showsql))
+	syslog(fmt.Sprintf("Argument: debug: %v", *debug))
+	syslog(fmt.Sprintf("Argument: graph: %s", *graph))
+	syslog(fmt.Sprintf("Argument: reduced logging: %v", *reduceLog))
+	syslog(fmt.Sprintf("Argument: bypass db load: %v", *bypassLoad))
 
 	// purge state tables
 	tblEdge, tblEdgeChild := tbl.SetEdgeNames(types.GraphName())
@@ -330,6 +335,7 @@ func main() { //(f io.Reader) error { // S P O
 
 	// shutdown pipeline goroutines - verify and save goroutines...
 	close(verifyCh)
+	tclose := time.Now()
 	// and wait for them to exit
 	wpEnd.Wait()
 
@@ -345,16 +351,15 @@ func main() { //(f io.Reader) error { // S P O
 	// and wait for them to exit
 	ctxEnd.Wait()
 
-	tend := time.Now()
-
 	// persist database api stats
 	dbadmin.Persist()
 
 	// Complete run state for the program
 	run.Finish(err)
+	tend := time.Now()
 
-	syslog(fmt.Sprintf("Exit....Runid %q   .Duration: %s", runid.EncodeBase64(), tend.Sub(tstart)))
-	fmt.Printf("Exit.....Duration: %s", tend.Sub(tstart))
+	syslog(fmt.Sprintf("Exit....Runid %q   Duration: EndLoad: %s  PostLoad: %s", runid, tclose.Sub(tstart), tend.Sub(tstart)))
+	fmt.Printf("Exit.....Duration: ToClose: %s  ToEnd: %s", tclose.Sub(tstart), tend.Sub(tstart))
 	// wait for last syslog message to be processed
 	time.Sleep(1 * time.Second)
 
@@ -772,6 +777,10 @@ func unmarshalRDF(node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *g
 		edge.LoadCh <- edge.NEdges{Puid: psn, Edges: edges}
 	}
 
+	if *bypassLoad > 0 {
+		return
+	}
+
 	// pass NV onto save-to-database channel if no errors detected
 	if len(node.Err) == 0 {
 
@@ -817,10 +826,10 @@ func saveNode(wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup) {
 		go save.SaveRDFNode(py.sname, py.suppliedUUID, py.attributes, &wg, limiterSave)
 
 	}
-	syslog(fmt.Sprintf("waiting for SaveRDFNodes to Unregister..... %d", c))
+	syslog(fmt.Sprintf("waiting for SaveRDFNodes...loop count. %d", c))
 	wg.Wait()
 	limiterSave.Unregister()
-	syslog("saveNode finished waiting.....now to attach nodes")
+	syslog("saveNode finished waiting.")
 	//
 	// limiterAttach := grmgr.New("nodeAttach", *attachers)
 	//

@@ -29,10 +29,10 @@ type MySQL struct {
 func logerr(e error, panic_ ...bool) {
 
 	if len(panic_) > 0 && panic_[0] {
-		slog.Log(logid, e.Error(), true)
+		slog.LogErr(logid, e.Error(), true)
 		panic(e)
 	}
-	slog.Log(logid, e.Error())
+	slog.LogErr(logid, e.Error())
 }
 
 func syslog(s string) {
@@ -83,7 +83,7 @@ func (h MySQL) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api
 	case db.TransactionAPI:
 
 		if ctx == nil {
-			syslog("MySQL transactional API is being used with no context passed in")
+			syslog("0 MySQL transactional API is being used with no context passed in")
 			cTx, err = h.Begin()
 		} else {
 			syslog("MySQL transactional API is being used with a context passed in")

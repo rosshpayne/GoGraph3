@@ -16,7 +16,7 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
-const LogId = "Edge: "
+const logid = "EdgeLoad"
 
 // reverse sort type. Can use to "convert" existing []int types.
 type IntSliceR []int
@@ -35,11 +35,14 @@ type NEdges struct {
 
 var (
 	LoadCh    chan NEdges
-	Dump2DBCh chan struct{}
+	Dump2DBCh chan chan struct{}
 )
 
 func Persist() {
-	Dump2DBCh <- struct{}{}
+	respCh := make(chan struct{})
+	Dump2DBCh <- respCh
+	<-respCh
+
 }
 
 func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
@@ -52,13 +55,11 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 		edges    map[int][]uuid.UID
 	)
 	LoadCh = make(chan NEdges, 55)
-	Dump2DBCh = make(chan struct{})
+	Dump2DBCh = make(chan chan struct{})
 
 	edges = make(map[int][]uuid.UID)
 
 	slog.Log(param.Logid, "Powering up...")
-
-	//tblEdge := string(tbl.Edge) + types.GraphName()
 
 	tblEdge, _ := tbl.SetEdgeNames(types.GraphName())
 
@@ -78,7 +79,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 				edges[ec.Edges] = n
 			}
 
-		case <-Dump2DBCh:
+		case respch := <-Dump2DBCh:
 
 			var (
 				bc, bi int     // batch item counter, bulkinsert item counter
@@ -93,10 +94,11 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 			}
 			IntSliceR(cnt).Sort()
 
-			slog.Log(LogId, "Start Edge save...")
+			slog.Log(logid, "Start Edge save...")
 			t0 := time.Now()
-			etx := tx.New("edge").DB("mysql-GoGraph").Prepare()
 			//etx := tx.NewTx("edge")
+			//etx := tx.New("edge").DB("mysql-GoGraph").Prepare()
+			etx := tx.NewTxContext(ctx, "edge").DB("mysql-GoGraph").Prepare()
 
 			for _, v := range cnt {
 
@@ -110,11 +112,12 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 						// execute active batch of mutations now rather then keep adding to batch-of-batches to reduce memory requirements.
 						err := etx.Execute()
 						if err != nil {
-							elog.Add("Edge: ", fmt.Errorf("Error in bulk insert %w", err))
+							elog.Add(logid, fmt.Errorf("Error in bulk insert %w", err))
 							panic(err)
 						}
-						etx = tx.New("edge").DB("mysql-GoGraph").Prepare()
 						//etx = tx.NewTx("edge")
+						//tx = tx.New("edge").DB("mysql-GoGraph").Prepare()
+						etx = tx.NewTxContext(ctx, "edge").DB("mysql-GoGraph").Prepare()
 						bi = 0
 					}
 					// increment batch id when number of items in current batch exceeds 150
@@ -128,12 +131,14 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 			//
 			err := etx.Execute()
 			if err != nil {
-				slog.Log(param.Logid, err.Error())
+				slog.Log(logid, err.Error())
 			}
-			slog.Log(LogId, fmt.Sprintf("End Edge Save, Duration: %s", time.Now().Sub(t0)))
+			slog.Log(logid, fmt.Sprintf("End Edge Save, Duration: %s", time.Now().Sub(t0)))
+
+			respch <- struct{}{}
 
 		case <-ctx.Done():
-			slog.Log(LogId, "Shutdown.")
+			slog.Log(logid, "Shutdown.")
 			return
 
 		}
