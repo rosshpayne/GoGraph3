@@ -8,10 +8,12 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	//"github.com/GoGraph/attach/anmgr"
 	"github.com/GoGraph/cache"
+	"github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
@@ -64,6 +66,7 @@ func main() {
 	var (
 		wpEnd, wpStart sync.WaitGroup
 		err            error
+		tstart         time.Time
 		runid          uuid.UID
 	)
 
@@ -93,8 +96,10 @@ func main() {
 		}
 	}()
 
-	// allocate a run id
-	// allocate a run id
+	// register default database client
+	db.Init(ctx)
+
+	tstart = time.Now()
 
 	param.ReducedLog = false
 	if *reduceLog == 1 {
@@ -168,8 +173,6 @@ func main() {
 
 	syslog(fmt.Sprintf("runid: %v", runid))
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	if param.DB == param.Dynamodb {
 		//
 		// Regstier index
@@ -239,9 +242,6 @@ func main() {
 	// allocate cache for node data
 	cache.NewCache()
 
-	// register default database client
-	db.Init(ctx)
-
 	t0 := time.Now()
 	for ty, _ := range dpTy {
 
@@ -266,7 +266,7 @@ func main() {
 	t1 := time.Now()
 	limiterDP.Unregister()
 	monitor.Report()
-	printErrors()
+	elog.PrintErrors()
 	cancel()
 	wpEnd.Wait()
 
@@ -349,18 +349,4 @@ func ScanForDPitems(ty string, dpCh chan<- uuid.UID) {
 
 	close(dpCh)
 
-}
-
-func printErrors() {
-
-	errlog.ReqErrCh <- struct{}{}
-	errs := <-errlog.RequestCh
-	syslog(fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errs)))
-	fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errs))
-	if len(errs) > 0 {
-		for _, e := range errs {
-			syslog(fmt.Sprintf(" %s:  %s", e.Id, e.Err))
-			fmt.Println(e.Id, e.Err)
-		}
-	}
 }

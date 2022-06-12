@@ -99,6 +99,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 			//etx := tx.NewTx("edge")
 			//etx := tx.New("edge").DB("mysql-GoGraph").Prepare()
 			etx := tx.NewTxContext(ctx, "edge").DB("mysql-GoGraph").Prepare()
+			//etx := tx.NewTxContext(ctx, "edge").DB("mysql-GoGraph")
 
 			for _, v := range cnt {
 
@@ -118,6 +119,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 						//etx = tx.NewTx("edge")
 						//tx = tx.New("edge").DB("mysql-GoGraph").Prepare()
 						etx = tx.NewTxContext(ctx, "edge").DB("mysql-GoGraph").Prepare()
+						//etx = tx.NewTxContext(ctx, "edge").DB("mysql-GoGraph")
 						bi = 0
 					}
 					// increment batch id when number of items in current batch exceeds 150

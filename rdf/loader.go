@@ -243,7 +243,7 @@ func main() { //(f io.Reader) error { // S P O
 	}
 
 	// dump program parameters to syslog
-	syslog(fmt.Sprintf("Argument: table: %d", *tblgraph))
+	syslog(fmt.Sprintf("Argument: table: %s", *tblgraph))
 	syslog(fmt.Sprintf("Argument: env: %s\n", *environ))
 	syslog(fmt.Sprintf("Argument: stats: %d", *stats))
 	syslog(fmt.Sprintf("Argument: inputfile: %s\n", *inputFile))
@@ -278,7 +278,7 @@ func main() { //(f io.Reader) error { // S P O
 	//
 	// start pipeline goroutines
 	//
-	go verify(&wpStart, &wpEnd)
+	go verify(ctx, &wpStart, &wpEnd)
 	go saveNode(&wpStart, &wpEnd)
 	//
 	// start supporting services
@@ -358,8 +358,8 @@ func main() { //(f io.Reader) error { // S P O
 	run.Finish(err)
 	tend := time.Now()
 
-	syslog(fmt.Sprintf("Exit....Runid %q   Duration: EndLoad: %s  PostLoad: %s", runid, tclose.Sub(tstart), tend.Sub(tstart)))
-	fmt.Printf("Exit.....Duration: ToClose: %s  ToEnd: %s", tclose.Sub(tstart), tend.Sub(tstart))
+	syslog(fmt.Sprintf("Completed....Runid:  %q   Duration: Load: %s  PostLoad: %s", runid.Base64(), tclose.Sub(tstart), tend.Sub(tstart)))
+	fmt.Printf("Completed.....Duration: ToClose: %s  ToEnd: %s", tclose.Sub(tstart), tend.Sub(tstart))
 	// wait for last syslog message to be processed
 	time.Sleep(1 * time.Second)
 
@@ -374,7 +374,7 @@ func main() { //(f io.Reader) error { // S P O
 // verify is a goroutine (aka service_ started when program is instantiated.
 // It persists for duration of load into database after which the verify channel from which it reads is closed.
 // It forms part of a pipeline wiht the reader and main routine.
-func verify(wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup) { //, wg *sync.WaitGroup) {
+func verify(ctx context.Context, wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup) { //, wg *sync.WaitGroup) {
 
 	defer wpEnd.Done()
 	defer close(saveCh)
@@ -413,7 +413,7 @@ func verify(wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup) { //, wg *sync.WaitG
 			<-limitUnmarshaler.RespCh()
 
 			wg.Add(1)
-			go unmarshalRDF(nodes[ii], ty, &wg, limitUnmarshaler)
+			go unmarshalRDF(ctx, nodes[ii], ty, &wg, limitUnmarshaler)
 
 		}
 	}
@@ -423,7 +423,7 @@ func verify(wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup) { //, wg *sync.WaitG
 
 //unmarshalRDF merges the rdf lines for an individual node (identical subject value) to create NV entries
 // for the type of the node.
-func unmarshalRDF(node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *grmgr.Limiter) {
+func unmarshalRDF(ctx context.Context, node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *grmgr.Limiter) {
 	defer wg.Done()
 
 	genSortK := func(ty blk.TyAttrD) string {
@@ -717,6 +717,7 @@ func unmarshalRDF(node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *g
 	uuid.ReqCh <- uuid.Request{SName: node.ID, RespCh: lch}
 	psn = <-lch
 	//tblEdgeChild := string(tbl.EdgeChild) + types.GraphName()
+	etx := tx.NewTxContext(ctx, "edgeChild").DB("mysql-GoGraph", db.Option{"prepare", false}, db.Option{"prepare", true}).Prepare()
 
 	_, tblEdgeChild := tbl.SetEdgeNames(types.GraphName())
 	for _, v := range attr {
@@ -737,7 +738,6 @@ func unmarshalRDF(node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *g
 
 			// perform following inserts as as signel transaction use: tx.NewTx
 			// tx := db.BeginTx(ctx,)   DB will vaidate tx method is appropriate for the database selected.
-			etx := tx.New("edgeChild").DB("mysql-GoGraph", db.Option{"prepare", false}, db.Option{"prepare", true})
 			//etx := tx.NewTx("edgeChild")
 			// increment node edge counter
 			edges += len(childNodes)
@@ -764,13 +764,12 @@ func unmarshalRDF(node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *g
 				//	etx.MergeInsert(tbl.Name(tblEdgeChild)).AddMember("Puid", psn).AddMember("SortK_Cuid", sk.String()).AddMember("Status", "X")
 				etx.NewInsert(tbl.Name(tblEdgeChild)).AddMember("Puid", psn).AddMember("SortK_Cuid", sk.String()).AddMember("Status", "X")
 			}
-
-			err = etx.Execute()
-			if err != nil {
-				elog.Add(logid, err)
-			}
-
 		}
+	}
+
+	err = etx.Execute()
+	if err != nil {
+		elog.Add("ChildEdge", err)
 	}
 	if edges > 0 {
 		// for post edge processing...

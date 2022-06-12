@@ -138,11 +138,8 @@ func syslog(s string) {
 }
 
 func New(r string, c Ceiling) *Limiter {
-	fmt.Println("grmgr 1")
 	l := Limiter{c: c, r: Routine(r), ch: make(chan struct{}), on: true}
-	fmt.Println("grmgr 2")
 	registerCh <- &l
-	fmt.Println("grmgr 3")
 	syslog(fmt.Sprintf("New Routine %q   Ceiling: %d ", r, c))
 	return &l
 }

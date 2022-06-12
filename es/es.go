@@ -35,7 +35,7 @@ import (
 
 const (
 	logid  = "ElasticSearch: "
-	esdoc  = "gograph"
+	esdoc  = "gographsdk2"
 	loadId = "ES Load"
 )
 
@@ -342,10 +342,9 @@ func main() {
 	if err != nil {
 		elog.Add("SetLoadStatus", err)
 	}
-	//
-	// errors
-	printErrors()
-	//
+
+	elog.PrintErrors()
+
 	// shutdown support services
 	cancel()
 	time.Sleep(1 * time.Second)
@@ -353,20 +352,6 @@ func main() {
 	tend := time.Now()
 	syslog(fmt.Sprintf("Exit.....Duration: %s", tend.Sub(tstart).String()))
 	return
-}
-
-func printErrors() {
-
-	elog.ReqErrCh <- struct{}{}
-	errs := <-elog.RequestCh
-	syslog(fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errs)))
-	fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errs))
-	if len(errs) > 0 {
-		for _, e := range errs {
-			syslog(fmt.Sprintf(" %s:  %s", e.Id, e.Err))
-			fmt.Println(e.Id, e.Err)
-		}
-	}
 }
 
 var (
@@ -496,7 +481,7 @@ func getLoadStatus(ctx context.Context, id string) (string, uuid.UID, error) {
 	var status Status
 	opt := db.Option{Name: "singlerow", Val: true}
 	// check if ES load completed
-	ftx := tx.NewQuery2(ctx, "GetLoadStatus", "State$").DB("mysql-goGraph", db.Options{opt}...)
+	ftx := tx.NewQueryContext(ctx, "GetLoadStatus", "State$").DB("mysql-goGraph", db.Options{opt}...)
 	ftx.Select(&status).Key("Graph", types.GraphSN()).Key("Name", id) // other values: "E","R"
 
 	err = ftx.Execute()
@@ -607,7 +592,7 @@ func fetchUnprocessedAttrs(ctx context.Context) ([]ftrec, error) {
 
 	var ftAttrs []ftrec
 
-	ftx := tx.NewQuery2(ctx, "fetchFTattrs", "State$ES").DB("mysql-goGraph")
+	ftx := tx.NewQueryContext(ctx, "fetchFTattrs", "State$ES").DB("mysql-goGraph")
 	ftx.Select(&ftAttrs).Filter("Graph", types.GraphSN()).Filter("Status", "C", query.NE)
 	err := ftx.Execute()
 	if err != nil {

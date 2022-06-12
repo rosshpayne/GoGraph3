@@ -12,7 +12,7 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
-const logid = "run:"
+const logid = "run"
 
 type Runid = uuid.UID
 

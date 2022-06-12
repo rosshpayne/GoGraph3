@@ -52,7 +52,7 @@ func Scan(ctx context.Context, batch *int, ty string, sk string, fetchCh chan<- 
 
 	// State( arg1: id used by tx.Execute to save stateVal to in its State tbl. id is es.runid.
 	//        arg2: (optional), restart bool. Restart=True forces Execute to read State val from table. False: no restart, no rrequirement to read from State tbl.
-	ptx := tx.NewQuery2(ctx, "label", tbl.TblName, "TyES") //"TyES").Parallel(4)
+	ptx := tx.NewQueryContext(ctx, "label", tbl.TblName, "TyES") //"TyES").Parallel(4)
 
 	//ptx.Select(&pks).Filter("Ty", ty).Filter("SortK", sk).Limit(*batch).Paginate(id, restart)
 	ptx.Select(&pks).Key("Ty", ty).Filter("SortK", sk).Limit(*batch).Paginate(id, restart)
