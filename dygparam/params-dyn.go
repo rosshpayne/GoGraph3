@@ -6,7 +6,6 @@ package param
 import (
 	"io"
 	"log"
-	"strings"
 )
 
 var (
@@ -30,7 +29,6 @@ var (
 	// elasticsearch
 	// ESenabled = false
 	// Note: ES index must be in lower case.
-	ESindex = strings.ToLower(AppName) + "idx"
 )
 
 const (

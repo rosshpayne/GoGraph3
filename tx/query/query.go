@@ -1,9 +1,11 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
+	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/uuid"
@@ -15,6 +17,7 @@ type ComparOpr byte
 type ScanOrder int8
 type Orderby int8
 type AccessTy byte
+type BoolCd byte
 
 const (
 	EQ ComparOpr = iota + 1
@@ -35,12 +38,16 @@ const (
 	Asc  Orderby = 0 // default
 	Desc Orderby = 1
 	//
-	GetItem AccessTy = iota + 1
+	GetItem AccessTy = iota
 	Query
 	Scan
 	Transact
 	Batch
 	Null
+	//
+	NIL BoolCd = iota
+	AND
+	OR
 	//
 )
 
@@ -83,11 +90,12 @@ func syslog(s string) {
 }
 
 type Attr struct {
-	name  string
-	param string
-	value interface{}
-	aty   Attrty
-	eqy   ComparOpr
+	name   string
+	param  string
+	value  interface{}
+	aty    Attrty // attribute type, e.g. Key, Filter, Fetch
+	eqy    ComparOpr
+	boolCd BoolCd // And, Or - appropriate for Filter only.
 }
 
 type orderby struct {
@@ -98,7 +106,7 @@ type QueryHandle struct {
 	Tag string
 	//ctx context.Context
 	//stateId util.UID - id for maintaining state
-	attr     []Attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
+	attr     []*Attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
 	tbl      tbl.Name
 	idx      tbl.Name
 	limit    int
@@ -200,6 +208,10 @@ func (q *QueryHandle) Reset() {
 	q.pk, q.sk = "", ""
 }
 
+func (q *QueryHandle) Error() error {
+	return q.err
+}
+
 func (q *QueryHandle) SetWorderId(i int) {
 	q.worker = i
 }
@@ -275,7 +287,7 @@ func (q *QueryHandle) IsScanForwardSet() bool {
 	return q.so == Forward
 }
 
-func (q *QueryHandle) GetAttr() []Attr {
+func (q *QueryHandle) GetAttr() []*Attr {
 	return q.attr
 }
 
@@ -439,8 +451,19 @@ func (q *QueryHandle) GetFilter() []string {
 	return flt
 }
 
-func (q *QueryHandle) GetWhereAttrs() []Attr {
-	var flt []Attr
+func (q *QueryHandle) GetFilterAttr() []*Attr {
+	var flt []*Attr
+	for _, v := range q.attr {
+		if v.aty == IsFilter {
+			flt = append(flt, v)
+		}
+	}
+	return flt
+}
+
+// GetWhereAttrs - for SQL only
+func (q *QueryHandle) GetWhereAttrs() []*Attr {
+	var flt []*Attr
 	for _, v := range q.attr {
 		switch v.aty {
 		case IsFilter:
@@ -452,35 +475,39 @@ func (q *QueryHandle) GetWhereAttrs() []Attr {
 	return flt
 }
 
-func (a Attr) GetOprStr() string {
+func (a *Attr) GetOprStr() string {
 	return a.eqy.String()
 }
 
-func (a Attr) ComparOpr() ComparOpr {
+func (a *Attr) ComparOpr() ComparOpr {
 	return a.eqy
 }
 
-func (a Attr) AttrType() Attrty {
+func (a *Attr) AttrType() Attrty {
 	return a.aty
 }
 
-func (a Attr) Name() string {
+func (a *Attr) Name() string {
 	return a.name
 }
 
-func (a Attr) Value() interface{} {
+func (a *Attr) BoolCd() BoolCd {
+	return a.boolCd
+}
+
+func (a *Attr) Value() interface{} {
 	return a.value
 }
 
-func (a Attr) IsKey() bool {
+func (a *Attr) IsKey() bool {
 	return a.aty == IsKey
 }
 
-func (a Attr) IsFetch() bool {
+func (a *Attr) IsFetch() bool {
 	return a.aty == IsFetch
 }
 
-func (a Attr) Filter() bool {
+func (a *Attr) Filter() bool {
 	return a.aty == IsFilter
 }
 
@@ -573,7 +600,7 @@ func (q *QueryHandle) Key(a string, v interface{}, e ...ComparOpr) *QueryHandle 
 	// 	}
 	// }
 	//
-	at := Attr{name: a, value: v, aty: IsKey, eqy: eqy}
+	at := &Attr{name: a, value: v, aty: IsKey, eqy: eqy}
 	q.attr = append(q.attr, at)
 
 	return q
@@ -602,21 +629,75 @@ func (q *QueryHandle) Paginate(id uuid.UID, restart bool) *QueryHandle {
 	return q
 }
 
-func (q *QueryHandle) Filter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
-
-	if q.err != nil {
-		return q
-	}
+func (q *QueryHandle) appendFilter(a string, v interface{}, bcd BoolCd, e ...ComparOpr) {
 
 	eq := EQ
 	if len(e) > 0 {
 		eq = e[0]
 	}
 
-	at := Attr{name: a, value: v, aty: IsFilter, eqy: eq}
+	at := &Attr{name: a, value: v, aty: IsFilter, eqy: eq, boolCd: bcd}
 	q.attr = append(q.attr, at)
 
+}
+func (q *QueryHandle) Filter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+
+	var found bool
+
+	for _, a := range q.attr {
+		if a.aty == IsFilter {
+			found = true
+			break
+		}
+	}
+	if found {
+		err := errors.New("Filter condition already specified. Use either AndFilter or OrFilter")
+		elog.Add("parseQuery", err)
+		q.err = err
+		return q
+		//
+	}
+
+	if q.err != nil {
+		return q
+	}
+
+	q.appendFilter(a, v, NIL, e...)
+
 	return q
+}
+
+func (q *QueryHandle) appendBoolFilter(a string, v interface{}, bcd BoolCd, e ...ComparOpr) *QueryHandle {
+
+	var found bool
+
+	for _, a := range q.attr {
+		if a.aty == IsFilter && a.boolCd == NIL {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		err := errors.New(fmt.Sprintf(`Query Tag: %s, no "Filter" condition specified`, q.Tag))
+		elog.Add("query", err)
+		q.err = err
+		return q
+		//
+	}
+
+	q.appendFilter(a, v, bcd, e...)
+
+	return q
+}
+
+func (q *QueryHandle) AndFilter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+	return q.appendBoolFilter(a, v, AND, e...)
+
+}
+
+func (q *QueryHandle) OrFilter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+	return q.appendBoolFilter(a, v, OR, e...)
 }
 
 func (q *QueryHandle) ScanOrder(so ScanOrder) *QueryHandle {
@@ -676,7 +757,7 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 
 		for i := 0; i < s.NumField(); i++ {
 			v := s.Field(i)
-			at := Attr{name: v.Name, aty: IsFetch}
+			at := &Attr{name: v.Name, aty: IsFetch}
 			q.attr = append(q.attr, at)
 		}
 	case reflect.Slice:
@@ -696,7 +777,7 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 				if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
 					name = v.Name
 				}
-				at := Attr{name: name, aty: IsFetch}
+				at := &Attr{name: name, aty: IsFetch}
 				q.attr = append(q.attr, at)
 			}
 		} else {

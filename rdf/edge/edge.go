@@ -8,11 +8,9 @@ import (
 	"time"
 
 	param "github.com/GoGraph/dygparam"
-	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
-	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
 )
 
@@ -33,15 +31,20 @@ type NEdges struct {
 	Edges int
 }
 
+type dumpPy struct {
+	respCh chan struct{}
+	tbl    string
+}
+
 var (
 	LoadCh    chan NEdges
-	Dump2DBCh chan chan struct{}
+	Dump2DBCh chan dumpPy
 )
 
-func Persist() {
-	respCh := make(chan struct{})
-	Dump2DBCh <- respCh
-	<-respCh
+func Persist(tbl string) {
+	d := dumpPy{respCh: make(chan struct{}), tbl: tbl}
+	Dump2DBCh <- d
+	<-d.respCh
 
 }
 
@@ -55,13 +58,11 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 		edges    map[int][]uuid.UID
 	)
 	LoadCh = make(chan NEdges, 55)
-	Dump2DBCh = make(chan chan struct{})
+	Dump2DBCh = make(chan dumpPy)
 
 	edges = make(map[int][]uuid.UID)
 
 	slog.Log(param.Logid, "Powering up...")
-
-	tblEdge, _ := tbl.SetEdgeNames(types.GraphName())
 
 	for {
 
@@ -79,9 +80,11 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 				edges[ec.Edges] = n
 			}
 
-		case respch := <-Dump2DBCh:
+		case py := <-Dump2DBCh:
 
+			fmt.Println("edge dump.....", len(edges))
 			var (
+				err    error
 				bc, bi int     // batch item counter, bulkinsert item counter
 				bid    int = 1 // batch id
 			)
@@ -105,16 +108,15 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 
 				for _, n := range edges[v] {
 
-					etx.NewInsert(tbl.Name(tblEdge)).AddMember("Bid", bid).AddMember("Puid", n).AddMember("Cnt", v)
-					bc++
+					etx.NewInsert(tbl.Name(py.tbl)).AddMember("Bid", bid).AddMember("Puid", n).AddMember("Cnt", v)
 					bi++
+					bc++
 					//
 					if bi == param.DBbulkInsert {
 						// execute active batch of mutations now rather then keep adding to batch-of-batches to reduce memory requirements.
-						err := etx.Execute()
+						err = etx.Execute()
 						if err != nil {
-							elog.Add(logid, fmt.Errorf("Error in bulk insert %w", err))
-							panic(err)
+							break
 						}
 						//etx = tx.NewTx("edge")
 						//tx = tx.New("edge").DB("mysql-GoGraph").Prepare()
@@ -128,16 +130,31 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 						bid++
 					}
 				}
-
+				if err != nil {
+					break
+				}
 			}
-			//
-			err := etx.Execute()
+
 			if err != nil {
-				slog.Log(logid, err.Error())
-			}
-			slog.Log(logid, fmt.Sprintf("End Edge Save, Duration: %s", time.Now().Sub(t0)))
+				for _, e := range etx.GetErrors() {
+					slog.Log(logid, e.Error())
+				}
+				slog.Log(logid, fmt.Sprintf("End Edge Save, Errors: %d  Duration: %s", len(etx.GetErrors()), time.Now().Sub(t0)))
+			} else {
 
-			respch <- struct{}{}
+				err = etx.Execute()
+				if err != nil {
+					for _, e := range etx.GetErrors() {
+						slog.Log(logid, e.Error())
+					}
+					slog.Log(logid, fmt.Sprintf("End Edge Save, Errors: %d  Duration: %s", len(etx.GetErrors()), time.Now().Sub(t0)))
+				} else {
+					slog.Log(logid, fmt.Sprintf("End Edge Save, Errors: 0 Duration: %s", time.Now().Sub(t0)))
+				}
+
+			}
+
+			py.respCh <- struct{}{}
 
 		case <-ctx.Done():
 			slog.Log(logid, "Shutdown.")

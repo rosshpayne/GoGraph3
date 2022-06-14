@@ -952,6 +952,10 @@ func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) erro
 		err error
 	)
 
+	if q.Error() != nil {
+		return q.Error()
+	}
+
 	for _, o := range opt {
 		switch strings.ToLower(o.Name) {
 		default:
@@ -1125,37 +1129,46 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		}
 	}
 
-	for i, n := range q.GetFilter() {
+	for i, n := range q.GetFilterAttr() {
 		if i == 0 {
-			switch q.GetFilterComparOpr(n) {
+			switch n.ComparOpr() {
+			case query.BEGINSWITH:
+				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case query.GT:
-				flt = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.LT:
-				flt = expression.LessThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.EQ:
-				flt = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.NE:
-				flt = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", q.GetFilterComparOpr(n))))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", n.ComparOpr())))
 			}
 
 		} else {
 
-			switch q.GetFilterComparOpr(n) {
+			switch n.ComparOpr() {
+			case query.BEGINSWITH:
+				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case query.GT:
-				f = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.LT:
-				f = expression.LessThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.EQ:
-				f = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.NE:
-				f = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", q.GetFilterComparOpr(n))))
+				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", n.ComparOpr())))
 			}
-			flt = flt.And(f)
-			// TODO: implement others, OR, NOT
+			//flt = flt.And(f)
+			switch n.BoolCd() {
+			case query.AND:
+				flt = flt.And(f)
+			case query.OR:
+				flt = flt.Or(f)
+			}
 		}
 	}
 
@@ -1284,45 +1297,49 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	if proj == nil {
 		return fmt.Errorf("Select must be specified in a Scan")
 	}
-	for i, n := range q.GetFilter() {
-
+	for i, n := range q.GetFilterAttr() {
 		if i == 0 {
-
-			switch q.GetFilterComparOpr(n) {
+			switch n.ComparOpr() {
 			case query.BEGINSWITH:
-				flt = expression.BeginsWith(expression.Name(n), q.GetFilterValue(n).(string))
+				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case query.GT:
-				flt = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.LT:
-				flt = expression.LessThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.EQ:
-				flt = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.NE:
-				flt = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", q.GetFilterComparOpr(n))))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", n.ComparOpr())))
 			}
 
 		} else {
 
-			switch q.GetFilterComparOpr(n) {
+			switch n.ComparOpr() {
 			case query.BEGINSWITH:
-				f = expression.BeginsWith(expression.Name(n), q.GetFilterValue(n).(string))
+				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case query.GT:
-				f = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.LT:
-				f = expression.LessThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.EQ:
-				f = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.NE:
-				f = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", q.GetFilterComparOpr(n))))
+				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", n.ComparOpr())))
 			}
-			flt = flt.And(f)
-			// TODO: implement others, OR, NOT
+			//flt = flt.And(f)
+			switch n.BoolCd() {
+			case query.AND:
+				flt = flt.And(f)
+			case query.OR:
+				flt = flt.Or(f)
+			}
 		}
 	}
+
 	// build expression.Expression
 	b := expression.NewBuilder()
 	if proj != nil {
@@ -1456,38 +1473,46 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	if proj == nil {
 		return fmt.Errorf("Select must be specified in a Scan")
 	}
-	for i, n := range q.GetFilter() {
-
+	for i, n := range q.GetFilterAttr() {
 		if i == 0 {
-			switch q.GetFilterComparOpr(n) {
+			switch n.ComparOpr() {
+			case query.BEGINSWITH:
+				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case query.GT:
-				flt = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.LT:
-				flt = expression.LessThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.EQ:
-				flt = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.NE:
-				flt = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", q.GetFilterComparOpr(n))))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", n.ComparOpr())))
 			}
 
 		} else {
 
-			switch q.GetFilterComparOpr(n) {
+			switch n.ComparOpr() {
+			case query.BEGINSWITH:
+				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case query.GT:
-				f = expression.GreaterThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.LT:
-				f = expression.LessThan(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.EQ:
-				f = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case query.NE:
-				f = expression.Equal(expression.Name(n), expression.Value(q.GetFilterValue(n)))
+				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", q.GetFilterComparOpr(n))))
+				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", n.ComparOpr())))
 			}
-			flt = flt.And(f)
-			// TODO: implement others, OR, NOT
+			//flt = flt.And(f)
+			switch n.BoolCd() {
+			case query.AND:
+				flt = flt.And(f)
+			case query.OR:
+				flt = flt.Or(f)
+			}
 		}
 	}
 	// build expression.Expression

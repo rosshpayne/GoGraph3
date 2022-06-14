@@ -255,6 +255,30 @@ func (h *TxHandle) new(m ...*mut.Mutation) *TxHandle {
 	return h
 }
 
+func (q *TxHandle) GetErrors() []error {
+	var es []error
+
+	for _, m := range *q.m {
+		if m, ok := m.(*mut.Mutation); ok {
+			if e := m.GetError(); e != nil {
+				es = append(es, e)
+			}
+		}
+	}
+	for _, b := range q.batch {
+		for _, m := range *b {
+
+			if m, ok := m.(*mut.Mutation); ok {
+				if e := m.GetError(); e != nil {
+					es = append(es, e)
+				}
+			}
+		}
+	}
+
+	return es
+}
+
 func (q *TxHandle) Prepare() *TxHandle {
 	q.prepare = true
 	return q

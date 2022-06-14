@@ -40,11 +40,8 @@ func CheckLimit(lc chan bool) bool {
 
 func Add(logid string, err error) {
 
-	if logid[len(logid)-2:] != ": " {
-		logid = strings.TrimRight(logid, " ")
-		logid = strings.TrimRight(logid, ":")
-		logid = logid + ": "
-	}
+	logid = strings.TrimRight(logid, " :")
+
 	addCh <- &payload{logid, err}
 }
 
@@ -96,7 +93,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		select {
 
 		case pld = <-addCh:
-
+			fmt.Println("errlog Add ...")
 			var errmsg strings.Builder
 			errmsg.WriteString(pld.Id)
 			errmsg.WriteString(" ")

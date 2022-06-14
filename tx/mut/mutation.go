@@ -155,6 +155,7 @@ type Mutation struct {
 	text     string      // alternate representation of a mutation e.g. sql
 	prepStmt interface{} // some db's may optional "prepare" mutations before execution Three phase 1) single prepare stmt 2) multiple stmt executions 3) close stmt
 	params   []interface{}
+	err      error
 }
 
 type Mutations []dbs.Mutation //*Mutation
@@ -301,6 +302,14 @@ func (m *Mutation) SetText(p string) {
 
 func (m *Mutation) Text() string {
 	return m.text
+}
+
+func (m *Mutation) SetError(e error) {
+	m.err = e
+}
+
+func (m *Mutation) GetError() error {
+	return m.err
 }
 
 func (m *Mutation) SQL() string {

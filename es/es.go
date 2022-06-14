@@ -30,12 +30,11 @@ import (
 	esapi "github.com/elastic/go-elasticsearch/v7/esapi"
 	//	esv8 "github.com/elastic/go-elasticsearch/v8"
 
-	_ "github.com/GoGraph/mysql"
+	"github.com/GoGraph/mysql"
 )
 
 const (
 	logid  = "ElasticSearch: "
-	esdoc  = "gographsdk2"
 	loadId = "ES Load"
 )
 
@@ -66,6 +65,7 @@ var graph = flag.String("g", "", "Graph: ")
 var showsql = flag.Int("sql", 0, "Show generated SQL [1: enable 0: disable]")
 var reduceLog = flag.Int("rlog", 1, "Reduced Logging [1: enable 0: disable]")
 var table = flag.String("tbl", string(tbl.TblName), "Graph Table from which other table names are derived")
+var esidx = flag.String("idx", "", "ES index name [no default]")
 var batch = flag.Int("batch", 500, "Batch size used for scan of items to load into ES. [Default 500]")
 
 func logerr(e error, panic_ ...bool) {
@@ -96,6 +96,7 @@ func main() {
 
 	fmt.Printf("Argument: concurrent: %d\n", *parallel)
 	fmt.Printf("Argument: table: %s\n", *table)
+	fmt.Printf("Argument: ES index: %s\n", *esidx)
 	fmt.Printf("Argument: showsql: %v\n", *showsql)
 	fmt.Printf("Argument: debug: %v\n", *debug)
 	fmt.Printf("Argument: graph: %s\n", *graph)
@@ -115,6 +116,12 @@ func main() {
 		esloadCnt    int
 		ty, sk, attr string
 	)
+
+	if len(*esidx) == 0 {
+		fmt.Println("Must supply name of ES index")
+		flag.PrintDefaults()
+		return
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -147,6 +154,9 @@ func main() {
 		}
 	}()
 
+	// register default database client
+	db.Init(ctx)
+	mysql.Init(ctx)
 	// process input arguments
 	param.ReducedLog = false
 	if *reduceLog == 1 {
@@ -253,6 +263,7 @@ func main() {
 
 	//batch := NewBatch()
 	syslog(fmt.Sprintf("Argument: table: %s", *table))
+	syslog(fmt.Sprintf("Argument: ES index: %s", *esidx))
 	syslog(fmt.Sprintf("Argument: concurrency: %d", *parallel))
 	syslog(fmt.Sprintf("Argument: showsql: %v", *showsql))
 	syslog(fmt.Sprintf("Argument: debug: %v", *debug))
@@ -445,7 +456,7 @@ func esLoad(d *Doc, pkey []byte, wp *sync.WaitGroup, lmtr *grmgr.Limiter) {
 	//Set up the request object.
 	t0 := time.Now()
 	req := esapi.IndexRequest{
-		Index:      param.ESindex, // must be in lowercase otherwise generates a 400 error
+		Index:      *esidx, // must be in lowercase otherwise generates a 400 error
 		DocumentID: doc.String(),
 		Body:       strings.NewReader(b.String()),
 		Refresh:    "true",

@@ -36,11 +36,16 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 	// )
 	type sqlHashValT string
 	var (
+		errs       []error
 		err        error
 		mutM       map[sqlHashValT]*sql.Stmt
 		sqlHashVal sqlHashValT
 		prepStmt   *sql.Stmt
 	)
+
+	add := func(err error) {
+		errs = append(errs, err)
+	}
 
 	mutM = make(map[sqlHashValT]*sql.Stmt)
 
@@ -66,15 +71,24 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 				if mhash, ok := mutM[sqlHashVal]; !ok {
 
 					if cTx != nil {
-						syslog(fmt.Sprintf("1 cTx.Prepare( %s", sqlstmt.sql))
 						prepStmt, err = cTx.Prepare(sqlstmt.sql)
 					} else {
 						prepStmt, err = client.Prepare(sqlstmt.sql)
 					}
+					if err != nil {
+						add(err)
+						// save error to mutation
+						m.SetError(err)
+						continue
+					}
+
 					mutM[sqlHashVal] = prepStmt
 
 				} else {
 					// get prep stmt from map of hashed sql
+					if len(errs) > 0 {
+						return errs[0]
+					}
 					prepStmt = mhash
 				}
 				m.SetPrepStmt(prepStmt)
@@ -85,6 +99,11 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 			}
 			m.SetParams(sqlstmt.params)
 		}
+	}
+
+	if len(errs) > 0 {
+		fmt.Printf("*** execute: %d errors\n", len(errs))
+		return errs[0]
 	}
 
 	// execute the mutations using either the sql or the prepared version
@@ -98,10 +117,8 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 				prepStmt := m.PrepStmt().(*sql.Stmt)
 
 				if ctx != nil {
-					syslog(fmt.Sprintf("2 cTx.ExecContext( %d", len(m.Params())))
 					_, err = prepStmt.ExecContext(ctx, m.Params()...)
 				} else {
-					syslog(fmt.Sprintf("2 ctx is nil cTx.Exec( %d", len(m.Params())))
 					_, err = prepStmt.Exec(m.Params()...)
 				}
 
@@ -128,7 +145,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 
 	if err != nil {
 		if cTx != nil {
-			syslog(fmt.Sprintf("error: %s", err.Error()))
+			syslog(fmt.Sprintf("Execute error: %s", err.Error()))
 			errR := cTx.Rollback()
 			if errR != nil {
 				return fmt.Errorf("Rollback failed with error %s. Original error: %w", errR, err)

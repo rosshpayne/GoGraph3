@@ -90,6 +90,10 @@ func LoadDataDictionary() (blk.TyIBlock, error) {
 	ldd := tx.NewQuery2("LoadDataDictionary", tbl.Name(typesTblN))
 	ldd.Select(&dd).Filter("PKey", gId, query.BEGINSWITH)
 
+	if ldd.Error() != nil {
+		fmt.Println("Error load dd")
+		panic(ldd.Error())
+	}
 	err := ldd.Execute()
 	if err != nil {
 		return nil, err

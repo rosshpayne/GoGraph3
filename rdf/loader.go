@@ -228,13 +228,6 @@ func main() { //(f io.Reader) error { // S P O
 		fmt.Println("\n no error ")
 	}
 
-	// set Graph and load types into memory - dependency on syslog
-	err = types.SetGraph(*graph)
-	if err != nil {
-		fmt.Println("Error in determining graph, may not exist: Error: %s", err)
-		return
-	}
-
 	//
 	f, err := os.Open(*inputFile)
 	if err != nil {
@@ -253,15 +246,6 @@ func main() { //(f io.Reader) error { // S P O
 	syslog(fmt.Sprintf("Argument: graph: %s", *graph))
 	syslog(fmt.Sprintf("Argument: reduced logging: %v", *reduceLog))
 	syslog(fmt.Sprintf("Argument: bypass db load: %v", *bypassLoad))
-
-	// purge state tables
-	tblEdge, tblEdgeChild := tbl.SetEdgeNames(types.GraphName())
-	etx := tx.NewTx("truncate").DB("mysql-GoGraph") // TODO: what about tx.New()
-	etx.NewTruncate([]tbl.Name{tbl.Name(tblEdgeChild), tbl.Name(tblEdge)})
-	err = etx.Execute()
-	if err != nil {
-		panic(err)
-	}
 
 	// purge graph table if running in dev
 	// tblEdge, tblEdgeChild := tbl.SetEdgeNames(types.GraphName())
@@ -295,6 +279,22 @@ func main() { //(f io.Reader) error { // S P O
 	syslog(fmt.Sprintf("waiting on services to start...."))
 	wpStart.Wait()
 	syslog(fmt.Sprintf("all load services started "))
+
+	// set Graph and load types into memory - dependency on syslog
+	err = types.SetGraph(*graph)
+	if err != nil {
+		fmt.Println("Error in determining graph, may not exist: Error: %s", err)
+		return
+	}
+
+	// purge state tables
+	tblEdge, tblEdgeChild := tbl.SetEdgeNames(types.GraphName())
+	etx := tx.NewTx("truncate").DB("mysql-GoGraph") // TODO: what about tx.New()
+	etx.NewTruncate([]tbl.Name{tbl.Name(tblEdgeChild), tbl.Name(tblEdge)})
+	err = etx.Execute()
+	if err != nil {
+		panic(err)
+	}
 
 	// setup db related services (e.g. stats snapshot save)
 	dbadmin.Setup()
@@ -341,7 +341,7 @@ func main() { //(f io.Reader) error { // S P O
 
 	elog.PrintErrors()
 	// Save edge data to db.
-	edge.Persist()
+	edge.Persist(string(tblEdge))
 
 	// output monitor report
 	monitor.Report()
