@@ -31,6 +31,7 @@ import (
 	"github.com/GoGraph/rdf/edge"
 	"github.com/GoGraph/rdf/reader"
 	"github.com/GoGraph/rdf/save"
+	"github.com/GoGraph/throttle"
 	//"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx"
@@ -154,9 +155,8 @@ func main() { //(f io.Reader) error { // S P O
 			os.Exit(2)
 		}
 	}()
-
 	// register default database client
-	db.Init(ctx)
+	db.Init(ctx, []db.Option{db.Option{Name: "throttler", Val: throttle.Control}}...)
 	mysql.Init(ctx)
 
 	//
@@ -389,7 +389,12 @@ func verify(ctx context.Context, wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup)
 	//
 	//	unmarshalTrg := grmgr.Trigger{R: routine, C: 5, Ch: make(chan struct{})}
 
-	limitUnmarshaler := grmgr.New("unmarshaler", *concurrent*2)
+	//limitUnmarshaler := grmgr.New("unmarshaler", *concurrent*2)
+	//limitUnmarshaler := grmgr.NewConfig("unmarshaler", *concurrent*2, min,upInc,downInc,changeInterval)
+	limitUnmarshaler, err := grmgr.NewConfig("unmarshaler", *concurrent*2, 2, 1, 3, "1m")
+	if err != nil {
+		panic(err)
+	}
 
 	// the loop will terminate on close of channel when rdf file is fully read.
 	for nodes_ := range verifyCh {
@@ -810,7 +815,11 @@ func saveNode(wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup) {
 	//
 	// define goroutine limiters
 	//
-	limiterSave := grmgr.New("saveNode", *concurrent)
+	//limiterSave := grmgr.New("saveNode", *concurrent)
+	limiterSave, err := grmgr.NewConfig("saveNode", *concurrent, 4, 1, 4, "1m")
+	if err != nil {
+		panic(err)
+	}
 
 	var c int
 

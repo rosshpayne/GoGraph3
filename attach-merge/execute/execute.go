@@ -214,6 +214,9 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	}
 	pTySN = types.GraphSN() + "|" + pTySN
 
+	st := eAN.NewTask("AtachExecute")
+	defer st.Finish(err)
+
 	for _, e := range edges {
 
 		t0 = time.Now()
@@ -222,14 +225,14 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		// all mutations will comprise put/inserts
 		err = AttachEdge(cTx, mt, pnd, uuid.UID(e.Cuid), uuid.UID(e.Puid), e.Sortk, pty, pTySN, checkMode, dip)
 		if err != nil {
-			if !errors.Is(err, edgeExistsErr) {
-				errlog.Add(logid, err)
-				// if this edge exists than all edges for parent node must
+			if errors.Is(err, edgeExistsErr) {
+				// database must be Spanner in checkMode. Abort attach process for this parent node.
+				// cancel edgeExistsErr and return
+				slog.LogErr("AttachEdges: ", fmt.Sprintf("Abort attach process for pUID %s as an edge exists - %s", e.Puid, err))
 				return
 			}
-			// database must be Spanner in checkMode. Abort attach process for this parent node.
-			// cancel edgeExistsErr and return
-			slog.Log("AttachEdges: ", fmt.Sprintf("Abort attach process for pUID %s as an edge exists - %s", e.Puid, err))
+			errlog.Add(logid, err)
+			// if this edge exists than all edges for parent node must
 			return
 		}
 
@@ -247,14 +250,19 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	// NOTE: cTx is Batch currently. This is risky as execute will invole multiple calls to the db and consequently should be transactional.
 	// The batch will contain a single update for the target SortK in the Parent Node, inserts for each scalar attribute and optionally inerts/updates for
 	// any Overflow blocks or batches, and update to the overflow batch
-	st := eAN.NewTask("AtachExecute")
 
+	// Execute()
 	err = cTx.Commit()
 	if err != nil {
+		// if err == ReduceConcurrency {
+		// 	sleep
+		// 	AttachNodeEdges(...) or MarkRetry()
+		// 	st.Finish(err)
+		// 	return
+		// }
 		errlog.Add(logid, fmt.Errorf("Error in execute of attach node transaction: %w ", err))
-		return
 	}
-	st.Finish(err)
+
 }
 
 // sortK is parent's uid-pred to attach child node too. E.g. G#:S (sibling) or G#:F (friend) or A#G#:F It is the parent's attribute to attach the child node.
@@ -307,8 +315,7 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 	if err != nil {
 		err := fmt.Errorf("Error fetching child scalar data: %w", err)
 		errlog.Add(logid, err)
-		//return
-		panic(err)
+		return err
 	}
 	//	fmt.Println("ABout GetType for child node: ", cUID.String())
 	// get type of child node from A#T sortk e.g "Person"

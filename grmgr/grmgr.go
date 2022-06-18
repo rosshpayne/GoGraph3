@@ -15,7 +15,7 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
-const logid = "grmgr: "
+const logid = "grmgr"
 
 type Routine = string
 
@@ -27,7 +27,8 @@ type Ceiling = int
 //
 //var StartCh = make(chan Routine, 1)
 
-type rCntMap map[Routine]Ceiling
+// count of the number of concurrent instances of a routine. This varies between 0 and ceiling (max concurrency)
+type rCntMap map[Routine]int
 
 var rCnt rCntMap
 
@@ -38,9 +39,14 @@ var rWait rWaitMap
 //
 // Channels
 //
-var EndCh = make(chan Routine, 1)
-var rAskCh = make(chan Routine)
-var rExpirehCh = make(chan Routine)
+var (
+	EndCh          = make(chan Routine, 1)
+	ThrottleDownCh = make(chan struct{})
+	ThrottleUpCh   = make(chan struct{})
+	//
+	rAskCh     = make(chan Routine)
+	rExpirehCh = make(chan Routine)
+)
 
 //
 // Limiter
@@ -48,8 +54,18 @@ var rExpirehCh = make(chan Routine)
 type respCh chan struct{}
 
 type Limiter struct {
-	c  Ceiling
-	r  Routine
+	r  Routine // modified routine to make unique
+	or Routine // original routine
+	//
+	c    Ceiling // ceiling value (starts at oc value)
+	maxc Ceiling // original (maximum) ceiling
+	minc Ceiling // minimum ceiling
+	//
+	up   int // scale up by value
+	down int // scale down by value (down <= up)
+	//
+	hold time.Duration // hold at current ceiling for duration
+	//
 	ch respCh
 	on bool // send Wait response
 }
@@ -137,11 +153,38 @@ func syslog(s string) {
 	slog.Log(logid, s)
 }
 
-func New(r string, c Ceiling) *Limiter {
-	l := Limiter{c: c, r: Routine(r), ch: make(chan struct{}), on: true}
+func alertlog(s string) {
+	slog.LogAlert(logid, s)
+}
+
+func errlog(s string) {
+	slog.LogErr(logid, s)
+}
+
+// New registers a new routine and its ceiling (max concurrency) combination.
+func New(r string, c Ceiling, min ...Ceiling) *Limiter {
+
+	m := 1 // minimum ceiling
+	if len(min) > 0 {
+		m = min[0]
+	}
+	l, _ := NewConfig(r, c, 2, 1, m, "30s")
+	return l
+}
+
+//limitUnmarshaler := grmgr.NewConfig("unmarshaler", *concurrent*2, 2,1,3,"1m")
+
+func NewConfig(r string, c Ceiling, down int, up int, min Ceiling, h string) (*Limiter, error) {
+
+	hold, err := time.ParseDuration(h)
+	if err != nil {
+		return nil, err
+	}
+
+	l := Limiter{c: c, maxc: c, minc: min, up: up, down: down, r: Routine(r), or: Routine(r), ch: make(chan struct{}), on: true, hold: hold}
 	registerCh <- &l
-	syslog(fmt.Sprintf("New Routine %q   Ceiling: %d ", r, c))
-	return &l
+	syslog(fmt.Sprintf("New Routine %q   Ceiling: %d [min: %d, down: %d, upd: %d, hold: %s]", r, c))
+	return &l, nil
 }
 
 var (
@@ -152,6 +195,9 @@ var (
 	// keep live averages at the following reportInterval's (in seconds)
 	reportInterval          []int = []int{10, 20, 40, 60, 120, 180, 300, 600, 1200, 2400, 3600, 7200}
 	numSamplesAtRepInterval []int
+
+	throttleDownActioned time.Time
+	throttleUpActioned   time.Time
 )
 
 func init() {
@@ -160,6 +206,21 @@ func init() {
 		numSamplesAtRepInterval = append(numSamplesAtRepInterval, v/snapInterval)
 	}
 }
+
+// func scale(c int, perc float64) int {
+// 	oc := c
+// 	f := float64(c)
+// 	f *= perc
+// 	c = int(f)
+// 	if oc == c {
+// 		if perc > 1.0 {
+// 			c++
+// 		} else {
+// 			c--
+// 		}
+// 	}
+// 	return c
+// }
 
 // use channels to synchronise access to shared memory ie. the various maps, rLimiterMap.rCntMap.
 // "don't communicate by sharing memory, share memory by communicating"
@@ -181,6 +242,9 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	rWait = make(rWaitMap)
 	csnap := make(map[string][]int)  //cumlative snapshots
 	csnap_ := make(map[string][]int) //shadow copy of csnap used by reporting system
+
+	ThrottleDownCh = make(chan struct{})
+	ThrottleUpCh = make(chan struct{})
 
 	// setup snapshot interrupt goroutine
 	snapCh := make(chan time.Time)
@@ -225,13 +289,14 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 			// change the ceiling by passing in Limiter struct. As struct is a non-ref type, l is a copy of struct passed into channel. Ref typs, spcmf - slice, pointer, map, func, channel
 			// check not already registered -
-			// generate unique lable
+			// generate unique label
 			var e byte = 65
 			for {
 				if _, ok := rLimit[l.r]; !ok {
 					// unique label
 					break
 				}
+				// routine r already exists, generate a unique value
 				l.r += string(e)
 				e++
 				if e > 175 {
@@ -269,6 +334,61 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				//slog.Log("grmgr: ", fmt.Sprintf("has ASKed. Cnt is above limit. Mark %s as waiting", r))
 				rWait[r] += 1 // log routine as waiting to proceed
 			}
+
+		case <-ThrottleDownCh:
+
+			t0 := time.Now()
+
+			for _, v := range rLimit {
+				//
+
+				if t0.Sub(throttleDownActioned) < v.hold {
+					alertlog("throttleDown: to soon to throttle down after last throttled action")
+				}
+
+				if t0.Sub(throttleUpActioned) < v.hold {
+					alertlog("throttleDown: to soon to throttle down after last throttled action")
+				}
+
+				// throttle down by 20%. Once changed cannot be modified for 2 minutes.
+
+				v.c -= v.down
+
+				if v.c < v.minc {
+					v.c = v.minc
+					alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
+				} else {
+					alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+				}
+			}
+			throttleDownActioned = t0
+
+		case <-ThrottleUpCh:
+
+			t0 := time.Now()
+			for _, v := range rLimit {
+				//
+
+				if t0.Sub(throttleDownActioned) < v.hold {
+					alertlog("throttleDown: to soon to throttle down after last throttled action")
+				}
+
+				if t0.Sub(throttleUpActioned) < v.hold {
+					alertlog("throttleDown: to soon to throttle down after last throttled action")
+				}
+
+				// throttle down by 20%. Once changed cannot be modified for 2 minutes.
+
+				v.c += v.up
+
+				if v.c > v.maxc {
+					v.c = v.maxc
+					alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
+				} else {
+					alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+				}
+			}
+			throttleUpActioned = t0
 
 		case <-snapCh:
 

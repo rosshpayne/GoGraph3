@@ -11,6 +11,7 @@ import (
 
 	//"github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/uuid"
 )
 
 // var (
@@ -39,12 +40,12 @@ func (u UnprocessedErr) Error() string {
 
 type DBExprErr struct {
 	routine string
-	pkey    string
+	pkey    uuid.UIDb64
 	sortk   string
 	err     error // aws dynamo expression error,InvalidParameterError, UnsetParameterError use errors.As
 }
 
-func newDBExprErr(rt string, pk string, sk string, err error) error {
+func newDBExprErr(rt string, pk uuid.UIDb64, sk string, err error) error {
 	er := &DBExprErr{routine: rt, pkey: pk, sortk: sk, err: err}
 	logerr(er)
 	return er
@@ -135,7 +136,7 @@ func newDBSysErr2(rt string, tag string, reason string, code string, err error) 
 
 type DBNoItemFound struct {
 	routine string
-	pkey    string
+	pkey    uuid.UIDb64
 	sortk   string
 	api     string // DB statement
 	err     error
@@ -157,7 +158,7 @@ func (e *DBNoItemFound) Unwrap() error {
 	return e.err
 }
 
-func NewDBNoItemFound(rt string, pk string, sk string, api string) error {
+func NewDBNoItemFound(rt string, pk uuid.UIDb64, sk string, api string) error {
 
 	e := &DBNoItemFound{routine: rt, pkey: pk, sortk: sk, api: api}
 	e.err = NoDataFound
@@ -167,7 +168,7 @@ func NewDBNoItemFound(rt string, pk string, sk string, api string) error {
 	return e
 }
 
-func newDBNoItemFound(rt string, pk string, sk string, api string) error {
+func newDBNoItemFound(rt string, pk uuid.UIDb64, sk string, api string) error {
 
 	e := &DBNoItemFound{routine: rt, pkey: pk, sortk: sk, api: api}
 	e.err = NoDataFound
@@ -177,13 +178,13 @@ func newDBNoItemFound(rt string, pk string, sk string, api string) error {
 
 type DBMarshalingErr struct {
 	routine string
-	pkey    string
+	pkey    uuid.UIDb64
 	sortk   string
 	api     string // DB statement
 	err     error  // aws database error
 }
 
-func newDBMarshalingErr(rt string, pk string, sk string, api string, err error) error {
+func newDBMarshalingErr(rt string, pk uuid.UIDb64, sk string, api string, err error) error {
 	e := &DBMarshalingErr{routine: rt, pkey: pk, sortk: sk, api: api, err: err}
 	slog.LogErr("DBExecute: ", fmt.Sprintf("Error: %s", e.Error()))
 	//	errlog.Add("DBExecute", e)
@@ -203,13 +204,13 @@ func (e *DBMarshalingErr) Unwrap() error {
 
 type DBUnmarshalErr struct {
 	routine string
-	pkey    string
+	pkey    uuid.UIDb64
 	sortk   string
 	api     string // DB statement
 	err     error  // aws database error
 }
 
-func newDBUnmarshalErr(rt string, pk string, sk string, api string, err error) error {
+func newDBUnmarshalErr(rt string, pk uuid.UIDb64, sk string, api string, err error) error {
 	e := &DBUnmarshalErr{routine: rt, pkey: pk, sortk: sk, api: api, err: err}
 	slog.LogErr("DBExecute: ", e.Error())
 	//errlog.Add("DBExecute", e)

@@ -14,7 +14,7 @@ import (
 )
 
 type SpannerHandle struct {
-	opt Options
+	opt []Option
 	ctx context.Context
 	*spanner.Client
 }

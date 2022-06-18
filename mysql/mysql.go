@@ -20,7 +20,7 @@ const (
 )
 
 type MySQL struct {
-	options  db.Options
+	options  []db.Option
 	trunctbl []tbl.Name
 	ctx      context.Context
 	*sql.DB

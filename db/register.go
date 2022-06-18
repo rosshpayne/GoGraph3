@@ -16,7 +16,10 @@ type Option struct {
 	Val  interface{}
 }
 
-type Options []Option
+type Throttle interface {
+	Up()
+	Down()
+}
 
 type DBHandle interface {
 	Execute(context.Context, []*mut.Mutations, string, API, bool, ...Option) error

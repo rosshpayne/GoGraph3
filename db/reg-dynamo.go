@@ -20,7 +20,7 @@ import (
 )
 
 type DynamodbHandle struct {
-	opt Options
+	opt []Option
 	ctx context.Context
 	*dynamodb.Client
 }
@@ -46,7 +46,7 @@ func newService(ctx_ context.Context) *dynamodb.Client {
 	return dynamodb.NewFromConfig(cfg)
 }
 
-func Init(ctx_ context.Context) {
+func Init(ctx_ context.Context, opt ...Option) {
 
 	dbSrv = newService(ctx_)
 	if dbSrv == nil {

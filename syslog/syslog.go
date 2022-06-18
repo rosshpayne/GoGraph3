@@ -25,14 +25,21 @@ var (
 	logr *log.Logger
 	iow  io.Writer
 	//
-	prefixMutex sync.Mutex
-	logrMap     map[string]*log.Logger
-	logWRm      sync.RWMutex
+	logrMap map[string]*log.Logger
+	logWRm  sync.RWMutex
+
+	logrAlertMap map[string]*log.Logger
+	alertWRm     sync.RWMutex
+
+	logrErrMap map[string]*log.Logger
+	errWRm     sync.RWMutex
 )
 
 func init() {
 
 	logrMap = make(map[string]*log.Logger)
+	logrAlertMap = make(map[string]*log.Logger)
+	logrErrMap = make(map[string]*log.Logger)
 
 }
 
@@ -58,11 +65,17 @@ func Stop() {
 	wrt.Stop()
 }
 
-func newLogr(prefix string) *log.Logger {
+func newLogr(prefix string, logType string) *log.Logger {
 
 	fmt.Printf("*** create new logr for prefix: [%s]\n", prefix)
 
-	logr := log.New(iow, prefix+": ", logrFlags)
+	var s strings.Builder
+	s.WriteString(prefix)
+	s.WriteByte(':')
+	s.WriteString(logType)
+	s.WriteByte(':')
+
+	logr := log.New(iow, s.String(), logrFlags)
 	logr.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	return logr
@@ -113,7 +126,7 @@ func Log(prefix string, s string, panic ...bool) {
 
 	if !ok {
 		// create new logger and save to map
-		logr = newLogr(prefix)
+		logr = newLogr(prefix, "info")
 		if logr == nil {
 			fmt.Println("logr is nil")
 		}
@@ -131,21 +144,42 @@ func Log(prefix string, s string, panic ...bool) {
 
 }
 
+func LogAlert(prefix string, s string, panic ...bool) {
+
+	var ok bool
+
+	// get a logger from the map for the particular prefix
+	alertWRm.RLock()
+	logr, ok = logrAlertMap[prefix]
+	alertWRm.RUnlock()
+	if !ok {
+		fmt.Println("create new alert logr for prefix: ", prefix)
+		// create new logger and save to map
+		logr = newLogr(prefix, "alert")
+		alertWRm.Lock()
+		logrAlertMap[prefix] = logr
+		alertWRm.Unlock()
+	}
+	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
+	// which is either a os.File or Cloudwatch Logs.
+	logr.Print(s)
+
+}
 func LogErr(prefix string, s string, panic ...bool) {
 
 	var ok bool
 
 	// get a logger from the map for the particular prefix
-	logWRm.RLock()
-	logr, ok = logrMap[prefix]
-	logWRm.RUnlock()
+	errWRm.RLock()
+	logr, ok = logrErrMap[prefix]
+	errWRm.RUnlock()
 	if !ok {
-		fmt.Println("create new logr for prefix: ", prefix)
+		fmt.Println("create new critical logr for prefix: ", prefix)
 		// create new logger and save to map
-		logr = newLogr(prefix)
-		logWRm.Lock()
-		logrMap[prefix] = logr
-		logWRm.Unlock()
+		logr = newLogr(prefix, "critical")
+		errWRm.Lock()
+		logrErrMap[prefix] = logr
+		errWRm.Unlock()
 	}
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
 	// which is either a os.File or Cloudwatch Logs.

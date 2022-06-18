@@ -484,8 +484,6 @@ func (nc *NodeCache) UnmarshalNodeCache(nv ds.ClientNV, ty_ ...string) error {
 			// no match between NV name and type attribute name
 			continue
 		}
-		fmt.Println("UnmarshalCache: a.Name, sortk, attrDT: ", a.Name, sortk, attrDT)
-
 		// grab the *blk.DataItem from the cache for the nominated sortk.
 		// we could query the child node to get this data or query the #G data which is its copy of the data
 		a.ItemTy = ty // root node type or uid-pred type

@@ -41,7 +41,7 @@ type TxHandle struct {
 	//
 	dbHdl   db.Handle // database handle. mysql sql.DB, [default: either, spanner spanner.NewClient, dynamodb dynamodb.New]
 	maxMuts int       // depending on database driver. -1 or param.MaxMutations
-	options db.Options
+	options []db.Option
 	//
 	prepare bool
 	//
@@ -518,7 +518,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 
 type QHandle struct {
 	dbHdl              db.Handle            // mysql handle, [default: either, spanner spanner.NewClient, dynamodb dynamodb.New]
-	options            db.Options           // []db.Option
+	options            []db.Option          // []db.Option
 	ctx                context.Context      // moved from QueryHandle.ctx. As set in tx.NewQuery*
 	*query.QueryHandle                      // GoGraph query handle - single thread
 	workers            []*query.QueryHandle // GoGraph query handle's for parallel scans - one per parallel thread

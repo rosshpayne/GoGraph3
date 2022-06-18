@@ -86,7 +86,7 @@ type PKey struct {
 
 // 	av, err = dynamodbattribute.MarshalMap(&pkey)
 // 	if err != nil {
-// 		return false, newDBMarshalingErr("NodeExists", uid.String(), sortk, "MarshalMap", err)
+// 		return false, newDBMarshalingErr("NodeExists", uid.Base64(), sortk, "MarshalMap", err)
 // 	}
 // 	//
 // 	input := &dynamodb.GetItemInput{
@@ -124,16 +124,16 @@ func FetchNodeContext(ctx_ context.Context, uid uuid.UID, subKey ...string) (blk
 	var sortk string
 	if len(subKey) > 0 {
 		sortk = subKey[0]
-		//		slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.String(), sortk))
+		//		slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.Base64(), sortk))
 	} else {
 		sortk = "A#"
-		// slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.String(), sortk))
+		// slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.Base64(), sortk))
 	}
 
 	keyC := expression.KeyEqual(expression.Key("PKey"), expression.Value(uid)).And(expression.KeyBeginsWith(expression.Key("SortK"), sortk))
 	expr, err := expression.NewBuilder().WithKeyCondition(keyC).Build()
 	if err != nil {
-		return nil, newDBExprErr("FetchTNode", uid.String(), sortk, err)
+		return nil, newDBExprErr("FetchTNode", uid.Base64(), sortk, err)
 	}
 	//
 	input := &dynamodb.QueryInput{
@@ -161,12 +161,12 @@ func FetchNodeContext(ctx_ context.Context, uid uuid.UID, subKey ...string) (blk
 	syslog(fmt.Sprintf("FetchNode:consumed capacity for Query  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur.String()))
 	//
 	if result.Count == 0 {
-		return nil, newDBNoItemFound("FetchNode", uid.String(), "", "Query")
+		return nil, newDBNoItemFound("FetchNode", uid.Base64(), "", "Query")
 	}
 	data := make(blk.NodeBlock, result.Count)
 	err = attributevalue.UnmarshalListOfMaps(result.Items, &data)
 	if err != nil {
-		return nil, newDBUnmarshalErr("FetchNode", uid.String(), "", "UnmarshalListOfMaps", err)
+		return nil, newDBUnmarshalErr("FetchNode", uid.Base64(), "", "UnmarshalListOfMaps", err)
 	}
 	//
 	// update stats
@@ -187,16 +187,16 @@ func FetchNode(uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
 	var sortk string
 	if len(subKey) > 0 {
 		sortk = subKey[0]
-		//		slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.String(), sortk))
+		//		slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.Base64(), sortk))
 	} else {
 		sortk = "A#"
-		// slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.String(), sortk))
+		// slog.Log("DB FetchNode: ", fmt.Sprintf(" node: %s subKey: %s", uid.Base64(), sortk))
 	}
 
 	keyC := expression.KeyEqual(expression.Key("PKey"), expression.Value(uid)).And(expression.KeyBeginsWith(expression.Key("SortK"), sortk))
 	expr, err := expression.NewBuilder().WithKeyCondition(keyC).Build()
 	if err != nil {
-		return nil, newDBExprErr("FetchTNode", uid.String(), sortk, err)
+		return nil, newDBExprErr("FetchTNode", uid.Base64(), sortk, err)
 	}
 	//
 	input := &dynamodb.QueryInput{
@@ -224,12 +224,12 @@ func FetchNode(uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
 	syslog(fmt.Sprintf("FetchNode:consumed capacity for Query  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur.String()))
 	//
 	if int(result.Count) == 0 {
-		return nil, newDBNoItemFound("FetchNode", uid.String(), "", "Query")
+		return nil, newDBNoItemFound("FetchNode", uid.Base64(), "", "Query")
 	}
 	data := make(blk.NodeBlock, result.Count)
 	err = attributevalue.UnmarshalListOfMaps(result.Items, &data)
 	if err != nil {
-		return nil, newDBUnmarshalErr("FetchNode", uid.String(), "", "UnmarshalListOfMaps", err)
+		return nil, newDBUnmarshalErr("FetchNode", uid.Base64(), "", "UnmarshalListOfMaps", err)
 	}
 	//
 	// update stats
