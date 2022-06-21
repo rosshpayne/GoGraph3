@@ -34,6 +34,17 @@ type UnprocessedErr struct {
 	Retries   int
 }
 
+var logid = "DB: "
+
+func logerr(e error, panic_ ...bool) {
+
+	if len(panic_) > 0 && panic_[0] {
+		slog.Log("DB: ", e.Error(), true)
+		panic(e)
+	}
+	slog.Log("DB: ", e.Error())
+}
+
 func (u UnprocessedErr) Error() string {
 	return fmt.Sprintf("Failed to process %d of %d unprocessed items after %d retries", u.Remaining, u.Total, u.Retries)
 }

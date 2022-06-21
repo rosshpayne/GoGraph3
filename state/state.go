@@ -69,7 +69,7 @@ func Get(state string) (string, error) {
 	}
 	result := &Value{}
 
-	qtx := tx.NewQuery(tbl.State, "State").DB("mysql-gograph", db.Options{db.Option{Name: "singlerow", Val: true}}...)
+	qtx := tx.NewQuery(tbl.State, "State").DB("mysql-gograph", []db.Option{db.Option{Name: "singlerow", Val: true}}...)
 
 	qtx.Select(result).Key("Name", getState(state))
 	syslog.Log("state", fmt.Sprintf("get state data for %s", getState(state)))

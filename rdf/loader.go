@@ -31,7 +31,6 @@ import (
 	"github.com/GoGraph/rdf/edge"
 	"github.com/GoGraph/rdf/reader"
 	"github.com/GoGraph/rdf/save"
-	"github.com/GoGraph/throttle"
 	//"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx"
@@ -156,7 +155,7 @@ func main() { //(f io.Reader) error { // S P O
 		}
 	}()
 	// register default database client
-	db.Init(ctx, []db.Option{db.Option{Name: "throttler", Val: throttle.Control}}...)
+	db.Init(ctx, &ctxEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Init(ctx)
 
 	//

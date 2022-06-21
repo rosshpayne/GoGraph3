@@ -1,0 +1,100 @@
+package throttleSrv
+
+import (
+	"context"
+	"sync"
+
+	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/throttle"
+)
+
+const logid = "dbThrottle"
+
+func syslog(s string) {
+	slog.Log(logid, s)
+}
+
+func alertlog(s string) {
+	slog.LogAlert(logid, s)
+}
+
+func errlog(s string) {
+	slog.LogErr(logid, s)
+}
+
+func Down() {
+	DownCh <- struct{}{}
+}
+
+func Up() {
+	UpCh <- struct{}{}
+}
+
+var (
+	DownCh chan struct{}
+	UpCh   chan struct{}
+)
+
+func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, ctxEnd *sync.WaitGroup, appThrottle throttle.Throttler) {
+
+	defer ctxEnd.Done()
+
+	DownCh = make(chan struct{})
+	UpCh = make(chan struct{})
+
+	ctxSnap, cancelSnap := context.WithCancel(context.Background())
+	var (
+		wgSnap  sync.WaitGroup
+		wgStart sync.WaitGroup
+		//
+
+	)
+	wgStart.Add(1)
+	wgSnap.Add(1)
+
+	//
+	go func() {
+		wgStart.Done()
+		defer wgSnap.Done()
+		// wait for grmgr to start for loop
+		wpStart.Wait()
+		slog.Log(logid, "Report-snapshot Powering up...")
+		for {
+			select {
+			// case t := <-time.After(time.Duration(snapInterval) * time.Second):
+			// 	snapCh <- t
+			case <-ctxSnap.Done():
+				slog.Log(logid, "Report-snapshot Shutdown.")
+				return
+			}
+		}
+
+	}()
+
+	slog.Log(logid, "Waiting for gr monitor to start...")
+	// wait for snap interrupter to start
+	wgStart.Wait()
+	slog.Log(logid, "Fully powered up...")
+
+	wpStart.Done()
+
+	for {
+
+		select {
+
+		case <-DownCh:
+
+			appThrottle.Down()
+
+		case <-UpCh:
+
+			appThrottle.Up()
+
+		case <-ctx.Done():
+			cancelSnap()
+			// shutdown any goroutines that are started above...
+			return
+
+		}
+	}
+}

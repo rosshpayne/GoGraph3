@@ -14,6 +14,7 @@ import (
 	"text/scanner"
 	"time"
 
+	throttle "github.com/GoGraph/db/internal/throttleSrv"
 	"github.com/GoGraph/db/stats"
 	"github.com/GoGraph/dbs"
 	slog "github.com/GoGraph/syslog"
@@ -43,28 +44,22 @@ type action byte
 const (
 	fail action = iota
 	retry
-	delay
-	throttle // reduce concurrency
+	shortDelay
+	longDelay
+	throttle_ // reduce concurrency
 )
 
 func syslog(s string) {
 	slog.Log(logid, s)
 }
 
-var appThrottle Throttle
-
-func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API, opt ...Option) error {
+func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API, cfg aws.Config, opt ...Option) error {
 
 	var (
 		err error
 	)
 
-	for _, v := range opt {
-		switch v.Name {
-		case "throttler":
-			appThrottle = v.Val.(Throttle)
-		}
-	}
+	awsConfig = cfg
 
 	switch api {
 
@@ -92,7 +87,7 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 
 // retry determines whether the database operation that caused the error can be retried, based on the type of error.
 // All http 500 status codes can be retried whereas only a handful of 400 status codes can be.
-func errorActions(err error) []action { // (bool, action string) {
+func errorAction(err error) []action { // (bool, action string) {
 	//
 	re := &awshttp.ResponseError{}
 	if errors.As(err, &re) {
@@ -102,23 +97,23 @@ func errorActions(err error) []action { // (bool, action string) {
 			return []action{retry}
 
 		case 400:
-			// these are the only errors that the application can retry after receiving
-			icsle := &types.ItemCollectionSizeLimitExceededException{}
-			if errors.As(err, &icsle) {
-				return []action{retry}
-			}
-			lee := &types.LimitExceededException{}
-			if errors.As(err, &lee) {
-				return []action{retry}
-			}
-			ptee := &types.ProvisionedThroughputExceededException{}
-			if errors.As(err, &ptee) {
-				return []action{retry}
-			}
-			rle := &types.RequestLimitExceeded{}
-			if errors.As(err, &rle) {
-				return []action{retry}
-			}
+			// // these are the only errors that the application can retry after receiving
+			// icsle := &types.ItemCollectionSizeLimitExceededException{}
+			// if errors.As(err, &icsle) {
+			// 	return []action{retry}
+			// }
+			// lee := &types.LimitExceededException{}
+			// if errors.As(err, &lee) {
+			// 	return []action{longDelay, retry}
+			// }
+			// ptee := &types.ProvisionedThroughputExceededException{}
+			// if errors.As(err, &ptee) {
+			// 	return []action{longDelay, retry}
+			// }
+			// rle := &types.RequestLimitExceeded{}
+			// if errors.As(err, &rle) {
+			// 	return []action{retry}
+			// }
 
 			errString := strings.ToLower(err.Error())
 			if strings.Index(errString, "api error throttlingexception") > 0 {
@@ -126,13 +121,13 @@ func errorActions(err error) []action { // (bool, action string) {
 					// // lets wait 30 seconds....
 					// slog.LogError("throttlingexception", "About to wait 30 seconds before proceeding...")
 					// time.Sleep(30 * time.Second)
-					return []action{delay, retry}
+					return []action{longDelay, retry}
 				} else {
 					return []action{fail}
 				}
 			}
 			if strings.Index(errString, "rate of requests exceeds the allowed throughput") > 0 {
-				return []action{throttle, delay, retry}
+				return []action{throttle_, longDelay, retry}
 			}
 			//Message: Rate of requests exceeds the allowed throughput.
 			//Message: The Access Key ID or security token is invalid.
@@ -145,16 +140,39 @@ func errorActions(err error) []action { // (bool, action string) {
 
 func retryOp(err error) bool {
 
-	for _, action := range errorActions(err) {
+	for _, action := range errorAction(err) {
+		//
+		// use github.com/aws/aws-sdk-go-v2/aws/Retryer
+		//
+		retryer := awsConfig.Retryer
+
+		if retryer != nil {
+			if retryer().IsErrorRetryable(err) {
+				fmt.Println("retryOp: error is retryable...")
+				for _, v := range []int{1, 2, 3} {
+					d, err := retryer().RetryDelay(v, err)
+					if err != nil {
+						fmt.Printf("retryOp:  Delay attempt %d:  %s", v, d.String())
+					}
+				}
+			}
+			fmt.Println("max attempts: ", retryer().MaxAttempts())
+		} else {
+			fmt.Println("config max attempts: ", awsConfig.RetryMaxAttempts)
+		}
+
 		switch action {
-		case delay:
-			time.Sleep(30 * time.Second)
+		case shortDelay:
+			time.Sleep(5 * time.Second)
+		case longDelay:
+			time.Sleep(20 * time.Second)
 		case retry:
 			return true
-		case fail:
-			return false
-		case throttle:
+		// case fail:
+		// 	return false
+		case throttle_:
 			// call throttle down api
+			throttle.Down()
 
 		}
 	}
@@ -500,7 +518,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 			if err != nil {
 
 				if !retryOp(err) {
-					return newDBSysErr2("BatchWriteItem", tag, "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, err)
+					return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation or max retries exceeded", NonRetryOperErr, err)
 				}
 				// wait 1 seconds before processing again...
 				time.Sleep(1 * time.Second)
@@ -543,7 +561,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 				if err != nil {
 					retryErr = err
 					if !retryOp(err) {
-						return newDBSysErr2("BatchWriteItem", tag, "System error in processing batch. Error type prevents retry of operation.", NonRetryOperErr, err)
+						return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation.", NonRetryOperErr, err)
 					}
 					// wait n seconds before reprocessing...
 					time.Sleep(1 * time.Second)

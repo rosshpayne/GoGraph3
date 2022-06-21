@@ -10,7 +10,6 @@ import (
 
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/db/stats"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	//"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/uuid"
@@ -34,16 +33,7 @@ import (
 //   DD:   datetime    conversion: string -> time.Time
 //  all the other datatypes do not need to be converted.
 
-var logid = "DB: "
 
-func logerr(e error, panic_ ...bool) {
-
-	if len(panic_) > 0 && panic_[0] {
-		slog.Log("DB: ", e.Error(), true)
-		panic(e)
-	}
-	slog.Log("DB: ", e.Error())
-}
 
 //  NOTE: tyShortNm is duplicated in cache pkg. It exists in in db package only to support come code in rdfload.go that references the db version rather than the cache which it cannot access
 // because of input-cycle issues. Once this reference is rdfload is removed the cache version should be the only one used.

@@ -113,7 +113,9 @@ func main() {
 	}()
 
 	// register default database client
-	db.Init(ctx)
+	//db.Init(ctx)
+	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+
 	mysql.Init(ctx)
 
 	tstart = time.Now()
@@ -232,7 +234,7 @@ func main() {
 	)
 
 	// register default database client
-	db.Init(ctx)
+	// db.Init(ctx)
 
 	slog.Log(logid, "Main: Started. Waiting on EdgeCh...")
 

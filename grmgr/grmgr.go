@@ -21,6 +21,22 @@ type Routine = string
 
 type Ceiling = int
 
+type throttle_ byte
+
+var Control throttle_
+
+func (t throttle_) Up() {
+	ThrottleUpCh <- struct{}{}
+}
+
+func (t throttle_) Down() {
+	ThrottleDownCh <- struct{}{}
+}
+
+func (t throttle_) Stop() {}
+
+func (t throttle_) String() {}
+
 /////////////////////////////////////
 //
 // register gRoutine start
@@ -344,21 +360,23 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 				if t0.Sub(throttleDownActioned) < v.hold {
 					alertlog("throttleDown: to soon to throttle down after last throttled action")
-				}
-
-				if t0.Sub(throttleUpActioned) < v.hold {
-					alertlog("throttleDown: to soon to throttle down after last throttled action")
-				}
-
-				// throttle down by 20%. Once changed cannot be modified for 2 minutes.
-
-				v.c -= v.down
-
-				if v.c < v.minc {
-					v.c = v.minc
-					alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
 				} else {
-					alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+
+					if t0.Sub(throttleUpActioned) < v.hold {
+						alertlog("throttleDown: to soon to throttle down after last throttled action")
+					} else {
+
+						// throttle down by 20%. Once changed cannot be modified for 2 minutes.
+
+						v.c -= v.down
+
+						if v.c < v.minc {
+							v.c = v.minc
+							alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
+						} else {
+							alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+						}
+					}
 				}
 			}
 			throttleDownActioned = t0
@@ -371,21 +389,23 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 				if t0.Sub(throttleDownActioned) < v.hold {
 					alertlog("throttleDown: to soon to throttle down after last throttled action")
-				}
-
-				if t0.Sub(throttleUpActioned) < v.hold {
-					alertlog("throttleDown: to soon to throttle down after last throttled action")
-				}
-
-				// throttle down by 20%. Once changed cannot be modified for 2 minutes.
-
-				v.c += v.up
-
-				if v.c > v.maxc {
-					v.c = v.maxc
-					alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
 				} else {
-					alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+
+					if t0.Sub(throttleUpActioned) < v.hold {
+						alertlog("throttleDown: to soon to throttle down after last throttled action")
+					} else {
+
+						// throttle down by 20%. Once changed cannot be modified for 2 minutes.
+
+						v.c += v.up
+
+						if v.c > v.maxc {
+							v.c = v.maxc
+							alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
+						} else {
+							alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+						}
+					}
 				}
 			}
 			throttleUpActioned = t0

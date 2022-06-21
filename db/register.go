@@ -16,7 +16,7 @@ type Option struct {
 	Val  interface{}
 }
 
-type Throttle interface {
+type Throttler interface {
 	Up()
 	Down()
 }
