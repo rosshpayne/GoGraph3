@@ -34,7 +34,7 @@ type UnprocessedErr struct {
 	Retries   int
 }
 
-var logid = "DB: "
+var logid = "DB"
 
 func logerr(e error, panic_ ...bool) {
 

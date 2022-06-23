@@ -389,7 +389,7 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 	err = txh.Execute()
 
 	if err != nil {
-		errlog.Add("saveRDF: ", fmt.Errorf("Failed to save: PKey: %s  SortK: %s : %s", UID.Base64(), sortk, err))
+		errlog.Add("saveRDF", fmt.Errorf("Failed to save: PKey: %s  SortK: %s : %s", UID.Base64(), sortk, err))
 	}
 	//
 	// expand Set and List types into individual S# entries to be indexed// TODO: what about SN, LN

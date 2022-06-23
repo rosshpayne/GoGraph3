@@ -33,8 +33,6 @@ import (
 //   DD:   datetime    conversion: string -> time.Time
 //  all the other datatypes do not need to be converted.
 
-
-
 //  NOTE: tyShortNm is duplicated in cache pkg. It exists in in db package only to support come code in rdfload.go that references the db version rather than the cache which it cannot access
 // because of input-cycle issues. Once this reference is rdfload is removed the cache version should be the only one used.
 
@@ -204,6 +202,9 @@ func FetchNode(uid uuid.UID, subKey ...string) (blk.NodeBlock, error) {
 	// Query
 	//
 	t0 := time.Now()
+	if dbSrv == nil {
+		panic(fmt.Errorf("dbSrv is nil"))
+	}
 	result, err := dbSrv.Query(context.Background(), input)
 	t1 := time.Now()
 	if err != nil {

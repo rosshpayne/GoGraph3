@@ -260,10 +260,8 @@ func main() {
 			wg.Add(1)
 
 			edges += int64(len(e))
-			// if len(e) == 0 {
 
-			// }
-			execute.AttachNodeEdges(ctx, e, &wg, limiterAttach, checkMode, nextBatchCh, &once)
+			go execute.AttachNodeEdges(ctx, e, &wg, limiterAttach, checkMode, nextBatchCh, &once)
 
 		}
 		// check for eod

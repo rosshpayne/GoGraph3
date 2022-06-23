@@ -69,7 +69,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	var (
 		pld      *payload
 		errors   Errors
-		errLimit = 25
+		errLimit = 5
 		lc       chan bool
 	)
 
@@ -132,10 +132,10 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 		case respch := <-PrintCh:
 
-			slog.LogErr(logid, fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errors)))
+			slog.LogAlert(logid, fmt.Sprintf(" ==================== ERRORS : %d	==============", len(errors)))
 			fmt.Printf(" ==================== ERRORS : %d	==============\n", len(errors))
 			for _, e := range errors {
-				slog.LogErr(logid, fmt.Sprintf(" %s %s", e.Id, e.Err))
+				slog.LogAlert(logid, fmt.Sprintf(" %s %s", e.Id, e.Err))
 				fmt.Println(e.Id, e.Err)
 			}
 			respch <- struct{}{}

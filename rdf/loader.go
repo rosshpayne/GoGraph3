@@ -155,6 +155,7 @@ func main() { //(f io.Reader) error { // S P O
 		}
 	}()
 	// register default database client
+	// TODO: Init should support of aws.Options e.g. WithRegion, etc
 	db.Init(ctx, &ctxEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Init(ctx)
 
@@ -297,9 +298,8 @@ func main() { //(f io.Reader) error { // S P O
 
 	// setup db related services (e.g. stats snapshot save)
 	dbadmin.Setup()
-	//
+
 	// create rdf reader
-	//
 	rdr, _ := reader.New(f)
 
 	for {
@@ -759,7 +759,7 @@ func unmarshalRDF(ctx context.Context, node *ds.Node, ty blk.TyAttrBlock, wg *sy
 				sk.WriteString(v.sortk)
 				// append csn to sortk as we need to support a two key only design in Dynamodb (lowest common denominator in this case) for a table that had three
 				sk.WriteByte('|')
-				sk.WriteString(csn.String())
+				sk.WriteString(string(csn.Base64()))
 
 				//etx.Add(mut.NewInsert(tbl.Name(tblEdgeChild)).AddMember("Puid", psn).AddMember("SortK_Cuid", sk.String()).AddMember("Status", "X"))
 

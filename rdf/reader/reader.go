@@ -26,7 +26,7 @@ func NewRDFloader(f io.Reader) *Decoder {
 }
 
 func syslog(s string) {
-	slog.Log("RDFreader: ", s)
+	slog.Log("RDFreader", s)
 }
 
 type ndShortNm = string
@@ -53,15 +53,7 @@ type RDFReader struct {
 	line int
 }
 
-type Reader interface {
-	Read([]*ds.Node) (int, bool, error)
-}
-
-//
-// pkg rdf
-//
-
-func New(f io.Reader) (Reader, uuid.UID) {
+func New(f io.Reader) (*RDFReader, uuid.UID) {
 
 	rdf := new(RDFReader)
 

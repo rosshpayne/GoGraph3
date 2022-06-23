@@ -53,6 +53,10 @@ func syslog(s string) {
 	slog.Log(logid, s)
 }
 
+func alertlog(s string) {
+	slog.LogAlert(logid, s)
+}
+
 func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API, cfg aws.Config, opt ...Option) error {
 
 	var (
@@ -94,7 +98,8 @@ func errorAction(err error) []action { // (bool, action string) {
 
 		switch re.Response.StatusCode {
 		case 500:
-			return []action{retry}
+			// do not override the default Retryer, which will have done its thing, so if error persists fail it.
+			return []action{shortDelay, retry}
 
 		case 400:
 			// // these are the only errors that the application can retry after receiving
@@ -121,7 +126,7 @@ func errorAction(err error) []action { // (bool, action string) {
 					// // lets wait 30 seconds....
 					// slog.LogError("throttlingexception", "About to wait 30 seconds before proceeding...")
 					// time.Sleep(30 * time.Second)
-					return []action{longDelay, retry}
+					return []action{shortDelay, retry}
 				} else {
 					return []action{fail}
 				}
@@ -129,8 +134,6 @@ func errorAction(err error) []action { // (bool, action string) {
 			if strings.Index(errString, "rate of requests exceeds the allowed throughput") > 0 {
 				return []action{throttle_, longDelay, retry}
 			}
-			//Message: Rate of requests exceeds the allowed throughput.
-			//Message: The Access Key ID or security token is invalid.
 		}
 	} else {
 		panic(fmt.Errorf("errActions: expected a ResponseError"))
@@ -140,42 +143,50 @@ func errorAction(err error) []action { // (bool, action string) {
 
 func retryOp(err error) bool {
 
-	for _, action := range errorAction(err) {
-		//
-		// use github.com/aws/aws-sdk-go-v2/aws/Retryer
-		//
-		retryer := awsConfig.Retryer
+	//  github.com/aws/aws-sdk-go-v2/aws/Retryer
+	retryer := awsConfig.Retryer
 
-		if retryer != nil {
-			if retryer().IsErrorRetryable(err) {
-				fmt.Println("retryOp: error is retryable...")
-				for _, v := range []int{1, 2, 3} {
-					d, err := retryer().RetryDelay(v, err)
-					if err != nil {
-						fmt.Printf("retryOp:  Delay attempt %d:  %s", v, d.String())
-					}
+	alertlog(fmt.Sprintf("retryOp: [%T] %s", err, err))
+
+	if retryer != nil {
+		if retryer().IsErrorRetryable(err) {
+			alertlog("retryOp: error is retryable...")
+			for _, v := range []int{1, 2, 3} {
+				d, err := retryer().RetryDelay(v, err)
+				if err != nil {
+					fmt.Printf("retryOp:  Delay attempt %d:  %s", v, d.String())
 				}
 			}
-			fmt.Println("max attempts: ", retryer().MaxAttempts())
 		} else {
-			fmt.Println("config max attempts: ", awsConfig.RetryMaxAttempts)
+			alertlog("retryOp: error is NOT retryable...")
 		}
+		alertlog(fmt.Sprintf("retryOp: max attempts: %d", retryer().MaxAttempts()))
+	} else {
+		alertlog(fmt.Sprintf("retryOp: no Retryer defined. aws.Config max attempts: %d", awsConfig.RetryMaxAttempts))
+	}
+
+	for _, action := range errorAction(err) {
 
 		switch action {
 		case shortDelay:
-			time.Sleep(5 * time.Second)
-		case longDelay:
+			alertlog("retryOp: short delay...")
 			time.Sleep(20 * time.Second)
+		case longDelay:
+			alertlog("retryOp: long delay...")
+			time.Sleep(60 * time.Second)
 		case retry:
+			alertlog("retryOp: retry...")
 			return true
 		// case fail:
 		// 	return false
 		case throttle_:
+			alertlog("retryOp: throttle...")
 			// call throttle down api
 			throttle.Down()
 
 		}
 	}
+	alertlog("retryOp: no retry...")
 	return false
 }
 
@@ -502,7 +513,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 		for {
 
 			if operRetryCnt == param.MaxOperRetries {
-				return newDBSysErr2("execBatchMutations", tag, fmt.Sprintf("Exceed max retries [%d] on operation error", param.MaxOperRetries), MaxOperRetries, retryErr)
+				return newDBSysErr2("execBatchMutations", tag, fmt.Sprintf("Exceed max retries [%d]", param.MaxOperRetries), MaxOperRetries, retryErr)
 			}
 			t0 = time.Now()
 			out, err = client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: reqi, ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes}) //aws.String("INDEXES")})
@@ -521,7 +532,6 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 					return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation or max retries exceeded", NonRetryOperErr, err)
 				}
 				// wait 1 seconds before processing again...
-				time.Sleep(1 * time.Second)
 				operRetryCnt++
 				retryErr = err
 				continue

@@ -52,11 +52,13 @@ func newService(ctx_ context.Context, opt ...Option) (*dynamodb.Client, aws.Conf
 			optFuncs = append(optFuncs, f)
 		}
 	}
+	// add default RetryMode
+	optFuncs = append(optFuncs, (func(*config.LoadOptions) error)(config.WithRetryMode(aws.RetryModeStandard)))
+
 	// Using the SDK's default configuration, loading additional config
 	// and credentials values from the environment variables, shared
 	// credentials, and shared configuration files
-	//cfg, err := config.LoadDefaultConfig(ctx_, config.WithRegion("us-east-1"))
-	cfg, err := config.LoadDefaultConfig(ctx_, optFuncs...)
+	cfg, err := config.LoadDefaultConfig(ctx_, optFuncs...) // fastest...
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
@@ -71,18 +73,17 @@ func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...Option) {
 	for _, v := range opt {
 		switch strings.ToLower(v.Name) {
 		case "throttler":
-			appThrottle = v.Val.(Throttler)
+			appThrottle = v.Val.(thtle.Throttler)
 		case "region":
 			fmt.Println("Region = ", v.Val.(string))
 			v.Val = config.WithRegion(v.Val.(string))
 		}
 	}
 
-	dbSrv, awsConfig := newService(ctx_, opt...)
+	dbSrv, awsConfig = newService(ctx_, opt...)
 	if dbSrv == nil {
 		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}
-	dbSrv = dbSrv
 
 	dbRegistry[DefaultDB].Handle = DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
 

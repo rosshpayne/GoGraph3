@@ -194,12 +194,13 @@ func NewConfig(r string, c Ceiling, down int, up int, min Ceiling, h string) (*L
 
 	hold, err := time.ParseDuration(h)
 	if err != nil {
+		panic(err)
 		return nil, err
 	}
 
 	l := Limiter{c: c, maxc: c, minc: min, up: up, down: down, r: Routine(r), or: Routine(r), ch: make(chan struct{}), on: true, hold: hold}
 	registerCh <- &l
-	syslog(fmt.Sprintf("New Routine %q   Ceiling: %d [min: %d, down: %d, upd: %d, hold: %s]", r, c))
+	alertlog(fmt.Sprintf("New Routine %q  Ceiling: %d [min: %d, down: %d, up: %d, hold: %s]", r, c, min, down, up, h))
 	return &l, nil
 }
 
@@ -329,6 +330,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		case r = <-EndCh:
 
 			rCnt[r] -= 1
+			syslog(fmt.Sprintf("EndCh for %s. #concurrent count: %d", r, rCnt[r]))
 
 			if b, ok := rWait[r]; ok {
 				if b > 0 && rCnt[r] < rLimit[r].c {
@@ -345,9 +347,9 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				// has ASKed
 				rLimit[r].ch <- struct{}{} // proceed to run gr
 				rCnt[r] += 1
-				//slog.Log("grmgr: ", fmt.Sprintf("has ASKed. Under cnt limit. Send ACK on routine channel..for %s  cnt: %d", r, rCnt[r]))
+				syslog(fmt.Sprintf("has ASKed. Under cnt limit. SEnt ACK on routine channel..for %s  cnt: %d Limit: %d", r, rCnt[r], rLimit[r].c))
 			} else {
-				//slog.Log("grmgr: ", fmt.Sprintf("has ASKed. Cnt is above limit. Mark %s as waiting", r))
+				syslog(fmt.Sprintf("has ASKed %s. Cnt [%d] is above limit [%d]. Mark %s as waiting", r, rCnt[r], rLimit[r].c))
 				rWait[r] += 1 // log routine as waiting to proceed
 			}
 

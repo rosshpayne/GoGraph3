@@ -11,7 +11,7 @@ import (
 	"time"
 
 	atds "github.com/GoGraph/attach-merge/ds"
-	"github.com/GoGraph/attach-merge/execute/event"
+	//	"github.com/GoGraph/attach-merge/execute/event"
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
 	"github.com/GoGraph/ds"
@@ -73,22 +73,23 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		t0      time.Time
 		ok      bool
 		op      *AttachOp
-		eAN     *event.AttachNode
+	//	eAN     *event.AttachNode
 	)
 	defer lmtr.EndR()
 	defer wg_.Done()
 
+	// remove following defer as it impacts performance.
 	// log Attach Event via defer
-	defer func() func() {
-		eAN = event.NewAttachNodeContext(ctx, edges[0].Puid, len(edges)) // 0:"EV$event",  1:EV$edge
-		//	eAN.LogStart()
-		return func() {
-			err = eAN.EventCommit(err)
-			if err != nil {
-				panic(err) //TODO: replace panic
-			}
-		}
-	}()()
+	// defer func() func() {
+	// 	eAN = event.NewAttachNodeContext(ctx, edges[0].Puid, len(edges)) // 0:"EV$event",  1:EV$edge
+	// 	//	eAN.LogStart()
+	// 	return func() {
+	// 		err = eAN.EventCommit(err)
+	// 		if err != nil {
+	// 			panic(err) //TODO: replace panic
+	// 		}
+	// 	}
+	// }()()
 
 	// // update state via defer
 	defer func() func() {
@@ -96,15 +97,14 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		// Two tx are compensated by having the join process check on existence of edge before creating - only for the batch at restart though.
 		oTx := tx.New("op state").DB("mysql-GoGraph")
 		return func() {
-			et := eAN.NewTask("op-StateChange") // EV$task
+			//	et := eAN.NewTask("op-StateChange") // EV$task
 			// Persist state
 			oTx.Add(op.End(err)...) // Edge_Movies
 			err = oTx.Execute()
 			// log finish event
-			et.Finish(err) // 2: "EV$task"
+			//	et.Finish(err) // 2: "EV$task"
 			if err != nil {
 				errlog.Add(logid, fmt.Errorf("Error in execute oTx for attach node operation state: %w ", err))
-				panic(err)
 			}
 		}
 	}()()
@@ -112,7 +112,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	handleErr := func(err error) {
 		//pnd.Unlock()
 		errlog.Add(logid, err)
-		panic(err)
+		//panic(err)
 	}
 
 	// cTx := tx.NewTx("AttachEdges")// should use transactions as attaching nodes involves multiple puts (inserts) any one of which could fail.
@@ -179,8 +179,15 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	// The database commit unit contains all child nodes that are attached.
 	// source node type item from cache
 
+	// populate op with first entry in edges in case of an early error
+	op = &AttachOp{Puid: edges[0].Puid, Cuid: edges[0].Cuid, Sortk: edges[0].Sortk, Bid: edges[0].Bid}
+
 	gc := cache.GetCache()
 	pnd, err := gc.FetchNode(edges[0].Puid, types.GraphSN()+"|A#A#T")
+	if err != nil {
+		handleErr(err)
+		return
+	}
 
 	sk := make(map[string]struct{})
 	for _, e := range edges {
@@ -200,7 +207,8 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 
 	// get type e.g "Person" of node from A#A#T item or ty attribute if present
 	if pTyName, ok = pnd.GetType(); !ok {
-		handleErr(fmt.Errorf(fmt.Sprintf("AttachNode: Error in GetType of parent node")))
+		err := fmt.Errorf(fmt.Sprintf("AttachNode: Error in GetType of parent node"))
+		handleErr(err)
 		return
 	}
 
@@ -209,13 +217,14 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	// get type details from type table for child node based on sortk (edge attribute)
 	var pty blk.TyAttrBlock
 	if pty, err = types.FetchType(pTyName); err != nil {
-		handleErr(fmt.Errorf("AttachNode main: Error in types.FetchType : %w", err))
+		err := fmt.Errorf("AttachNode main: Error in types.FetchType : %w", err)
+		handleErr(err)
 		return
 	}
 	pTySN = types.GraphSN() + "|" + pTySN
 
-	st := eAN.NewTask("AtachExecute")
-	defer st.Finish(err)
+	//st := eAN.NewTask("AtachExecute")
+	//defer st.Finish(err)
 
 	for _, e := range edges {
 
@@ -254,12 +263,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	// Execute()
 	err = cTx.Commit()
 	if err != nil {
-		// if err == ReduceConcurrency {
-		// 	sleep
-		// 	AttachNodeEdges(...) or MarkRetry()
-		// 	st.Finish(err)
-		// 	return
-		// }
+		//cTx.Dump() // serialise cTx to mysql dump table
 		errlog.Add(logid, fmt.Errorf("Error in execute of attach node transaction: %w ", err))
 	}
 
@@ -336,12 +340,12 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 	//check child node (cn) type matches parent attachpoint type
 	cnTy, ok := types.GetTyShortNm(cTyName)
 	if !ok {
-		panic(fmt.Errorf("AttachEdge: not ok returned from types.GetTyShortNm for arg: %s", cTyName))
+		return fmt.Errorf("AttachEdge: not ok returned from types.GetTyShortNm for arg: %s", cTyName)
 	}
 
 	if cnTy != apAttrTy {
 		// should return or panic??
-		panic(fmt.Errorf("Child node type %q does not match parent node attachpoint type %q", attachPoint, cnTy))
+		return fmt.Errorf("Child node type %q does not match parent node attachpoint type %q", attachPoint, cnTy)
 	}
 
 	// get type definition for child node
@@ -355,7 +359,7 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 	py := &blk.ChPayload{PTy: pty}
 	err = propagationTarget(cTx, pnd, py, sortK, pUID, cUID, dip)
 	if err != nil {
-		panic(err)
+		return err // panic(err)
 	}
 
 	// add child UID to parent node's uid-pred or one of its overflow batches
@@ -406,7 +410,7 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 			// update XF flag in parent UID-PRED if overflow batch size exceeds limit. This will result in a new batch being created in propagationTarget().
 			err = checkOBatchSizeLimitReached(cTx, cUID, py)
 			if err != nil {
-				panic(err)
+				return err // panic(err)
 			}
 		}
 		// increment N in parent UID-PRED, which maintains total of all attached nodes.
@@ -442,7 +446,7 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 	}
 	if !found {
 		// should return or panic??
-		panic(fmt.Errorf("did not find attachPoint %q in child node type ", attachPoint))
+		return fmt.Errorf("did not find attachPoint %q in child node type ", attachPoint)
 	}
 
 	if len(cnv) > 0 {
@@ -460,8 +464,8 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 			if err != nil {
 				err := fmt.Errorf("Error fetching child scalar data: %w", err)
 				errlog.Add(logid, err)
-				//return
-				panic(err)
+				return err
+				//panic(err)
 			}
 		}
 		err = cnd.UnmarshalCache(cnv)
@@ -716,7 +720,8 @@ func propagateMerge(cTx *tx.Handle, ty blk.TyAttrD, pUID uuid.UID, sortK string,
 			merge.AddMember("LF", v)
 		default:
 			// TODO: check if string - ok
-			panic(fmt.Errorf("data type must be a number, int64, float64"))
+			errlog.Add(logid, fmt.Errorf("data type must be a number, int64, float64"))
+			return
 		}
 
 	case "LBl":
