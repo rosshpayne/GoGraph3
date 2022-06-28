@@ -447,6 +447,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 			delete(rCnt, r)
 			delete(rWait, r)
 			delete(csnap, r)
+			alertlog(fmt.Sprintf("Unregister %s", r))
 
 		case <-ctx.Done():
 			cancelSnap()

@@ -31,6 +31,7 @@ var (
 	ErrCntByIdCh chan string
 	ErrCntRespCh chan int
 	ResetCntCh   chan string
+	ErrCntCh     chan chan int
 )
 
 func CheckLimit(lc chan bool) bool {
@@ -52,12 +53,11 @@ func PrintErrors() {
 }
 
 func RunErrored() bool {
-	respCh := make(chan struct{})
-	PrintCh <- respCh
-	<-respCh
-	errs := <-RequestCh
+	respCh := make(chan int)
+	ErrCntCh <- respCh
+	errs := <-respCh
 
-	if len(errs) > 0 {
+	if errs > 0 {
 		return true
 	}
 	return false
@@ -93,7 +93,6 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		select {
 
 		case pld = <-addCh:
-			fmt.Println("errlog Add ...")
 			var errmsg strings.Builder
 			errmsg.WriteString(pld.Id)
 			errmsg.WriteString(" ")
@@ -123,6 +122,15 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 			} else {
 				ErrCntRespCh <- c
 			}
+
+		case respCh := <-ErrCntCh:
+
+			var v int
+			for _, v := range errCnt {
+				v++
+			}
+
+			respCh <- v
 
 		case id := <-ResetCntCh:
 

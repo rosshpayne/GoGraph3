@@ -1076,12 +1076,8 @@ func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) erro
 
 	switch {
 
-	case len(pk) != 0 && len(sk) != 0 && tbl.KeyCnt(q.GetTable()) == 2, len(pk) != 0 && len(sk) == 0 && tbl.KeyCnt(q.GetTable()) == 1:
+	case len(pk) != 0 && len(sk) == 0 && tbl.KeyCnt(q.GetTable()) == 1:
 
-		// if q.EqyCondition(pk) != query.EQ {
-		// 	return fmt.Errorf("Partition Key must be defined with equality condition")
-		// }
-		//fmt.Println("===========GetItem=======")
 		return exGetItem(ctx, client, q, av, proj)
 
 	default:
@@ -1166,11 +1162,13 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		flt, f expression.ConditionBuilder
 	)
 
+	syslog(fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+
 	// pagination
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		syslog(fmt.Sprintf("exQuery: restart"))
+		//syslog(fmt.Sprintf("exQuery: restart"))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId())))
 		q.SetRestart(false)
 
@@ -1186,6 +1184,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 				panic(err)
 			}
 		}
+		syslog(fmt.Sprintf("exQuery: restart false."))
 	}
 
 	switch q.KeyCnt() {
@@ -1206,6 +1205,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		case query.LE:
 			keyc = expression.KeyAnd(keyc, expression.KeyLessThanEqual(expression.Key(q.GetSK()), expression.Value(q.GetKeyValue(q.GetSK()))))
 		case query.BEGINSWITH:
+			//syslog(fmt.Sprintf("BEGINSWITH: %s %s ", q.GetSK(), q.GetKeyValue(q.GetSK()).(string)))
 			keyc = expression.KeyAnd(keyc, expression.KeyBeginsWith(expression.Key(q.GetSK()), q.GetKeyValue(q.GetSK()).(string)))
 		}
 	}
@@ -1280,9 +1280,11 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 
 	if q.IndexSpecified() {
 		input.IndexName = aws.String(string(q.GetIndex()))
+		//syslog(fmt.Sprintf("exQuery: index specified: %s", q.GetIndex()))
 	}
 	if l := q.GetLimit(); l > 0 {
 		input.Limit = aws.Int32(int32(l))
+		//syslog(fmt.Sprintf("exQuery: limit specified %d", l))
 	}
 	if lk := q.PgStateValI(); lk != nil {
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
@@ -1293,14 +1295,18 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	}
 	//
 	t0 := time.Now()
+
 	result, err := client.Query(ctx, input)
+	syslog(fmt.Sprintf("exQuery: returns %d items", result.Count))
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exQuery", "Query", err)
 	}
+
 	// pagination cont....
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
+		syslog(fmt.Sprintf("exQuery: LastEvaluatedKey = 0"))
 		//EOD
 		q.SetPgStateValS("")
 		q.SetPgStateValI(nil)
@@ -1308,6 +1314,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 
 	} else {
 
+		syslog(fmt.Sprintf("exQuery: LastEvaluatedKey != 0"))
 		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 		q.SetPgStateValI(result.LastEvaluatedKey)
 	}
@@ -1348,6 +1355,7 @@ func exScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, pr
 	return err
 }
 
+// exSingleScan - non-parallel scan. Scan of table or index.
 func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
 	syslog(fmt.Sprintf("exSingleScan: thread %d", q.Worker()))
@@ -1723,7 +1731,7 @@ func savePgState(ctx context.Context, client DynamodbHandle, id uuid.UID, val st
 
 	var state string = "LastEvaluatedKey"
 
-	//syslog(fmt.Sprintf("exScan: savePgState id: %s ", id.String()))
+	syslog(fmt.Sprintf("savePgState id: %s ", id.Base64()))
 
 	m := mut.NewInsert("pgState")
 	if len(worker) > 0 {
@@ -1747,7 +1755,7 @@ func getPgState(ctx context.Context, id uuid.UID, worker ...int) string {
 		state += "-w" + strconv.Itoa(worker[0])
 	}
 
-	syslog(fmt.Sprintf("exScan: getPgState id: %s ", id.String()))
+	syslog(fmt.Sprintf("getPgState id: %s ", id.String()))
 
 	type Val struct {
 		Value string
@@ -1774,7 +1782,9 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 	)
 	mm := make(map[string]types.AttributeValue)
 
-	fmt.Println("in: ", in)
+	alertlog(fmt.Sprintf("unmarshalPgState: %s ", in))
+	// in:  4{IX : { S : "X" } }{PKey : { B : "a588f90b-7d07-4789-8d16-7cf01015c461" } }{Ty : { S : "m|P" } }{SortK : { S : "A#A#T" } }
+
 	var s scanner.Scanner
 	s.Init(strings.NewReader(in))
 	s.Scan()
@@ -1809,8 +1819,10 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 			s := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
 			av = &types.AttributeValueMemberS{Value: s}
 		case "B":
+			//
 			u := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
-			av = &types.AttributeValueMemberB{Value: []byte(u)}
+			uid := uuid.FromString(u)
+			av = &types.AttributeValueMemberB{Value: []byte(uid)}
 		case "N":
 			n := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
 			av = &types.AttributeValueMemberN{Value: n}
@@ -1828,7 +1840,7 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 		}
 	}
 
-	syslog(fmt.Sprintf("exScan: unmarshalPgState  %s", stringifyPgState(mm)))
+	syslog(fmt.Sprintf("unmarshalPgState  %s", stringifyPgState(mm)))
 
 	return mm
 }

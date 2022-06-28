@@ -112,6 +112,7 @@ func main() {
 
 		ecnt, ecnta int
 		eStatus     string
+		ls          string
 
 		esloadCnt    int
 		ty, sk, attr string
@@ -155,8 +156,9 @@ func main() {
 	}()
 
 	// register default database client
-	db.Init(ctx)
+	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Init(ctx)
+
 	// process input arguments
 	param.ReducedLog = false
 	if *reduceLog == 1 {
@@ -202,14 +204,14 @@ func main() {
 	}
 
 	// create run identifier
-	runid, err := run.New(logid, "dp")
+	runid, err := run.New(logid, "es")
 	if err != nil {
 		fmt.Println(fmt.Sprintf("Error in  MakeRunId() : %s", err))
 		return
 	}
 
 	// check state of processing, restart?
-	ls, stateId, err := getLoadStatus(ctx, loadId)
+	ls, stateId, err = getLoadStatus(ctx, loadId)
 	if err != nil {
 
 		if errors.Is(err, query.NoDataFoundErr) {
@@ -492,7 +494,7 @@ func getLoadStatus(ctx context.Context, id string) (string, uuid.UID, error) {
 	var status Status
 	opt := db.Option{Name: "singlerow", Val: true}
 	// check if ES load completed
-	ftx := tx.NewQueryContext(ctx, "GetLoadStatus", "State$").DB("mysql-goGraph", db.Options{opt}...)
+	ftx := tx.NewQueryContext(ctx, "GetLoadStatus", "State$").DB("mysql-goGraph", []db.Option{opt}...)
 	ftx.Select(&status).Key("Graph", types.GraphSN()).Key("Name", id) // other values: "E","R"
 
 	err = ftx.Execute()
@@ -504,8 +506,9 @@ func getLoadStatus(ctx context.Context, id string) (string, uuid.UID, error) {
 	return status.Value, status.RunId, nil
 }
 
-func setLoadStatus(ctx context.Context, id string, s string, err error, runid ...uuid.UID) error {
+func setLoadStatus(ctx context.Context, id string, s string, err_ error, runid ...uuid.UID) error {
 
+	var err error
 	if len(s) == 0 {
 		panic(fmt.Errorf("setLoadStatus : value is empty"))
 	}
@@ -516,7 +519,7 @@ func setLoadStatus(ctx context.Context, id string, s string, err error, runid ..
 		ftx := tx.New("setLoadStatus").DB("mysql-goGraph")
 		m := ftx.NewInsert("State$").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("Name", id, mut.IsKey).AddMember("Value", s).AddMember("RunId", runid[0])
 		m.AddMember("Created", "$CURRENT_TIMESTAMP$")
-		err := ftx.Execute()
+		err = ftx.Execute()
 		if err != nil {
 			return err
 		}

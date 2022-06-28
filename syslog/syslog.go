@@ -75,6 +75,10 @@ func newLogr(prefix string, logType string) *log.Logger {
 	s.WriteString(logType)
 	s.WriteByte(':')
 
+	if iow == nil {
+		panic(fmt.Errorf("syslog: syslog.Start() before using syslog"))
+	}
+
 	logr := log.New(iow, s.String(), logrFlags)
 	logr.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
@@ -140,8 +144,8 @@ func Log(prefix string, s string, panic ...bool) {
 	}
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
 	// which is either a os.File or Cloudwatch Logs.
-	logr.Print(s)
 
+	logr.Print(s)
 }
 
 func LogAlert(prefix string, s string, panic ...bool) {

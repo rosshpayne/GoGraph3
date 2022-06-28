@@ -21,6 +21,8 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
+var logid string = "cache"
+
 func syslog(s string) {
 	slog.Log("Cache: ", s)
 }
@@ -51,7 +53,7 @@ type SortKey = string
 type NodeCache struct {
 	sync.RWMutex // used for querying the cache data items. Promoted methods RLock(), Unlock()
 	m            map[SortKey]*blk.DataItem
-	Uid          uuid.UID    // TODO - should this be exposed
+	Uid          uuid.UID    // cache map key, uid of node (data, overflow blck). TODO - should this be exposed
 	fullLock     bool        // true for Lock, false for read Lock
 	gc           *GraphCache // point back to graph-cache
 	//
@@ -763,7 +765,7 @@ type BatchPy struct {
 
 type BatchChs []chan BatchPy
 
-func (nc *NodeCache) MakeChannels(sortk string) BatchChs {
+func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 
 	var (
 		bChs BatchChs
@@ -771,7 +773,7 @@ func (nc *NodeCache) MakeChannels(sortk string) BatchChs {
 	if nc == nil {
 		panic(ErrCacheEmpty)
 	}
-	//	syslog(fmt.Sprintf("UnmarshalEdge: %s sortk %s  len(nc.m) %d", nc.Uid, sortk, len(nc.m)))
+	syslog(fmt.Sprintf("UnmarshalEdge: %s sortk %s  len(nc.m) %d", nc.Uid, sortk, len(nc.m)))
 	if v, ok := nc.m[sortk]; ok {
 		// based on data type and whether its a node or uid-pred
 		var (
@@ -786,13 +788,13 @@ func (nc *NodeCache) MakeChannels(sortk string) BatchChs {
 		bChs = make(BatchChs, len(oUIDs)+1)
 		for i := 0; i < len(oUIDs)+1; i++ {
 			if i == 0 {
-				// no buffer - channel 0 used to sync with dp read
+				// no channel buffer - channel 0 used to sync with dp read
 				bChs[i] = make(chan BatchPy)
 			} else {
 				bChs[i] = make(chan BatchPy, 2)
 			}
 		}
-		//syslog(fmt.Sprintf("UnmarshalEdge %s  v.GetNd() -> cuid, len(cuid) %d len(xf) %d, len(oUIDs) %d", nc.Uid, len(cuid), len(xf), len(oUIDs)))
+		syslog(fmt.Sprintf("UnmarshalEdge %s  v.GetNd() -> cuid, len(cuid) %d, len(oUIDs) %d", nc.Uid, len(cuid), len(oUIDs)))
 		// a channel for each overflow block
 		//limiter = grmgr.New("edgeCh", len(oUIDs))
 		// read overflow blocks concurrently
@@ -809,7 +811,7 @@ func (nc *NodeCache) MakeChannels(sortk string) BatchChs {
 				// <-limiter.RespCh()
 				i := i
 				wg.Add(1)
-				//syslog(fmt.Sprintf("About to go nc.gc.FetchBatc : %d", i))
+
 				go nc.gc.FetchBatch(i+1, id[i], u, &wg, sortk, bChs[i+1])
 
 			}
@@ -820,14 +822,14 @@ func (nc *NodeCache) MakeChannels(sortk string) BatchChs {
 		}()
 
 	} else {
-		fmt.Sprintf("Errror in UnmarshalEdge Sortk %q not found in node cache map. Cache size %d", sortk, len(nc.m))
+		//fmt.Sprintf("Errror in UnmarshalEdge Sortk %q not found in node cache map. Cache size %d", sortk, len(nc.m))
 		for k, v := range nc.m {
-			fmt.Printf("cache %s %s", k, v.GetPkey())
+			slog.LogAlert(logid, fmt.Sprintf("cache %s %s\n", k, uuid.UID(v.GetPkey()).Base64()))
 		}
-		panic(fmt.Errorf("Errror in UnmarshalEdge Sortk %q not found in node cache map", sortk))
+		return nil, fmt.Errorf("Errror in UnmarshalEdge Sortk %q not found in node cache map", sortk)
 	}
 
-	return bChs
+	return bChs, nil
 
 }
 

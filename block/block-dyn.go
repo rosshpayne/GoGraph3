@@ -58,8 +58,8 @@ const (
 // Data in then used to populate the NV.value attribute in the UnmarshalCache() ie. from []DataItem -> NV.value
 // via the DataItem Get methods
 type DataItem struct {
-	Pkey  []byte // uuid.UID
-	Sortk string
+	Pkey  []byte `dynamodbav:"PKey"` // uuid.UID
+	Sortk string `dynamodbav:"SortK"`
 	//
 	Graph  string
 	IsNode string

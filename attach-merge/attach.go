@@ -303,7 +303,7 @@ func main() {
 // from previous processBatch run which have been accumulated in the bat argument.
 func nodeEdges(qetx, qptx *tx.QHandle) <-chan []*ds.Edge {
 
-	fmt.Println("=========================. processBatch ========================== ")
+	//fmt.Println("=========================. processBatch ========================== ")
 	edgeCh := make(chan []*ds.Edge) //, 10)
 
 	go scanForEdges(qetx, qptx, edgeCh)
@@ -434,7 +434,7 @@ func fetchChildEdges(qtx *tx.QHandle, puid uuid.UID) ([]*ds.Edge, error) {
 		return nil, err
 	}
 
-	slog.Log(logid, fmt.Sprintf("Query returns : %d  for Puid: %s", len(result), puid.Base64()))
+	slog.LogAlert(logid, fmt.Sprintf("Query returns : %d  for Puid: %s", len(result), puid.Base64()))
 
 	// if len(result) == 0 {
 

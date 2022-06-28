@@ -8,8 +8,8 @@ import (
 	"time"
 
 	blk "github.com/GoGraph/block"
-	"github.com/GoGraph/db"
 	elog "github.com/GoGraph/errlog"
+	"github.com/GoGraph/ggdb"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
@@ -46,7 +46,7 @@ func (g *GraphCache) FetchBatch(i int, bid int64, ouid uuid.UID, wg *sync.WaitGr
 	for b := 1; b < int(bid)+1; b++ {
 		// each bid has its own sortk value: <sortk>%<bid>
 		sk = sortk + "%" + strconv.Itoa(b)
-		nb, err := db.FetchNode(ouid, sk)
+		nb, err := ggdb.FetchNode(ouid, sk)
 		if err != nil {
 			elog.Add("FetchBatch: ", err)
 			break
@@ -89,7 +89,7 @@ func (g *GraphCache) FetchUOB(ouid uuid.UID, wg *sync.WaitGroup, ncCh chan<- *No
 		}
 		g.Unlock()
 
-		nb, err := db.FetchNode(ouid, sortk_)
+		nb, err := ggdb.FetchNode(ouid, sortk_)
 		if err != nil {
 			return
 		}
@@ -172,26 +172,29 @@ func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, 
 		sortk_ = types.GraphSN() + "|" + "A#"
 	}
 	uidb64 := uid.EncodeBase64()
-	slog.Log("FetchForUpdate: ", fmt.Sprintf("** Cache FetchForUpdate Cache Key Value: [%s]   sortk: %s", uid.EncodeBase64(), sortk_))
+
 	e := g.cache[uidb64]
 	// e is nill when UID not in cache (map), e.NodeCache is nill when node cache is cleared.
 	if e == nil { //|| e.NodeCache == nil || e.NodeCache.m == nil {
+		slog.Log("FetchForUpdate", fmt.Sprintf("NOT Cached. Cache Key Value: [%s]   sortk: %s", uid.EncodeBase64(), sortk_))
 		e = &entry{ready: make(chan struct{})}
 		g.cache[uidb64] = e
 		g.Unlock()
 		e.NodeCache = &NodeCache{m: make(map[SortKey]*blk.DataItem), Uid: uid, gc: g}
 		// nb: type blk.NodeBlock []*DataItem
-		nb, err := db.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNode(uid, sortk_)
 		if err != nil {
-			slog.Log("FetchForUpdate: ", fmt.Sprintf("db fetchnode error: %s", err.Error()))
+			slog.Log("FetchForUpdate", fmt.Sprintf("db fetchnode error: %s %s %s", uid.EncodeBase64(), sortk_, err.Error()))
 			return nil, err
 		}
+		//	slog.Log("FetchForUpdate", fmt.Sprintf("Successful fetch %s %s", uid.EncodeBase64(), sortk_))
 		en := e.NodeCache
 		for _, v := range nb {
 			en.m[v.Sortk] = v
 		}
 		close(e.ready)
 	} else {
+		//	slog.Log("FetchForUpdate", fmt.Sprintf("Is Cached. Cache Key Value: [%s]   sortk: %s", uid.EncodeBase64(), sortk_))
 		g.Unlock()
 		<-e.ready
 	}
@@ -214,10 +217,12 @@ func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, 
 	for k := range e.m {
 		if strings.HasPrefix(sortk_, k) {
 			cached = true
+			//	slog.Log("FetchForUpdate", fmt.Sprintf("HasPrefix TRUE. Cache Key: [%s]   sortk: %s k: %s", uid.EncodeBase64(), sortk_, k))
 			break
 		}
 	}
 	if !cached {
+		//	slog.Log("FetchForUpdate", fmt.Sprintf("dbFetchSortK for %s %s", uid.EncodeBase64(), sortk_))
 		// perform a db fetch of sortk
 		e.dbFetchSortK(sortk_)
 	}
@@ -254,7 +259,7 @@ func (g *GraphCache) FetchForUpdate2(uid uuid.UID, sortk ...string) (*NodeCache,
 		}
 		g.Unlock()
 		// nb: type blk.NodeBlock []*DataItem
-		nb, err := db.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNode(uid, sortk_)
 		if err != nil {
 			slog.Log("FetchForUpdate: ", fmt.Sprintf("db fetchnode error: %s", err.Error()))
 			return nil, err
@@ -330,7 +335,7 @@ func (g *GraphCache) FetchNodeNonCache(uid uuid.UID, sortk ...string) (*NodeCach
 		g.cache[uidb64] = e
 		g.Unlock()
 		// nb: type blk.NodeBlock []*DataIte
-		nb, err := db.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNode(uid, sortk_)
 		if err != nil {
 			return nil, err
 		}
@@ -378,7 +383,7 @@ func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error
 		e.NodeCache = &NodeCache{m: make(map[SortKey]*blk.DataItem), Uid: uid, gc: g}
 		// only single threaded access at this point so no need to e.Lock()
 		// all concurrent read threads will be waiting on the ready channel
-		nb, err := db.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNode(uid, sortk_)
 		if err != nil {
 			return nil, err
 		}
@@ -418,7 +423,7 @@ func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error
 func (nc *NodeCache) dbFetchSortK(sortk string) error {
 
 	slog.Log("dbFetchSortK: ", fmt.Sprintf("dbFetchSortK for %s UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
-	nb, err := db.FetchNode(nc.Uid, sortk)
+	nb, err := ggdb.FetchNode(nc.Uid, sortk)
 	if err != nil {
 		return err
 	}
@@ -608,7 +613,7 @@ func (g *GraphCache) FetchAndLockNode(uid uuid.UID, sortk ...string) (*NodeCache
 		// stop anyone reading cache while its being loaded.
 		g.Unlock()
 		// only single threaded access to all shared variables at this point
-		nb, err := db.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNode(uid, sortk_)
 		if err != nil {
 			return nil, err
 		}
