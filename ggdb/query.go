@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	blk "github.com/GoGraph/block"
-	elog "github.com/GoGraph/errlog"
-	//	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/query"
@@ -38,7 +36,6 @@ func FetchNodeContext(ctx context.Context, uid uuid.UID, subKey ...string) (blk.
 	stx.Select(&d).Key("PKey", uid).Key("SortK", sortk, query.BEGINSWITH)
 	err = stx.Execute()
 	if err != nil {
-		elog.Add(logid, fmt.Errorf("FetchNode: %w", err))
 		err = fmt.Errorf("FetchNode: %w", err)
 	}
 

@@ -333,19 +333,15 @@ func main() {
 
 			go Propagate(ctx, limiterDP, &wgc, n, ty, has11)
 
-			// processed a batch - now wait for remaining DPs to finish and alert scanner
 			if b == param.DPbatch {
+				// finished batch - wait for remaining DPs to finish and alert scanner to fetch next batch
 				wgc.Wait()
-				fmt.Println("End-of-batch - complete...onto next batch")
 				DPbatchCompleteCh <- struct{}{}
-				fmt.Println("End-of-batch - acknowledged")
 				b = 0
 			}
 		}
 		// wait got last DP process to complete i.e. run post delete, so it will not be fetched again in FetchNode query.
-		fmt.Println("Close of channel - waiting for DPs to complete...")
 		wgc.Wait()
-		fmt.Println("Close of channel - wait finished...onto next Ty")
 	}
 
 	t1 := time.Now()

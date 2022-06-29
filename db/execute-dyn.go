@@ -1297,7 +1297,6 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	t0 := time.Now()
 
 	result, err := client.Query(ctx, input)
-	syslog(fmt.Sprintf("exQuery: returns %d items", result.Count))
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exQuery", "Query", err)
