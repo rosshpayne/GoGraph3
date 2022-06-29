@@ -98,7 +98,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		syslog(fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 		//	fmt.Printf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s   ", pUID.String(), v.Ty, psortk)
 		// lock parent node and load  UID-PRED into cache
-		nc, err = gc.FetchForUpdate(pUID, psortk)
+
+		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
 			if nc != nil {
 				nc.Unlock()
@@ -189,7 +190,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 							//fmt.Printf("cuid: %s\n", uuid.UID(cuid).String())
 							// fetch 1:1 node propagated data and assign to pnode
 							// load cache with node's uid-pred and propagated data
-							ncc, err := gc.FetchNode(cuid, types.GraphSN()+"|A#G#")
+							ncc, err := gc.FetchNodeContext(ctx, cuid, types.GraphSN()+"|A#G#")
 							if err != nil {
 								if errors.Is(err, NoDataFound) {
 									syslog(fmt.Sprintf("No items found for cUID:  %s, sortk: %s ", cuid, types.GraphSN()+"|A#G#"))

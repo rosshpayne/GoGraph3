@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -114,7 +115,7 @@ func (g *GraphCache) FetchUOB(ouid uuid.UID, wg *sync.WaitGroup, ncCh chan<- *No
 	var cached bool
 	// check sortk is cached
 	for k := range e.m {
-		if strings.HasPrefix(sortk_, k) {
+		if strings.HasPrefix(k, sortk_) {
 			cached = true
 			break
 		}
@@ -153,19 +154,19 @@ func (g *GraphCache) LockNode(uid uuid.UID) {
 	e.Lock()
 
 }
+func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, error) {
+	return g.FetchForUpdateContext(context.TODO(), uid, sortk...)
+}
 
 // FetchForUpdate is used as a substitute for database lock. Provided all db access is via this API (or similar) then all updates will be serialised preventing
 // mutliple concurrent updates from corrupting each other. It also guarantees consistency between cache and storage copies of the data.
 // FetchForUpdate performs a Query so returns multiple items. Typically we us this to access all scalar node attribute (e.g. sortk of "A#A#")
 // or all uid-pred and its propagated data (e.g. "A#:G")
-func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, error) {
+func (g *GraphCache) FetchForUpdateContext(ctx context.Context, uid uuid.UID, sortk ...string) (*NodeCache, error) {
 	var (
 		sortk_ string
 	)
-	//
-	//	g lock protects global cache with UID key
-	//
-	g.Lock()
+
 	if len(sortk) > 0 {
 		sortk_ = sortk[0]
 	} else {
@@ -173,16 +174,18 @@ func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, 
 	}
 	uidb64 := uid.EncodeBase64()
 
+	g.Lock()
 	e := g.cache[uidb64]
+
 	// e is nill when UID not in cache (map), e.NodeCache is nill when node cache is cleared.
 	if e == nil { //|| e.NodeCache == nil || e.NodeCache.m == nil {
-		slog.Log("FetchForUpdate", fmt.Sprintf("NOT Cached. Cache Key Value: [%s]   sortk: %s", uid.EncodeBase64(), sortk_))
+		//slog.Log("FetchForUpdate", fmt.Sprintf("NOT Cached. Cache Key Value: [%s]   sortk: %s", uid.EncodeBase64(), sortk_))
 		e = &entry{ready: make(chan struct{})}
 		g.cache[uidb64] = e
 		g.Unlock()
 		e.NodeCache = &NodeCache{m: make(map[SortKey]*blk.DataItem), Uid: uid, gc: g}
 		// nb: type blk.NodeBlock []*DataItem
-		nb, err := ggdb.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNodeContext(ctx, uid, sortk_)
 		if err != nil {
 			slog.Log("FetchForUpdate", fmt.Sprintf("db fetchnode error: %s %s %s", uid.EncodeBase64(), sortk_, err.Error()))
 			return nil, err
@@ -204,9 +207,10 @@ func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, 
 	//  Note: e can only be acquired from outside of this package via the Fetch* api.
 	//
 	e.Lock()
+
 	// check if cache has been cleared while waiting to acquire lock, so try again
 	if e.m == nil {
-		g.FetchForUpdate(uid, sortk_)
+		g.FetchForUpdateContext(ctx, uid, sortk_)
 	}
 	e.fullLock = true
 	// check sortk is cached
@@ -215,16 +219,15 @@ func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, 
 	// are cached.
 	var cached bool
 	for k := range e.m {
-		if strings.HasPrefix(sortk_, k) {
+		if strings.HasPrefix(k, sortk_) {
 			cached = true
-			//	slog.Log("FetchForUpdate", fmt.Sprintf("HasPrefix TRUE. Cache Key: [%s]   sortk: %s k: %s", uid.EncodeBase64(), sortk_, k))
 			break
 		}
 	}
 	if !cached {
 		//	slog.Log("FetchForUpdate", fmt.Sprintf("dbFetchSortK for %s %s", uid.EncodeBase64(), sortk_))
 		// perform a db fetch of sortk
-		e.dbFetchSortK(sortk_)
+		e.dbFetchSortKContext(ctx, sortk_)
 	}
 	return e.NodeCache, nil
 }
@@ -292,7 +295,7 @@ func (g *GraphCache) FetchForUpdate2(uid uuid.UID, sortk ...string) (*NodeCache,
 	// are cached.
 	var cached bool
 	for k := range e.m {
-		if strings.HasPrefix(sortk_, k) {
+		if strings.HasPrefix(k, sortk_) {
 			cached = true
 			break
 		}
@@ -360,11 +363,15 @@ func (g *GraphCache) FetchNodeNonCache(uid uuid.UID, sortk ...string) (*NodeCach
 	return e.NodeCache, nil
 }
 
+func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error) {
+	return g.FetchNodeContext(context.TODO(), uid, sortk...)
+}
+
 // FetchNode complete or a subset of node data (for SORTK value) into cache.
 // Performs lock for sync (shared resource) and transactional perhpas.
 // If cache is already populated with Node data checks SORTK entry exists in cache - if not calls dbFetchSortK().
 // Lock is held long enough to read cached result then unlocked in calling routine.
-func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error) {
+func (g *GraphCache) FetchNodeContext(ctx context.Context, uid uuid.UID, sortk ...string) (*NodeCache, error) {
 	var sortk_ string
 
 	g.Lock()
@@ -383,7 +390,7 @@ func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error
 		e.NodeCache = &NodeCache{m: make(map[SortKey]*blk.DataItem), Uid: uid, gc: g}
 		// only single threaded access at this point so no need to e.Lock()
 		// all concurrent read threads will be waiting on the ready channel
-		nb, err := ggdb.FetchNode(uid, sortk_)
+		nb, err := ggdb.FetchNodeContext(ctx, uid, sortk_)
 		if err != nil {
 			return nil, err
 		}
@@ -407,23 +414,27 @@ func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error
 	// check sortk is cached
 	var cached bool
 	for k := range e.m {
-		if strings.HasPrefix(sortk_, k) {
+		if strings.HasPrefix(k, sortk_) {
 			cached = true
 			break
 		}
 	}
 	if !cached {
 		// perform a db fetch of sortk
-		e.dbFetchSortK(sortk_)
+		e.dbFetchSortKContext(ctx, sortk_)
 	}
 	return e.NodeCache, nil
 }
 
-//dbFetchSortK loads sortk attribute from database and enters into cache
 func (nc *NodeCache) dbFetchSortK(sortk string) error {
+	return nc.dbFetchSortKContext(context.TODO(), sortk)
+}
 
-	slog.Log("dbFetchSortK: ", fmt.Sprintf("dbFetchSortK for %s UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
-	nb, err := ggdb.FetchNode(nc.Uid, sortk)
+//dbFetchSortK loads sortk attribute from database and enters into cache
+func (nc *NodeCache) dbFetchSortKContext(ctx context.Context, sortk string) error {
+
+	slog.LogAlert("dbFetchSortK", fmt.Sprintf("dbFetchSortK for %s UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
+	nb, err := ggdb.FetchNodeContext(ctx, nc.Uid, sortk)
 	if err != nil {
 		return err
 	}
@@ -636,7 +647,7 @@ func (g *GraphCache) FetchAndLockNode(uid uuid.UID, sortk ...string) (*NodeCache
 	// check sortk is cached
 	var cached bool
 	for k := range e.m {
-		if strings.HasPrefix(sortk_, k) {
+		if strings.HasPrefix(k, sortk_) {
 			cached = true
 			break
 		}
