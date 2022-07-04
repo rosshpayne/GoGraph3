@@ -24,12 +24,12 @@ func ScanParallel(ctx context.Context, parallel int, ty string, sk string, fetch
 	ptx := tx.NewQueryContext(ctx, "label", tbl.TblName)
 
 	// a parallel scan will be paginated into 1Mb for each thread.
-	ptx.Select(&pks).Filter("Ty", ty).Filter("SortK", sk).Paginate(id, restart).Parallel(p)
+	ptx.Select(&pks).Filter("Ty", ty).Filter("SortK", sk).Limit(100).Paginate(id, restart).Parallel(p)
 
 	wg.Add(p)
 	for i, worker := range ptx.Workers() {
 
-		go func(worder *query.QueryHandle, i int) {
+		go func(worker *query.QueryHandle, i int) {
 
 			for !worker.EOD() {
 

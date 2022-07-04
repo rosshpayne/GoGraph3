@@ -18,7 +18,6 @@ import (
 	"github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
-	"github.com/GoGraph/errlog"
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	"github.com/GoGraph/monitor"
@@ -211,7 +210,7 @@ func main() {
 	wpEnd.Add(3)
 	wpStart.Add(3)
 	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, runid) // concurrent goroutine manager service
-	go errlog.PowerOn(ctx, &wpStart, &wpEnd)       // error logging service
+	go elog.PowerOn(ctx, &wpStart, &wpEnd)         // error logging service
 	go monitor.PowerOn(ctx, &wpStart, &wpEnd)      // repository of system statistics service
 	//	go cache.PowerOn(ctx, &wpStart, &wpEnd)        //in development
 	wpStart.Wait()

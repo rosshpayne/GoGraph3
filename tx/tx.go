@@ -591,7 +591,7 @@ func (h *QHandle) Close() error {
 
 func (h *QHandle) Workers() []*query.QueryHandle {
 
-	// create n workers requires n QueryHandle's
+	//  n workers requires n QueryHandle's
 
 	h.workers = make([]*query.QueryHandle, h.GetParallel())
 
@@ -629,6 +629,15 @@ func (h *QHandle) Execute(w ...int) error {
 	}
 
 }
+
+// func (h *QHandle) Execute() error {
+// 	// NewQueryContext takes precedence over dbHdl.ctx
+// 	ctx := h.ctx
+// 	if ctx == nil {
+// 		ctx = h.dbHdl.Ctx()
+// 	}
+// 	return h.dbHdl.ExecuteQuery(ctx, h.QueryHandle, h.options...)
+// }
 
 ////////////////////////////////////////////////// DML: MergeMutation ////////////
 
@@ -713,15 +722,20 @@ func (h *TxHandle) AddMember(attr string, value interface{}, opr_ ...mut.MutOpr)
 		// }
 		var found bool
 		sa := h.sm.GetMembers()
-		for i, v := range sa {
+		for i, v := range sa { // source attribute
+
 			// all members of active mutation match previous mutation - found source/original mutation
 			if v.Name != attr {
 				continue
 			}
-			opr = v.Opr
+
 			found = true
+			opr = v.Opr
+			if len(opr_) > 0 {
+				opr = opr_[0]
+			}
 			if opr == mut.Remove {
-				// set member operator to remove
+				// set source member operator to remove
 				v.Opr = mut.Remove
 				return h
 			}
@@ -821,7 +835,8 @@ func (h *TxHandle) AddMember(attr string, value interface{}, opr_ ...mut.MutOpr)
 				switch opr {
 				case mut.Set:
 					sa[i].Value = x
-					panic("[]uuid.UID set not append in tx.AddMember")
+					//panic("[]uuid.UID set not append in tx.AddMember")
+					// set should override append in this case - do no panic.
 				default: // Append
 					if s, ok := value.([]uuid.UID); !ok {
 						panic(fmt.Errorf("AddMember2: Expected []int64 got %T", x))

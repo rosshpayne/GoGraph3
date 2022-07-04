@@ -85,8 +85,8 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 			}
 		}
 	}
-	if q.GetError() != nil {
-		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %s", q.GetError()))
+	if q.Error() != nil {
+		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %s", q.Error()))
 	}
 
 	// generate SQL statement

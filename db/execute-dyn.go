@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	//	"sync"
 	"text/scanner"
 	"time"
 
@@ -1047,8 +1048,8 @@ func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) erro
 	client := GetDefaultDBHdl().(DynamodbHandle)
 	//client := dbSrv
 
-	if q.GetError() != nil {
-		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %s", q.GetError()))
+	if q.Error() != nil {
+		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %w", q.Error()))
 	}
 
 	// define projection based on struct passed via Select()
@@ -1061,11 +1062,6 @@ func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) erro
 	pk, sk := q.GetPkSk()
 	if len(pk) == 0 {
 
-		// if !q.HasFilter() {
-		// 	if len(sk) == 0 && !q.HasFilter() {
-		// 		return fmt.Errorf("Partition Key must be defined with equality condition")
-		// 	}
-		// }
 		return exScan(ctx, client, q, proj)
 	}
 
@@ -1348,7 +1344,31 @@ func exScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, pr
 		err = exSingleScan(ctx, client, q, proj)
 
 	default:
-		err = exWorkerScan(ctx, client, q, proj)
+
+		//err = exWorkerScan(ctx, client, q, proj) // used in es parallel scan load (see: github/GoGraph/es/scan-parallel.go)
+
+		// 	rec := []Scanned{}
+		//	ptx.Select(&rec).Filter("Ty", types.GraphSN()+"|"+k).OrFilter("Ty", types.GraphSN()+"|"+k).Limit(param.DPbatch).Paginate(id, restart).Parallel(4)
+
+		// var wg sync.WaitGroup
+		// par := q.GetParallel()
+
+		// r := reflect.ValueOf(h.Fetch()).Elem() // TODO: consider making slice parallel in size when client does
+
+		// f := reflect.MakeSlice(r.Type(), par, par)
+		// for i := 0; i < par; i++ {
+
+		// 	wg.Add(1)
+		// 	dp := q.Duplicate()
+		// 	dp.SetWorderId(i)
+		// 	dp.SetFetch(f.Index(i).Addr().Interface())
+
+		// 	go exWorkerScan(ctx, &wg, client, dp, proj)
+		// }
+		// wg.Wait() // issue: can only go as fast as slowest worker - albiet in reality each worker takes equal time.
+
+		// q.SetFetch(f.Interface())
+
 	}
 
 	return err
@@ -1357,7 +1377,7 @@ func exScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, pr
 // exSingleScan - non-parallel scan. Scan of table or index.
 func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
-	syslog(fmt.Sprintf("exSingleScan: thread %d", q.Worker()))
+	slog.LogAlert(logid, fmt.Sprintf("exSingleScan: thread %d", q.Worker()))
 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
@@ -1534,12 +1554,13 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 // exWorkerScan used by parallel scan`
 func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
-	syslog(fmt.Sprintf("exWorkerScan: thread %d  totalSegments %d", q.Worker(), q.GetParallel()))
-	fmt.Sprintf("exWorkerScan: thread %d totalSegments %d", q.Worker(), q.GetParallel())
+	worker := fmt.Sprintf("exWorkerScan: thread %d  totalSegments %d", q.Worker(), q.GetParallel())
+	slog.LogAlert(logid, worker)
+
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		syslog(fmt.Sprintf("exWorkerScan: restart"))
+		syslog(fmt.Sprintf("%s: restart", worker))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId(), q.Worker())))
 		q.SetRestart(false)
 
@@ -1549,7 +1570,7 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 		// if we don't get to save this state then the last batch will be reprocessed - as Elasticsearch is idempotent this is not an issue.
 		// saving lastEvaluatedKey minimises the amount of reprocessing in the event of an interruption to the ES load.
 		if len(q.PgStateValS()) > 0 {
-			syslog(fmt.Sprintf("exWorkerScan: load pg state..."))
+			syslog(fmt.Sprintf("%s: load pg state...", worker))
 			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS(), q.Worker())
 			if err != nil {
 				panic(err)

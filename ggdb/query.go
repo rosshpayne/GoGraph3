@@ -33,7 +33,12 @@ func FetchNodeContext(ctx context.Context, uid uuid.UID, subKey ...string) (blk.
 	}
 
 	stx := tx.NewQueryContext(ctx, "FetchNode", tbl.Block)
+
 	stx.Select(&d).Key("PKey", uid).Key("SortK", sortk, query.BEGINSWITH)
+	if stx.Error() != nil {
+		return nil, err
+	}
+
 	err = stx.Execute()
 	if err != nil {
 		err = fmt.Errorf("FetchNode: %w", err)

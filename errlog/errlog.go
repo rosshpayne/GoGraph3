@@ -93,6 +93,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		select {
 
 		case pld = <-addCh:
+
 			var errmsg strings.Builder
 			errmsg.WriteString(pld.Id)
 			errmsg.WriteString(" ")

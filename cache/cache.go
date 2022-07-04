@@ -756,7 +756,7 @@ func (nc *NodeCache) UnmarshalNodeCache(nv ds.ClientNV, ty_ ...string) error {
 
 // channel payload
 type BatchPy struct {
-	Bid   int // block id. embedded (0) and overflow (1..n)
+	Bid   int // block index. embedded (0) and overflow (1..n)
 	Batch int // overflow batch id. 1..n
 	Puid  uuid.UID
 	// overflow batch channel
@@ -765,6 +765,8 @@ type BatchPy struct {
 
 type BatchChs []chan BatchPy
 
+// MakeChannels creates a channel for parent noded containint the UID-PRED, plus a channel for each overflow block if present.
+// It assigns a go routine to each overflow block channel and sends the overflow child UIDS on the associated channel.
 func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 
 	var (
@@ -773,7 +775,7 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 	if nc == nil {
 		panic(ErrCacheEmpty)
 	}
-	syslog(fmt.Sprintf("UnmarshalEdge: %s sortk %s  len(nc.m) %d", nc.Uid, sortk, len(nc.m)))
+	syslog(fmt.Sprintf("MakeChannels: %s sortk %s  len(nc.m) %d", nc.Uid, sortk, len(nc.m)))
 	if v, ok := nc.m[sortk]; ok {
 		// based on data type and whether its a node or uid-pred
 		var (
@@ -782,9 +784,9 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 		)
 		// read root UID-PRED (i.e. "Siblings") edge data counting Child nodes and any overblock UIDs
 		cuid, _, oUIDs := v.GetNd()
-		// batch ids for each overflow block
+		// #batches for each overflow block
 		id := v.GetId()[len(cuid):]
-		// create a channel for each overflow block plus parent node (for edge of interest)
+		// create a channel for each overflow block plus UID-PRED (parent node) (for edge of interest)
 		bChs = make(BatchChs, len(oUIDs)+1)
 		for i := 0; i < len(oUIDs)+1; i++ {
 			if i == 0 {
@@ -794,7 +796,7 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 				bChs[i] = make(chan BatchPy, 2)
 			}
 		}
-		syslog(fmt.Sprintf("UnmarshalEdge %s  v.GetNd() -> cuid, len(cuid) %d, len(oUIDs) %d", nc.Uid, len(cuid), len(oUIDs)))
+		syslog(fmt.Sprintf("MakeChannels %s  v.GetNd() -> cuid, len(cuid) %d, len(oUIDs) %d", nc.Uid, len(cuid), len(oUIDs)))
 		// a channel for each overflow block
 		//limiter = grmgr.New("edgeCh", len(oUIDs))
 		// read overflow blocks concurrently
@@ -805,19 +807,20 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 			close(bChs[0])
 
 			// now for all overflow blocks
-			for i, u := range oUIDs {
+			for i, ouid := range oUIDs {
 
 				// limiter.Ask()
 				// <-limiter.RespCh()
 				i := i
 				wg.Add(1)
 
-				go nc.gc.FetchBatch(i+1, id[i], u, &wg, sortk, bChs[i+1])
+				// go routine for each overflow block. Responsible for sending uid in each overflow batch to the associated channel
+				go nc.gc.FetchOvflBatch(ouid, i+1, id[i], &wg, sortk, bChs[i+1])
 
 			}
 			wg.Wait()
 			//
-			syslog("all batch goroutines finished....")
+			syslog("MakeChannels: all goroutines finished....")
 
 		}()
 
@@ -826,7 +829,7 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 		for k, v := range nc.m {
 			slog.LogAlert(logid, fmt.Sprintf("cache %s %s\n", k, uuid.UID(v.GetPkey()).Base64()))
 		}
-		return nil, fmt.Errorf("Errror in UnmarshalEdge Sortk %q not found in node cache map", sortk)
+		return nil, fmt.Errorf("Errror in MakeChannels: sortk value [%s] not found in cache map for node: %q", nc.Uid.Base64(), sortk)
 	}
 
 	return bChs, nil

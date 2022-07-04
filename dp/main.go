@@ -93,7 +93,6 @@ func main() {
 
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// setup concurrent routine to capture OS signals.
 	appSignal := make(chan os.Signal, 3)
@@ -127,8 +126,6 @@ func main() {
 
 	tbl.Register("pgState", "Id", "Name")
 	tbl.Register("State$", "Graph", "Name")
-
-	tstart = time.Now()
 
 	param.ReducedLog = false
 	if *reduceLog == 1 {
@@ -175,7 +172,6 @@ func main() {
 		fmt.Println(fmt.Sprintf("Error in  MakeRunId() : %s", err))
 		return
 	}
-	defer run.Finish(err)
 
 	//start syslog services (if any)
 	err = slog.Start()
@@ -231,8 +227,6 @@ func main() {
 	}
 
 	syslog(fmt.Sprintf("runid: %s", runid.Base64()))
-
-	tstart = time.Now()
 
 	// batch size
 	if batchSize != nil {
@@ -304,7 +298,6 @@ func main() {
 	limiterDP := grmgr.New("dp", *parallel)
 
 	// channel used to sync DP processing with a new db Fetch. Replaces sleep() wait
-	finishDPch := make(chan struct{})
 	DPbatchCompleteCh := make(chan struct{})
 
 	for k, _ := range dpTy {
@@ -318,13 +311,13 @@ func main() {
 	// allocate cache for node data
 	cache.NewCache()
 
-	t0 := time.Now()
+	tstart = time.Now()
 	for ty, _ := range dpTy {
 
 		ty := ty
 		b := 0
 		// loop until channel closed, proceed to next type
-		for n := range FetchNodeCh(ctx, ty, stateId, restart, finishDPch, DPbatchCompleteCh) {
+		for n := range FetchNodeCh(ctx, ty, stateId, restart, DPbatchCompleteCh) {
 			b++
 			wgc.Add(1)
 			n := n
@@ -344,7 +337,6 @@ func main() {
 		wgc.Wait()
 	}
 
-	t1 := time.Now()
 	limiterDP.Unregister()
 	monitor.Report()
 	elog.PrintErrors()
@@ -361,10 +353,16 @@ func main() {
 	cancel()
 	wpEnd.Wait()
 
+	run.Finish(err)
+	tend := time.Now()
+
+	syslog(fmt.Sprintf("double propagate finished....Runid:  %q   Duration: %s", runid.Base64(), tend.Sub(tstart)))
+	time.Sleep(1 * time.Second)
+
+	// stop system logger services (if any)
+	slog.Stop()
 	// stop db admin services and save to db.
 	dbadmin.Persist()
-
-	syslog(fmt.Sprintf("double propagate processing finished. Duration: %s", t1.Sub(t0)))
 
 }
 
@@ -422,5 +420,99 @@ func setLoadStatus(ctx context.Context, id string, status string, err_ error, ru
 	}
 
 	return nil
+
+}
+
+func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool, DPbatchCompleteCh <-chan struct{}) <-chan uuid.UID {
+
+	dpCh := make(chan uuid.UID)
+
+	go ScanForDPitems(ty, dpCh, DPbatchCompleteCh)
+
+	return dpCh
+
+}
+
+type Unprocessed struct {
+	PKey uuid.UID
+}
+type PKey []byte
+
+// ScanForDPitems fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
+func ScanForDPitems(ty string, dpCh chan<- uuid.UID, DPbatchCompleteCh <-chan struct{}) {
+
+	// Option 1: uses an index query. For restartability purposes we mark each processed item, in this case by deleting its IX attribute, which has the
+	//           affect of removing the item from the index. The index therefore will contain only unprocessed items.
+	//
+	// 1. Fetch a batch (200) of items from TyIX (based on Ty & IX)
+	// 2. for each item
+	//   2.1   DP it.
+	//   2.2   Post DP: for restartability and identify those items in the tbase that have already been processed,
+	//         remove IX attribute from assoicated item (using PKey, Sortk). This has the affect of removing entry from TyIX index.
+	// 3. Go To 1.
+	//
+	// the cose of restartability can be measured in step 2.2 in terms of WCUs for each processed item.
+	//
+	// Option 2: replace index query with a paginated scan.
+	//
+	// 1. Paginated scan of index. Use page size of 200 items (say)
+	// 2. DP it.
+	// 3. Go To 1.
+	//
+	// The great advantage of the paginated scan is it eliminates the expensive writes of step 2.2 in option 1. Its costs is in more RCUs - so its a matter of determining
+	// whether more RCUs is worth it. This will depend on the number of items fetched to items scanned ratio. If it is less than 25% the paginated scan is more efficient.
+	// However the granularity of restartability is now much larger, at the size of a page of items rather than the individual items in option 1.
+	// This will force some items to be reprocessed in the case of restarting after a failed run. Is this an issue?
+	// As DP uses a PUT (merge mutation will force all mutations into original put mutation) it will not matter, as put will overwrite existing item(s) - equiv to SQL's merge.
+	// The cost is now in the processing of items that have already been processed after a failed run.
+	// For the case of no failure the cost is zero, whereas in option 1, the cost remains the same for a failured run as a non-failed run (step 2.2)
+	// So paginated scan is much more efficient for zero failure runs, which will be the case for the majority of executions.
+
+	var (
+		logid = "ScanForDPitems"
+		stx   *tx.QHandle
+		err   error
+		b     int
+	)
+
+	defer close(dpCh)
+
+	for {
+
+		slog.Log(logid, fmt.Sprintf("ScanForDPitems for type %q started. Batch %d", ty, b))
+
+		rec := []Unprocessed{}
+
+		stx = tx.NewQuery2("dpScan", tbl.Block, "TyIX")
+		if err != nil {
+			close(dpCh)
+			elog.Add(logid, err)
+			return
+		}
+		stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch).Consistent(false) // GSI (not LSI) cannot have consistent reads. TODO: need something to detect GSI.
+
+		err = stx.Execute()
+		if err != nil {
+			elog.Add(logid, err)
+			break
+		}
+
+		for _, v := range rec {
+			dpCh <- v.PKey
+		}
+
+		// exit loop when #fetched items less than limit
+		if len(rec) < param.DPbatch {
+			slog.LogAlert(logid, fmt.Sprintf("#items %q exiting fetch loop", ty))
+			break
+		}
+		b++
+
+		slog.LogAlert(logid, "Waiting on last DP to finish..")
+		<-DPbatchCompleteCh
+		slog.LogAlert(logid, "Waiting on last DP to finish..Done")
+
+	}
+	slog.LogAlert(logid, fmt.Sprintf("About to close dpCh "))
 
 }

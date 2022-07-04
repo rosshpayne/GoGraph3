@@ -109,7 +109,7 @@ type DataItem struct {
 	// note: I use XB rather than X as X causes a Unmarshalling error. See description of field in doco.
 	XBl []bool  // used for propagated child scalars (List data). True means associated child value is NULL (ie. is not defined)
 	XF  []int64 // used in uid-predicate 1 : c-UID, 2 : c-UID is soft deleted, 3 : ovefflow UID, 4 : overflow block full
-	Id  []int64 // overflow item number in Overflow block e.g. A#G:S#:A#3 where Id is 3 meaning its the third item in the overflow block. Each item containing 500 or more UIDs in Lists.
+	Id  []int64 // current maximum overflow batch id. Maps to the overflow item number in Overflow block e.g. A#G:S#:A#3 where Id is 3 meaning its the third item in the overflow block. Each item containing 500 or more UIDs in Lists.
 	//
 }
 type NodeBlock []*DataItem
@@ -295,9 +295,11 @@ func (dgv *DataItem) GetNd() (nd [][]byte, xf []int64, ovfl [][]byte) {
 	for i, v := range nd_ {
 
 		if x := xf_[i]; x <= UIDdetached {
+			//	ChildUID ,	CuidInuse  ,UIDdetached
 			nd = append(nd, uuid.UID(v))
 			xf = append(xf, x)
 		} else {
+			// 	OvflBlockUID  ,	OuidInuse      ,OBatchSizeLimit
 			ovfl = append(ovfl, uuid.UID(v))
 		}
 	}

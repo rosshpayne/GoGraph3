@@ -16,19 +16,19 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
-// FetchBatch reads the cUIDs within an overflow block batch.
-// Does not read from cache but uses cache as the lock entity.
-// i - overflow block. 1..n. 0 is embedded uid-pred which does not execute FetchBatch()
-// ouid - overflow block uid
-// bid - max overflow batch (5 batches say) within a overflow block
-func (g *GraphCache) FetchBatch(i int, bid int64, ouid uuid.UID, wg *sync.WaitGroup, sortk string, bCh chan<- BatchPy) {
+// FetchOvflBatch sends the cUIDs within an overflow block batch to the channel passed in.
+// Does not read from cache or into cache, but uses cache as the lock entity.
+// ouid - overflow block UID (parent node for overflow batches in that block)
+// idx - overflow block index 1..n. 0 where n is the number of overflow blocks
+// maxbid - max overflow batch (5 batches say) within a overflow block
+func (g *GraphCache) FetchOvflBatch(ouid uuid.UID, idx int, maxbid int64, wg *sync.WaitGroup, sortk string, bCh chan<- BatchPy) {
 
 	defer wg.Done()
 
 	g.Lock()
 	ouidb64 := ouid.EncodeBase64()
 	e := g.cache[ouidb64]
-	syslog(fmt.Sprintf("FetchBatch: i %d bid %d ouid %s  sortk: %s", i, bid, ouid.EncodeBase64(), sortk))
+	slog.LogAlert("FetchOvflBatch", fmt.Sprintf("idx %d maxbid %d ouid %s  sortk: %s", idx, maxbid, ouid.EncodeBase64(), sortk))
 	// e is nill when UID not in cache (map), e.NodeCache is nill when node cache is cleared.
 	if e == nil {
 		e = &entry{ready: make(chan struct{})}
@@ -44,18 +44,19 @@ func (g *GraphCache) FetchBatch(i int, bid int64, ouid uuid.UID, wg *sync.WaitGr
 	var (
 		sk string
 	)
-	for b := 1; b < int(bid)+1; b++ {
-		// each bid has its own sortk value: <sortk>%<bid>
+	for b := 1; b <= int(maxbid); b++ {
+		// each overflow batch id has its own sortk value: <sortk>%<bid>
 		sk = sortk + "%" + strconv.Itoa(b)
+		// read directly from database - single item read
 		nb, err := ggdb.FetchNode(ouid, sk)
 		if err != nil {
-			elog.Add("FetchBatch: ", err)
+			elog.Add("FetchOvflBatch: ", err)
 			break
 		}
-		syslog(fmt.Sprintf("FetchBatch: ouid %s  b, sk: %d %s len(nb) %d ", ouid, b, sk, len(nb)))
+
 		e.lastAccess = time.Now()
 		// an overflow batch consists of 1 item with an attribute array containing cuids.
-		bCh <- BatchPy{Bid: i, Batch: b, Puid: ouid, DI: nb[0]}
+		bCh <- BatchPy{Bid: idx, Batch: b, Puid: ouid, DI: nb[0]}
 	}
 	close(bCh)
 	e.Unlock()
@@ -433,7 +434,7 @@ func (nc *NodeCache) dbFetchSortK(sortk string) error {
 //dbFetchSortK loads sortk attribute from database and enters into cache
 func (nc *NodeCache) dbFetchSortKContext(ctx context.Context, sortk string) error {
 
-	slog.LogAlert("dbFetchSortK", fmt.Sprintf("dbFetchSortK for %s UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
+	slog.LogAlert("dbFetchSortK", fmt.Sprintf("dbFetchSortK for %q UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
 	nb, err := ggdb.FetchNodeContext(ctx, nc.Uid, sortk)
 	if err != nil {
 		return err
@@ -497,59 +498,61 @@ func (g *GraphCache) ClearNodeCache(uid uuid.UID) {
 	defer g.Unlock()
 
 	if e, ok = g.cache[uid.EncodeBase64()]; !ok {
-		slog.Log("ClearNodeCache: ", fmt.Sprintf("node %q not in cache", uid))
+		//	slog.Log("ClearNodeCache: ", fmt.Sprintf("node %q not in cache", uid.Base64()))
 		return
 	}
 	e.Lock()
 	e.stale = true
-	slog.Log("ClearNodeCache: ", fmt.Sprintf("delete %q from cache", uid))
+	//	slog.Log("ClearNodeCache: ", fmt.Sprintf("delete %q from cache", uid.Base64()))
 	delete(g.cache, uid.EncodeBase64())
 	e.Unlock()
 
-	// if e == nil {
-	// 	slog.Log("ClearNodeCache: ", "e nil Nothing to clear")
-	// }
-	// e.Lock()
-	// nc := e.NodeCache
-
-	// if len(sortk) > 0 {
-	// 	// optional: remove overflow blocks for supplied sortk (UID-PRED) they exist
-	// 	for _, uid := range nc.GetOvflUIDs(sortk[0]) {
-	// 		if _, ok = g.cache[uid.EncodeBase64()]; ok {
-	// 			// delete map entry will mean e is unassigned and allow GC to purge e and associated node cache.
-	// 			delete(g.cache, uid.EncodeBase64())
-	// 		}
-	// 	}
-	// 	// clear dataitem associated with sortk
-	// 	vv, ok := nc.m[sortk[0]]
-	// 	if ok && vv != nil {
-	// 		vv = nil
-	// 	}
-
-	// } else {
-	// 	// search for UIDPRED sortk's and clear all overflow blocks??
-	// 	for k, v := range nc.m {
-	// 		if i := strings.Index(k, "#G#"); i > 0 && i < 5 { // TODO: what about H,I,J,K
-	// 			for _, uid := range nc.GetOvflUIDs(k) {
-	// 				if e, ok = g.cache[uid.EncodeBase64()]; ok {
-	// 					// delete map entry will mean e is unassigned and allow GC to purge e and associated node cache.
-	// 					delete(g.cache, uid.EncodeBase64())
-	// 					e = nil
-	// 				}
-	// 			}
-	// 		}
-	// 		if v != nil {
-	// 			v = nil
-	// 		}
-	// 	}
-	// }
-	// if nc != nil {
-	// 	nc.m = nil
-	// }
-	// e.NodeCache = nil
-	// e = nil
-	// nc.Unlock()
 }
+
+// if e == nil {
+// 	slog.Log("ClearNodeCache: ", "e nil Nothing to clear")
+// }
+// e.Lock()
+// nc := e.NodeCache
+
+// if len(sortk) > 0 {
+// 	// optional: remove overflow blocks for supplied sortk (UID-PRED) they exist
+// 	for _, uid := range nc.GetOvflUIDs(sortk[0]) {
+// 		if _, ok = g.cache[uid.EncodeBase64()]; ok {
+// 			// delete map entry will mean e is unassigned and allow GC to purge e and associated node cache.
+// 			delete(g.cache, uid.EncodeBase64())
+// 		}
+// 	}
+// 	// clear dataitem associated with sortk
+// 	vv, ok := nc.m[sortk[0]]
+// 	if ok && vv != nil {
+// 		vv = nil
+// 	}
+
+// } else {
+// 	// search for UIDPRED sortk's and clear all overflow blocks??
+// 	for k, v := range nc.m {
+// 		if i := strings.Index(k, "#G#"); i > 0 && i < 5 { // TODO: what about H,I,J,K
+// 			for _, uid := range nc.GetOvflUIDs(k) {
+// 				if e, ok = g.cache[uid.EncodeBase64()]; ok {
+// 					// delete map entry will mean e is unassigned and allow GC to purge e and associated node cache.
+// 					delete(g.cache, uid.EncodeBase64())
+// 					e = nil
+// 				}
+// 			}
+// 		}
+// 		if v != nil {
+// 			v = nil
+// 		}
+// 	}
+// }
+// if nc != nil {
+// 	nc.m = nil
+// }
+// e.NodeCache = nil
+// e = nil
+// nc.Unlock()
+//}
 
 // Unlock method shadows the RWMutex Unlock
 // func (nd *NodeCache) Unlock(s ...string) {

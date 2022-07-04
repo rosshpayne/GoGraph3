@@ -186,6 +186,8 @@ func (q *QueryHandle) Duplicate() *QueryHandle {
 	//	orderby  string
 	d.so = q.so
 	d.accessTy = q.accessTy
+	d.orderBy = q.orderBy
+	d.err = q.err
 	// select() handlers
 	d.fetch = q.fetch
 	d.select_ = q.select_ // indicates Select() has been executed. Catches cases when Select() specified more than once.
@@ -195,7 +197,8 @@ func (q *QueryHandle) Duplicate() *QueryHandle {
 	d.pgStateId = q.pgStateId
 	d.pgStateValI = q.pgStateValI
 	d.pgStateValS = q.pgStateValS
-	// other runtime state data
+	d.eod = q.eod
+
 	return &d
 
 }
@@ -217,7 +220,7 @@ func (q *QueryHandle) SetWorderId(i int) {
 }
 
 func (q *QueryHandle) Worker() int {
-	return (q.worker)
+	return q.worker
 }
 
 func (q *QueryHandle) SetPrepare() {
@@ -326,10 +329,6 @@ func (q *QueryHandle) SetFetch(v interface{}) {
 // SetFetch uses reflect to set the internal value of a value.
 func (q *QueryHandle) SetFetchValue(v reflect.Value) {
 	reflect.ValueOf(q.fetch).Elem().Set(v)
-}
-
-func (q *QueryHandle) GetError() error {
-	return q.err
 }
 
 func (q *QueryHandle) GetPkSk() (string, string) {
@@ -606,6 +605,15 @@ func (q *QueryHandle) Key(a string, v interface{}, e ...ComparOpr) *QueryHandle 
 	return q
 }
 
+func (q *QueryHandle) PkeyAssigned() bool {
+	for _, v := range q.attr {
+		if v.aty == IsKey {
+			return true
+		}
+	}
+	return false
+}
+
 func (q *QueryHandle) GetKeyComparOpr(sk string) ComparOpr {
 	return q.getComparOpr(IsKey, sk)
 }
@@ -624,6 +632,7 @@ func (q *QueryHandle) getComparOpr(t Attrty, s string) ComparOpr {
 }
 
 func (q *QueryHandle) Paginate(id uuid.UID, restart bool) *QueryHandle {
+
 	q.restart = restart
 	q.pgStateId = id
 	return q
@@ -768,7 +777,7 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 			st = st.Elem() // [][]rec - used for parallel scan
 		}
 		if st.Kind() == reflect.Pointer {
-			st = st.Elem() // [][]rec - used for parallel scan
+			st = st.Elem()
 		}
 		if st.Kind() == reflect.Struct {
 			var name string

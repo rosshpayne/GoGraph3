@@ -28,7 +28,7 @@ func initState() {
 			//	if strings.Contains(strings.ToLower(err.Error()), "no rows in result") {
 			//if errors.Is(err, query.NoDataFoundErr) {
 			bid = 1
-			slog.Log(logid, fmt.Sprintf("no state data, bid = %d  checkMode: ", bid, checkMode))
+			slog.Log(logid, fmt.Sprintf("no state data, bid = %d  checkMode:  %v", bid, checkMode))
 			return
 		} else {
 			panic(err)

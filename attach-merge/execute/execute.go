@@ -380,7 +380,7 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 
 	} else {
 
-		// Randomly chooses a overflow block. However before it can choose random it must create a set of overflow blocks
+		// Randomly chooses an overflow block. However before it can choose random it must create a set of overflow blocks
 		// which relies upon an Overflow batch limit being reached and a new batch created.
 		if py.Random {
 
