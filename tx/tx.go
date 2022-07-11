@@ -615,6 +615,10 @@ func (h *QHandle) Workers() []*query.QueryHandle {
 }
 
 func (h *QHandle) Execute(w ...int) error {
+
+	if h.Error() != nil {
+		return h.Error()
+	}
 	// NewQueryContext takes precedence over dbHdl.ctx
 	ctx := h.ctx
 	if ctx == nil {

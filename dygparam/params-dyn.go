@@ -48,6 +48,9 @@ const (
 	Dynamodb = 2
 	DB       = 2
 
+	// cache size measured in number of nodes
+	CacheSize = 500
+
 	// number of log entries before updating log table
 	//ESlogCommit = 20
 

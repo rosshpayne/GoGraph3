@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -13,6 +14,7 @@ import (
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/ds"
 	param "github.com/GoGraph/dygparam"
+	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
@@ -48,7 +50,6 @@ type SortKey = string
 //type block map[SortKey]*blk.DataItem
 
 // ************************************ Node cache ********************************************
-
 // data associated with a single node
 type NodeCache struct {
 	sync.RWMutex // used for querying the cache data items. Promoted methods RLock(), Unlock()
@@ -64,6 +65,7 @@ type NodeCache struct {
 }
 
 type entry struct {
+	//idx     *int          // which cache ? [idx][]uuid.UIDb64 cache
 	ready chan struct{} // a channel for each entry - to synchronise access when the data is being sourced
 	*NodeCache
 }
@@ -73,10 +75,17 @@ type Rentry struct {
 }
 
 // graph cache consisting of all nodes loaded into memory
+// ultimately the whole cache access/update should be a service, where each cBuf list is a separate goroutine for more rapid updates.
 type GraphCache struct {
 	sync.RWMutex
-	cache  map[uuid.UIDb64]*entry
-	rsync  sync.RWMutex
+	//cache  map[uuid.UIDb64]*entry
+	cache map[uuid.UIDb64]*entry
+	rsync sync.RWMutex
+	//
+	//	cNodes   [][]uuid.UIDb64 multi-cache solution to scale large caches
+	cNodes   []uuid.UIDb64 // single cache - ok for testing.
+	cMaxSize int
+	//
 	cacheR map[uuid.UIDb64]*Rentry // not used?
 }
 
@@ -84,12 +93,65 @@ var graphC *GraphCache
 
 func NewCache() {
 	if graphC == nil {
-		graphC = &GraphCache{cache: make(map[uuid.UIDb64]*entry)}
+		graphC = &GraphCache{cache: make(map[uuid.UIDb64]*entry, param.CacheSize), cMaxSize: param.CacheSize}
 	}
 }
 
 func GetCache() *GraphCache {
 	return graphC
+}
+
+// addNode adds a newly created node to the global graphcache. It dellocates on an LRU basis, while keeping a constant cache size.
+// addNode presumes the calling routine has a current GraphCache.Lock()
+func (g *GraphCache) addNode(uid uuid.UID, e *entry) {
+	const logid = "addNode"
+	uidb64 := uid.EncodeBase64()
+	g.cache[uidb64] = e
+
+	g.cNodes = append(g.cNodes, uidb64)
+
+	if len(g.cNodes) > g.cMaxSize-1 {
+		// purge oldest Node from cache - as determined by LRU implemented by touchNode()
+		delete(g.cache, g.cNodes[0])
+		slog.Log(logid, fmt.Sprintf("purge node :%s", g.cNodes[0]))
+		g.cNodes = g.cNodes[1:]
+	}
+
+}
+
+// touchNode records cache activity and maintains anLRU algorithm.
+// used by addNode to determine which node to remove from cache when it need to purge an entry to maintina a fixed cache size
+// touchNode presumes the calling routine has a current GraphCache.Lock()
+func (g *GraphCache) touchNode(uid uuid.UID, e *entry) {
+	const logid = "touchNode"
+	var idx int
+	uidb64 := uid.EncodeBase64()
+
+	// read from most current entry (top of slice)
+	for i := len(g.cNodes) - 1; i >= 0; i-- {
+		if bytes.Equal([]byte(g.cNodes[i]), []byte(uidb64)) {
+			idx = i
+		}
+	}
+
+	if float64(idx)/float64(len(g.cNodes)) < 0.4 {
+		return
+	}
+
+	// promote current uid using least number of moves to maintain fixed size cache.
+	if float64(idx)/float64(len(g.cNodes)) <= 0.5 {
+		// move bottom up
+		g.cNodes = append(g.cNodes, uidb64)
+		// remove entry
+		copy(g.cNodes[1:], g.cNodes[:idx])
+		// keep fixed cache size
+		g.cNodes = g.cNodes[1:]
+	} else {
+		// move top down
+		copy(g.cNodes[idx:], g.cNodes[idx+1:])
+		// modify top entry
+		g.cNodes[len(g.cNodes)-1] = uidb64
+	}
 }
 
 func (n *NodeCache) GetMap() map[SortKey]*blk.DataItem {
@@ -829,7 +891,7 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 		for k, v := range nc.m {
 			slog.LogAlert(logid, fmt.Sprintf("cache %s %s\n", k, uuid.UID(v.GetPkey()).Base64()))
 		}
-		return nil, fmt.Errorf("Errror in MakeChannels: sortk value [%s] not found in cache map for node: %q", nc.Uid.Base64(), sortk)
+		return nil, fmt.Errorf("Error in MakeChannels: sortk value [%s] not found in cache map for node: %q", sortk, nc.Uid.Base64())
 	}
 
 	return bChs, nil
@@ -1014,49 +1076,49 @@ func (d *NodeCache) UnmarshalMap(i interface{}) error {
 
 }
 
-//var TySortK = types.GraphSN() + "|A#A#T"
-
-//var TySortK = "A#A#T"
-
+//GetType returns the node's long type name
 func (d *NodeCache) GetType() (tyN string, ok bool) {
 	var di *blk.DataItem
 
 	TySortK := types.GraphSN() + "|A#A#T"
-	//syslog(fmt.Sprintf("GetType: d.m: %#v\n", d.m))
-	//	if di, ok = d.m[types.GraphSN()+"|A#A#T"]; !ok {
 	if di, ok = d.m[TySortK]; !ok {
-		//
-		// check other predicates as most have a Ty attribute defined (currently propagated data does not)
-		// this check enables us to use more specific sortK values when fetching a node rather than using top level "A#" (performance hit)
-		//
+
+		// "A#A#T" is not cached, in which case check other predicates as most have a Ty attribute defined (currently propagated data does not)
+		// Checking the cache enables us to avoid querying the A#A#T item specifically when we need to know the node type
 		for _, di := range d.m {
-			//
-			if len(di.GetTy()) != 0 {
+
+			if len(di.GetTy()) > 0 {
+
 				ty, b := types.GetTyLongNm(di.GetTy())
 				if b == false {
-					// ok, then go to database
-					d.dbFetchSortK(TySortK)
-					return d.GetType()
+					elog.Add("CacheGetType", fmt.Errorf("CacheGetType", "GetType: Type long name not found for given short name: [%s]", di.GetTy()))
+					return "", false
 				}
+
+				slog.LogAlert("GetType", fmt.Sprintf("Found in cache: [%t]  LongNm: [%s]", di.GetTy(), ty))
 				return ty, true
 			}
+
 		}
+		// not in cache then fetch from  database
+		d.dbFetchItem(TySortK)
+		return d.GetType()
 	}
-	// ty, b := types.GetTyLongNm(di.GetTy())
-	// if b == false {
-	// 	panic(fmt.Errorf("cache.GetType() errored. Could not find long type name for short name %s", di.GetTy()))
-	// }
-	//ty := di.GetTy()
-	var ty string
-	var b bool
+
+	var (
+		ty string
+		b  bool
+	)
 	if di == nil {
+		// some clear cache operation must have occured.
 		syslog(fmt.Sprintf("GetType: dataItem is nil for Puid: %s", d.Uid))
 		d.dbFetchSortK(TySortK)
 		return d.GetType()
 
 	}
 	if ty, b = types.GetTyLongNm(di.GetTy()); !b {
-		panic(fmt.Errorf("cache.GetType() errored. Could not find long type name for short name %s", di.GetTy()))
+		elog.Add("CacheGetType", fmt.Errorf("GetType: Type long name not found for given short name: [%s]", di.GetTy()))
+		return "", false
 	}
 	return ty, true
 

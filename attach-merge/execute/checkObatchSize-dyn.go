@@ -8,7 +8,6 @@ import (
 
 	blk "github.com/GoGraph/block"
 	param "github.com/GoGraph/dygparam"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
@@ -42,7 +41,6 @@ func checkOBatchSizeLimitReached(txh *tx.Handle, cUID uuid.UID, py *blk.ChPayloa
 		//mut.NewUpdate(tbl.EOP).AddMember("PKey", py.DI.Pkey, mut.IsKey).AddMember("SortK", py.DI.GetSortK(), mut.IsKey).AddMember("XF", xf, mut.Set)
 		txh.MergeMutation(tbl.EOP, py.DI.Pkey, py.DI.GetSortK(), mut.Update).AddMember("XF", xf, mut.Set)
 
-		//	fmt.Println("checkOBatchSizeLimitReached:  len(xf) %d   asz %d\n", len(xf), asz)
 	}
 
 	return nil

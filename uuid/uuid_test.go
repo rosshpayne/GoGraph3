@@ -5,7 +5,7 @@ import (
 )
 
 func TestFromString(t *testing.T) {
-	s := "a588f90b-7d07-4789-8d16-7cf01015c461"
+	s := "76083c49-cbe3-4dab-a53f-309b5a1a6e6a"
 	uid := FromString(s)
 	t.Logf("UID: %s", uid.EncodeBase64())
 }

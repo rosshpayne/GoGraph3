@@ -11,7 +11,7 @@ import (
 	"time"
 
 	atds "github.com/GoGraph/attach-merge/ds"
-	//	"github.com/GoGraph/attach-merge/execute/event"
+	"github.com/GoGraph/attach-merge/execute/event"
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
 	"github.com/GoGraph/ds"
@@ -73,23 +73,23 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		t0      time.Time
 		ok      bool
 		op      *AttachOp
-	//	eAN     *event.AttachNode
+		eAN     *event.AttachNode
 	)
 	defer lmtr.EndR()
 	defer wg_.Done()
 
 	// remove following defer as it impacts performance.
 	// log Attach Event via defer
-	// defer func() func() {
-	// 	eAN = event.NewAttachNodeContext(ctx, edges[0].Puid, len(edges)) // 0:"EV$event",  1:EV$edge
-	// 	//	eAN.LogStart()
-	// 	return func() {
-	// 		err = eAN.EventCommit(err)
-	// 		if err != nil {
-	// 			panic(err) //TODO: replace panic
-	// 		}
-	// 	}
-	// }()()
+	defer func() func() {
+		eAN = event.NewAttachNodeContext(ctx, edges[0].Puid, len(edges)) // 0:"EV$event",  1:EV$edge
+		//	eAN.LogStart()
+		return func() {
+			err = eAN.EventCommit(err)
+			if err != nil {
+				panic(err) //TODO: replace panic
+			}
+		}
+	}()()
 
 	// // update state via defer
 	defer func() func() {
@@ -97,12 +97,12 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		// Two tx are compensated by having the join process check on existence of edge before creating - only for the batch at restart though.
 		oTx := tx.New("op state").DB("mysql-GoGraph")
 		return func() {
-			//	et := eAN.NewTask("op-StateChange") // EV$task
+			et := eAN.NewTask("op-StateChange") // EV$task
 			// Persist state
 			oTx.Add(op.End(err)...) // Edge_Movies
 			err = oTx.Execute()
 			// log finish event
-			//	et.Finish(err) // 2: "EV$task"
+			et.Finish(err) // 2: "EV$task"
 			if err != nil {
 				errlog.Add(logid, fmt.Errorf("Error in execute oTx for attach node operation state: %w ", err))
 			}
@@ -245,7 +245,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 			return
 		}
 
-		slog.Log("AttachEdges: ", fmt.Sprintf(" Joined cUID --> pUID       %s -->  %s  %s Elapsed: %s  DML: %s\n", uuid.UID(e.Cuid).String(), uuid.UID(e.Puid).String(), e.Sortk, time.Now().Sub(t0), mt))
+		slog.Log("AttachEdges: ", fmt.Sprintf(" Joined cUID --> pUID       %s -->  %s  %s Elapsed: %s  DML: %s\n", uuid.UID(e.Cuid).EncodeBase64(), uuid.UID(e.Puid).Base64(), e.Sortk, time.Now().Sub(t0), mt))
 		// monitor: increment attachnode counter
 		stat := mon.Stat{Id: mon.AttachNode}
 		mon.StatCh <- stat
@@ -314,7 +314,8 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 	//gc := cache.NewCache()
 	//
 	gc := cache.GetCache()
-	//	fmt.Println("ABout to lock child node: ", cUID.String())
+	//
+	slog.Log("AttachEdge", fmt.Sprintf("Fetch Child node scalar data for cUID: %s  SortK: [%s]", cUID.Base64(), types.GraphSN()+"|A#A#"))
 	cnd, err := gc.FetchNode(cUID, types.GraphSN()+"|A#A#")
 	if err != nil {
 		err := fmt.Errorf("Error fetching child scalar data: %w", err)

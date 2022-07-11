@@ -46,3 +46,35 @@ func FetchNodeContext(ctx context.Context, uid uuid.UID, subKey ...string) (blk.
 
 	return d, err
 }
+
+// FetchNode performs a Query with KeyBeginsWidth on the SortK value, so all item belonging to the SortK are fetched.
+func FetchNodeItem(uid uuid.UID, subKey string) (*blk.DataItem, error) {
+	return FetchNodeItemContext(context.TODO(), uid, subKey)
+}
+
+// FetchNode performs a Query with KeyBeginsWidth on the SortK value, so all item belonging to the SortK are fetched.
+func FetchNodeItemContext(ctx context.Context, uid uuid.UID, subKey string) (*blk.DataItem, error) {
+
+	var (
+		err   error
+		d     blk.DataItem
+		sortk string
+	)
+
+	sortk = subKey
+
+	stx := tx.NewQueryContext(ctx, "FetchNode", tbl.Block)
+
+	stx.Select(&d).Key("PKey", uid).Key("SortK", sortk)
+	if stx.Error() != nil {
+		return nil, err
+	}
+
+	err = stx.Execute()
+	if err != nil {
+		err = fmt.Errorf("FetchNodeItem: %w", err)
+		return nil, err
+	}
+
+	return &d, nil
+}

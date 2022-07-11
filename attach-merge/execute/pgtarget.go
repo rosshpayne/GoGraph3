@@ -20,7 +20,7 @@ import (
 
 //  PropagationTargetMerge performs the same function as  PropagationTarget but is designed for the faster loader process
 //  of attach-merge package and should only be used straight after the loader process.
-//  This process batches the reqired DML into memory rather than populate/update the database for each attach operation.
+//  This process batches the reqired DML in memory rather than populate/update the database for each attach operation.
 //  Attach-merge introduces a special mutation method for this purpose, MergeMutation, which is used to batch and handle
 //  appending of values.  The results are executed against the database in a single execute that may involve hundreds of child node being attached.
 func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload, sortK string, pUID, cUID uuid.UID, dip map[string]*blk.DataItem) error {

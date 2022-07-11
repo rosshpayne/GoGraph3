@@ -1107,7 +1107,6 @@ func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) erro
 //func exGetItem(q *query.QueryHandle, av []types.AttributeValue) error {
 func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, av map[string]types.AttributeValue, proj *expression.ProjectionBuilder) error {
 
-	//fmt.Println("=== GetItem ===")
 	if proj == nil {
 		return fmt.Errorf("Select must be specified in GetItem")
 	}
@@ -1139,6 +1138,18 @@ func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle,
 	}
 	//
 	if len(result.Item) == 0 {
+		// var (
+		// 	s string
+		// 	u []byte
+		// )
+		// for _, v := range av {
+		// 	switch x := v.(type) {
+		// 	case *types.AttributeValueMemberS:
+		// 		s = x.Value
+		// 	case *types.AttributeValueMemberB:
+		// 		u = x.Value
+		// 	}
+		// }
 		return query.NoDataFoundErr
 	}
 	err = attributevalue.UnmarshalMap(result.Item, q.GetFetch())

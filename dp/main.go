@@ -230,8 +230,8 @@ func main() {
 
 	// batch size
 	if batchSize != nil {
-		if *batchSize > 200 {
-			*batchSize = 200
+		if *batchSize > 500 {
+			*batchSize = 500
 		}
 		param.DPbatch = *batchSize
 	}
@@ -489,7 +489,7 @@ func ScanForDPitems(ty string, dpCh chan<- uuid.UID, DPbatchCompleteCh <-chan st
 			elog.Add(logid, err)
 			return
 		}
-		stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch).Consistent(false) // GSI (not LSI) cannot have consistent reads. TODO: need something to detect GSI.
+		stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch).Consistent(false)
 
 		err = stx.Execute()
 		if err != nil {

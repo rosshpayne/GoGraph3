@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	blk "github.com/GoGraph/block"
-	param "github.com/GoGraph/dygparam"
 	slog "github.com/GoGraph/syslog"
 )
 
@@ -15,7 +14,7 @@ import (
 //       multi-session out of scope for the moment.
 
 const (
-	logid = "types: "
+	logid = "types"
 )
 
 type Ty = string     // type
@@ -82,10 +81,15 @@ func GetTyShortNm(longNm string) (string, bool) {
 	return s, ok
 }
 
-func GetTyLongNm(tyNm string) (string, bool) {
-	for shortNm, longNm := range tyShortNm {
-		if tyNm == longNm {
-			return shortNm, true
+func GetTyLongNm(shortTyNm string) (string, bool) {
+	// for shortNm, longNm := range tyShortNm {
+	// 	if tyNm == longNm {
+	// 		return shortNm, true
+	// 	}
+	// }
+	for longNm, shortNm := range tyShortNm {
+		if shortTyNm == shortNm {
+			return longNm, true
 		}
 	}
 	return "", false
@@ -232,22 +236,22 @@ func populateTyCaches(allTypes blk.TyIBlock) {
 		TypeC.TyC[ty] = tc
 		tc = nil
 	}
-	if param.DebugOn {
-		syslog("==== TypeC.AttrTy")
-		for k, v := range TypeC.AttrTy {
-			syslog(fmt.Sprintf("%s   shortName: %s\n", k, v))
-		}
-		syslog("==== TypeC.TyC")
-		for k, v := range TypeC.TyC {
-			for _, v2 := range v {
-				syslog(fmt.Sprintf("%s       %#v\n", k, v2))
-			}
-		}
-		syslog("==== TypeC.TyAttrC")
-		for k, v := range TypeC.TyAttrC {
-			syslog(fmt.Sprintf("%s       %#v\n", k, v))
+	//	if param.DebugOn {
+	syslog("==== TypeC.AttrTy")
+	for k, v := range TypeC.AttrTy {
+		syslog(fmt.Sprintf("%s   shortName: %s\n", k, v))
+	}
+	syslog("==== TypeC.TyC")
+	for k, v := range TypeC.TyC {
+		for _, v2 := range v {
+			syslog(fmt.Sprintf("%s       %#v\n", k, v2))
 		}
 	}
+	syslog("==== TypeC.TyAttrC")
+	for k, v := range TypeC.TyAttrC {
+		syslog(fmt.Sprintf("%s       %#v\n", k, v))
+	}
+	//	}
 	// confirm caches are populated
 	if len(TypeC.TyC) == 0 {
 		panic(fmt.Errorf("typeC.TyC is empty"))
@@ -335,3 +339,94 @@ func IsUidPredInTy(ty string, pred string) bool { //TODO: pass in Type so uid-pr
 	}
 	return true
 }
+
+// GetScalars returns the SortK value of each scalar for a given type (ty: long type name)
+func GetScalars(ty string, prefix string) []string {
+	var attr []string
+
+	for _, v := range TypeC.TyC[ty] {
+		if len(v.Ty) == 0 && v.DT[0] != 'L' {
+			attr = append(attr, prefix+v.C)
+		}
+	}
+	return attr
+}
+
+// GetUidPreds returns the SortK value of each UID-PRED for a given type  (ty: long type name)
+func GetUidPreds(ty string, prefix string) []string {
+	var attr []string
+
+	for _, v := range TypeC.TyC[ty] {
+		if v.Ty == "Nd" {
+			attr = append(attr, prefix+v.C)
+		}
+	}
+	return attr
+}
+
+// GetSingleProgagatedScalars returns the SortK value for each propagated scalar a given type (UID-PRED)
+func GetSinglePropagatedScalarsAll(ty string, prefix string) []string {
+	var attr []string
+
+	for _, v := range TypeC.TyC[ty] { // ty = Performance
+		if v.DT == "Nd" {
+			prefix := prefix + v.C
+			attr = append(attr, prefix)
+			for _, c := range GetScalars(v.Ty, prefix+"#:") { // Person, Character, Film
+				attr = append(attr, c)
+			}
+		}
+	}
+	if len(attr) == 0 {
+		panic(fmt.Errorf("GetSingleProgagatedScalarsAll error. Failed to find for type [%s]", ty))
+	}
+
+	return attr
+}
+
+// GetSingleProgagatedScalars returns the SortK value for each propagated scalar a given type (UID-PRED)
+func GetSinglePropagatedScalars(ty string, uidpred string, prefix string) []string {
+	var attr []string
+
+	for _, v := range TypeC.TyC[ty] { // ty = Performance
+		if v.DT == "Nd" && uidpred == v.C {
+			prefix := prefix + v.C
+			attr = append(attr, prefix)
+			for _, c := range GetScalars(v.Ty, prefix+"#:") { // Person, Character, Film
+				attr = append(attr, c)
+			}
+		}
+	}
+	if len(attr) == 0 {
+		panic(fmt.Errorf("GetSingleProgagatedScalarsAll error. Failed to find for type [%s]", ty))
+	}
+
+	return attr
+}
+
+// GetDoubleProgagatedScalars: "A#G#:P" type: Fm,  "A#G#:?#G#:?#:?"
+// func GetDoubleProgagatedScalars(ty string, uidpred string, prefix string) []string {
+// 	var attr []string
+
+// 	//ty, _ := GetTyLongNm(ty)
+
+// 	for _, v := range TypeC.TyC[ty] {
+// 		if v.Ty != "Nd" {
+// 			continue
+// 		}
+// 		if uidpred != v.C {
+// 			continue
+// 		}
+
+// 		for _, v := range TypeC.TyC[v.Ty] {
+// 			prefix += v.C + "#:"
+// 			if v.Ty == "Nd" && v.Card == "1:1" {
+// 				for _, c := range GetScalars(v.Ty, prefix) {
+// 					attr = append(attr, c)
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return attr
+// }

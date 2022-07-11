@@ -365,6 +365,12 @@ func (q *QueryHandle) SetEOD() {
 }
 
 func (q *QueryHandle) EOD() bool {
+	if len(q.pgStateId) == 0 {
+		// query has not configured paginate
+		q.err = fmt.Errorf("Query [tag: %s] has not configured paginate. EOD is therefore not available", q.Tag)
+		elog.Add(q.Tag, q.err)
+		return false
+	}
 	return q.eod
 }
 func (q *QueryHandle) FilterSpecified() bool {
