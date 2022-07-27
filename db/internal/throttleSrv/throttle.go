@@ -10,10 +10,6 @@ import (
 
 const logid = "dbThrottle"
 
-func syslog(s string) {
-	slog.Log(logid, s)
-}
-
 func alertlog(s string) {
 	slog.LogAlert(logid, s)
 }
@@ -58,23 +54,23 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, ctxEnd *sync.WaitGrou
 		defer wgSnap.Done()
 		// wait for grmgr to start for loop
 		wpStart.Wait()
-		slog.Log(logid, "Report-snapshot Powering up...")
+		alertlog("report-snapshot started. (NOT YET CONFIGURED TO DO ANYTING")
 		for {
 			select {
 			// case t := <-time.After(time.Duration(snapInterval) * time.Second):
 			// 	snapCh <- t
 			case <-ctxSnap.Done():
-				slog.Log(logid, "Report-snapshot Shutdown.")
+				alertlog("report-snapshot shutdown.")
 				return
 			}
 		}
 
 	}()
 
-	slog.Log(logid, "Waiting for gr monitor to start...")
+	alertlog("Waiting for gr monitor to start...")
 	// wait for snap interrupter to start
 	wgStart.Wait()
-	slog.Log(logid, "Fully powered up...")
+	alertlog("Fully powered up...")
 
 	wpStart.Done()
 
@@ -91,7 +87,11 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, ctxEnd *sync.WaitGrou
 			appThrottle.Up()
 
 		case <-ctx.Done():
+			alertlog("Received cancel order....shutting down...")
 			cancelSnap()
+			alertlog("Waiting for gr internal monitoring service to stop...")
+			wgSnap.Wait()
+			alertlog("gr throttle monitor shutdown")
 			// shutdown any goroutines that are started above...
 			return
 

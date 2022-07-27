@@ -8,6 +8,7 @@ import (
 
 	"github.com/GoGraph/dbs"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/uuid"
 )
 
@@ -144,10 +145,10 @@ func (c *condition) GetValue() interface{} {
 }
 
 type Mutation struct {
-	ms   []Member
-	cd   *condition
-	pk   uuid.UID
-	sk   string
+	ms []Member
+	cd *condition
+	// pk   uuid.UID
+	// sk   string
 	pKey interface{}
 	tbl  tbl.Name
 	opr  StdMut
@@ -160,35 +161,6 @@ type Mutation struct {
 
 type Mutations []dbs.Mutation //*Mutation
 
-// func (im *Mutations) Add(m dbs.Mutation) bool {
-// 	if m == nil {
-// 		return false
-// 	}
-// 	var found bool
-// 	for _, v := range *im {
-// 		if v == m {
-// 			found = true
-// 		}
-// 	}
-// 	// 	switch x := *v.(type); x {
-// 	// 	case *Mutation:
-// 	// 		if x == m { // compare pointers Mutation struct
-// 	// 			found = ture
-// 	// 		}
-// 	// 	case *db.WithOBatchLimitStatement:
-// 	// 		if x == m { // compare pointers (to struct)
-// 	// 			found = ture
-// 	// 		}
-// 	// 	}
-// 	// }
-// 	if found {
-// 		return false
-// 	}
-// 	*im = append(*im, m)
-
-// 	return len(*im) == param.MaxMutations
-// }
-
 func (im *Mutations) GetMutation(i int) *Mutation {
 	fmt.Println("GetMutation: len(*im): ", len(*im))
 	return (*im)[i].(*Mutation)
@@ -198,39 +170,7 @@ func (im *Mutations) NumMutations() int {
 	return len(*im)
 }
 
-// func (ms *Mutations) Reset() {
-// 	*ms = nil
-// }
-
-func NewMutation(tab tbl.Name, pk uuid.UID, sk string, opr StdMut) *Mutation {
-
-	// not all table are represented in the Key table.
-	// Those that are not make use of the IsKey member attribute
-	kpk, ksk, _ := tbl.GetKeys(tab)
-
-	mut := &Mutation{tbl: tab, pk: pk, sk: sk, opr: opr}
-
-	// presumes all Primary Keys are a UUID
-	// first two elements of mutations must be a PK and SK or a blank SK "__"
-	if len(kpk) > 0 {
-
-		mut.AddMember(kpk, []byte(pk), IsKey)
-		if len(ksk) > 0 {
-			mut.AddMember(ksk, sk, IsKey)
-		} else {
-			mut.AddMember("__", "")
-		}
-	}
-
-	return mut
-}
-
 func NewInsert(tab tbl.Name) *Mutation {
-
-	// var pk uuid.UID
-	// var sk string
-
-	// mut := &Mutation{tbl: tab, pk: pk, sk: sk, opr: Insert}
 
 	return &Mutation{tbl: tab, opr: Insert}
 
@@ -328,13 +268,13 @@ func (m *Mutation) GetOpr() StdMut {
 	return m.opr
 }
 
-func (m *Mutation) GetPK() uuid.UID {
-	return m.pk
-}
+// func (m *Mutation) GetPK() uuid.UID {
+// 	return m.pk
+// }
 
-func (m *Mutation) GetSK() string {
-	return m.sk
-}
+// func (m *Mutation) GetSK() string {
+// 	return m.sk
+// }
 
 func (m *Mutation) GetTable() string {
 	return string(m.tbl)
@@ -407,6 +347,55 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
 		m.Opr = Append
 	}
+
+	im.ms = append(im.ms, m)
+
+	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
+	// if attr == "Nd" {
+	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Opr: Inc}
+	// 	im.ms = append(im.ms, m)
+	// }
+	//	}
+	return im
+}
+
+func (im *Mutation) AddMember2(attr string, value interface{}, opr ...MutOpr) *Mutation {
+
+	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
+	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
+	p := strings.Replace(attr, "#", "_", -1)
+	p = strings.Replace(p, ":", "x", -1)
+	if p[0] == '0' {
+		p = "1" + p
+	}
+	m := Member{Name: attr, Param: "@" + p, Value: value}
+
+	// assign Set to mut.Opr even for Insert DML where Opr will be ignored.
+	m.Opr = Set
+
+	// determine if member is an array type based on its value type. For Dynamobd  arrays are List or Set types.
+	// However, there is no way to distinguish between List or Set using the value type,
+	// but this is not necessary as GoGraph uses Lists only - as the order of the array data is important and needs to be preserved.
+	// For Spanner there is only one array type.
+	// Using reflect pkg replaces the use of hardwire attribute names that identify the array types e.g. case "Nd", " ", "Id", "XBl", "L*":
+	// (the advantage of hardwiring attribute names is it makes for a generic solution that suits both Dynamodb & Spanner).
+	// default behaviour is to append value to end of array
+	// TODO: come up with generic solution for both Dynamodb & Spanner - probably not possible so make use of conditional compilation.
+	m.Array = IsArray(value)
+
+	// override Opr value with argument value if specified
+	if len(opr) > 0 {
+		m.Opr = opr[0]
+	} else if m.Array {
+		// default operation for arrays is append.
+		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
+		// in such cases you must Put
+		// Conclusion: for the initial load the default is Put - this will overwrite what is in Nd which for the initial load will by a single NULL entry.
+		// this is good as it means the the index entries in Nd match those in the scalar propagation atributes.
+		// After the initial load the default should be set to Append as all items exist and the associated array attributes exist in those items, so appending will succeed.
+		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
+		m.Opr = Append
+	}
 	im.ms = append(im.ms, m)
 
 	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
@@ -427,6 +416,42 @@ func (im *Mutation) AddCondition(cond Cond, attr string, value ...interface{}) *
 
 func (im *Mutation) GetCondition() *condition {
 	return im.cd
+}
+
+// NewMutation is written specifically for GoGraph. Pkg Cache has its own GOGraph version of this function
+// Arguments pk,sk need to be replaced somehow, to remove dependency on types. Maybe use Tbl package in
+// which tables are registered with known pk and sk (names and datatypes)
+func NewMutation(tab tbl.Name, pk uuid.UID, sk string, opr StdMut) *Mutation {
+
+	// not all table are represented in the Key table.
+	// Those that are not make use of the IsKey member attribute
+	kpk, ksk, _ := tbl.GetKeys(tab)
+
+	mut := &Mutation{tbl: tab, opr: opr}
+
+	// presumes all Primary Keys are a UUID
+	// first two elements of mutations must be a PK and SK or a blank SK "__"
+	if len(kpk) > 0 {
+
+		mut.AddMember(kpk, []byte(pk), IsKey)
+		if len(ksk) > 0 {
+			mut.AddMember(ksk, sk, IsKey)
+		} else {
+			mut.AddMember("__", "")
+		}
+	}
+
+	return mut
+}
+
+func NewMutation2(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
+
+	mut := &Mutation{tbl: tab, opr: opr}
+
+	for _, v := range keys {
+		mut.AddMember(v.Name, v.Value, IsKey)
+	}
+	return mut
 }
 
 // FindMutation searches the associated batch of mutations based on argument values.
@@ -488,4 +513,107 @@ func (bm *Mutations) FindMutation(table tbl.Name, pk uuid.UID, sk string) *Mutat
 
 	}
 	return nil
+}
+
+// FindMutation searches the associated batch of mutations based on argument values.
+func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.Key) (*Mutation, error) {
+	var (
+		ok    bool
+		sm    *Mutation
+		match int
+	)
+	// TODO: what about active batch???
+	for _, sm_ := range *bm {
+
+		if sm, ok = sm_.(*Mutation); !ok {
+			continue
+		}
+		if sm.opr == Merge {
+			panic(fmt.Errorf("Merge mutation cannot be used with a MergeMuatation method"))
+		}
+		if sm.tbl != table || !(sm.opr == Insert || sm.opr == Update) {
+			continue
+		}
+		match = 0
+
+		// merge keys have been validated and are in table key order (partition, sortk)
+		for _, k := range keys {
+
+			// cycle thru members of source mutations -
+			for _, attr := range sm.ms {
+
+				// evaluate Partition Key and Sortk types (for DYnamodb these are scalar types, number, string, [])
+				fmt.Printf("k.Name, attr.Name %q %q\n", k.Name, attr.Name)
+				if k.Name != attr.Name {
+					continue
+				}
+
+				fmt.Printf("k.Value.(type) %T\n", k.Value)
+				switch x := k.Value.(type) {
+
+				case int64:
+					if av, ok := attr.Value.(int64); !ok {
+						return nil, fmt.Errorf("find mutation attribute %q. Expected an int64 type but supplied a %T type", attr.Name, attr.Value)
+					} else if x == av {
+						match++
+					}
+
+				case int:
+					if av, ok := attr.Value.(int); !ok {
+						return nil, fmt.Errorf("find mutation attribute %q. Expected an int type but supplied a %T type", attr.Name, attr.Value)
+					} else if x == av {
+						match++
+					}
+
+				case float64:
+					if av, ok := attr.Value.(float64); !ok {
+						return nil, fmt.Errorf("find mutation attribute %q. Expected a float64 type but supplied a %T type", attr.Name, attr.Value)
+					} else if x == av {
+						match++
+					}
+
+				case string:
+					if av, ok := attr.Value.(string); !ok {
+						return nil, fmt.Errorf("find mutation attribute %q. Expected a string type but suppled a %T type", attr.Name, attr.Value)
+					} else if x == av {
+						match++
+					}
+
+				case []byte:
+					if av, ok := attr.Value.([]byte); !ok {
+						return nil, fmt.Errorf("find mutation attribute %q. Expected a binary ([]byte type but is a %T type", attr.Name, attr.Value)
+					} else if bytes.Equal(x, av) {
+						match++
+					}
+
+				case uuid.UID:
+					if av, ok := attr.Value.(uuid.UID); !ok {
+						if av, ok := attr.Value.([]uint8); !ok {
+							return nil, fmt.Errorf("find mutation attribute %q. Expected a binary ([]uint8) type but is a %T type", attr.Name, attr.Value)
+						} else if bytes.Equal([]byte(x), []byte(av)) {
+							fmt.Println("r--- matched ----")
+							match++
+						}
+					} else if bytes.Equal([]byte(x), []byte(av)) {
+						fmt.Println("x--- matched ----")
+						match++
+					}
+				}
+				fmt.Println("match len(keys) ", match, len(keys))
+				break
+			}
+			fmt.Println("xx match len(keys) ", match, len(keys))
+			if match == len(keys) {
+				fmt.Println("==== Found original mutation =======")
+				return sm, nil
+			}
+		}
+	}
+
+	if match == len(keys) {
+		fmt.Println("====+ Found original mutation =======")
+		return sm, nil
+	}
+	fmt.Println("++++++ Did not find original mutation =+++++=")
+	return nil, nil
 }

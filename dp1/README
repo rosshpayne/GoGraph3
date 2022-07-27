@@ -1,0 +1,6 @@
+Directory: dp1.
+
+Description: paginated query of index. No post DP update to remove index entry. All else the same - go routine called for each Ty.  
+           All Dynamodb dml are idempotent e.g. Put
+
+API: Index Scan()

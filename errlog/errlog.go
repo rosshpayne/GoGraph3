@@ -18,7 +18,7 @@ type payload struct {
 }
 
 const (
-	logid = "errlog: "
+	logid = "errlog"
 )
 
 var (
@@ -39,11 +39,13 @@ func CheckLimit(lc chan bool) bool {
 	return c
 }
 
-func Add(logid string, err error) {
+func Add(logid string, err ...error) {
 
 	logid = strings.TrimRight(logid, " :")
 
-	addCh <- &payload{logid, err}
+	for _, e := range err {
+		addCh <- &payload{logid, e}
+	}
 }
 
 func PrintErrors() {
@@ -54,9 +56,9 @@ func PrintErrors() {
 
 func RunErrored() bool {
 	respCh := make(chan int)
+
 	ErrCntCh <- respCh
 	errs := <-respCh
-
 	if errs > 0 {
 		return true
 	}
@@ -83,10 +85,11 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	RequestCh = make(chan Errors)
 	ErrCntByIdCh = make(chan string)
 	ErrCntRespCh = make(chan int)
+	ErrCntCh = make(chan chan int)
 	ResetCntCh = make(chan string)
 
 	wpStart.Done()
-	slog.Log(logid, "Powering up...")
+	slog.LogAlert(logid, "Powering up...")
 
 	for {
 
@@ -147,10 +150,11 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				slog.LogAlert(logid, fmt.Sprintf(" %s %s", e.Id, e.Err))
 				fmt.Println(e.Id, e.Err)
 			}
+
 			respch <- struct{}{}
 
 		case <-ctx.Done():
-			slog.Log(logid, "Shutdown.")
+			slog.LogAlert(logid, "Shutdown.")
 			return
 
 		}

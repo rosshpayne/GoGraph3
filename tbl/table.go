@@ -42,13 +42,13 @@ func init() {
 
 	// only for tables with keys types { util.UID, String} but non standard names. Standard name PKey, SortK
 	keys = keyMap{
-		Block:      key{pk: "PKey"},
-		EOP:        key{"PKey", "SortK"},
-		NodeScalar: key{"PKey", "SortK"},
-		Event:      key{"eid", "id"},
-		Reverse:    key{"PKey", "SortK"},
+		// Block:      key{pk: "PKey"},
+		// EOP:        key{"PKey", "SortK"},
+		// NodeScalar: key{"PKey", "SortK"},
+		// Event:      key{"eid", "id"},
+		// Reverse:    key{"PKey", "SortK"},
 		//AttachDetachEvent: key{Pk: "eid"},
-		State: key{pk: "State"},
+		// State: key{pk: "State"},
 	}
 
 }

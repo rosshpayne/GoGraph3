@@ -60,9 +60,6 @@ func marshalAvUsingValue(val interface{}) types.AttributeValue {
 		return &types.AttributeValueMemberB{Value: x}
 
 	case string:
-		// var s strings.Builder
-		// s.WriteString(val.(string))
-		// ss:=s.String()
 		ss := val.(string)
 		if ss == "$CURRENT_TIMESTAMP$" {
 			tz, _ := time.LoadLocation(param.TZ)
@@ -70,22 +67,17 @@ func marshalAvUsingValue(val interface{}) types.AttributeValue {
 		}
 		return &types.AttributeValueMemberS{Value: ss}
 
-	//	return &types.AttributeValue{S: &ss}
-
 	case float64:
 		s := strconv.FormatFloat(x, 'g', -1, 64)
 		return &types.AttributeValueMemberN{Value: s}
-		//return &types.AttributeValue{N: &s}
 
 	case int64:
 		s := strconv.FormatInt(x, 10)
 		return &types.AttributeValueMemberN{Value: s}
-		//return &types.AttributeValue{N: &s}
 
 	case int32:
 		s := strconv.FormatInt(int64(x), 10)
 		return &types.AttributeValueMemberN{Value: s}
-		//return &types.AttributeValue{N: &s}
 
 	case int:
 		s := strconv.Itoa(x)

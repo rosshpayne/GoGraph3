@@ -163,3 +163,27 @@ func (h MySQL) String() string {
 	return "mysql [not default]"
 
 }
+
+func (h MySQL) GetTableKeys(ctx context.Context, table string) ([]string, error) {
+	return nil, nil
+}
+
+// 	var pk, sk string
+
+// 	dto, err := tabCache.fetchTableDesc(ctx, h.Client, table)
+
+// 	for _, vv := range dto.Table.KeySchema {
+// 		for _, v := range qkeys {
+// 			if *vv.AttributeName == v {
+// 				if vv.KeyType == types.KeyTypeHash {
+// 					pk = v
+// 				} else {
+// 					sk = v
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return []string{pk, sk}
+
+// }

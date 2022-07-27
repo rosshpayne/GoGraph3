@@ -19,7 +19,6 @@ import (
 	"github.com/GoGraph/db/stats"
 	"github.com/GoGraph/dbs"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/uuid"
 	//"github.com/GoGraph/tbl"
 	param "github.com/GoGraph/dygparam"
@@ -32,12 +31,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	//	smithyhttp "github.com/aws/smithy-go/transport/http"
-	// "github.com/aws/aws-sdk-go/aws"
-	// "github.com/aws/aws-sdk-go/aws/awserr"
-	// "github.com/aws/aws-sdk-go/service/dynamodb"
-	//"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	//"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 )
 
 type action byte
@@ -49,6 +42,42 @@ const (
 	longDelay
 	throttle_ // reduce concurrency
 )
+
+type ComparOpr string
+
+const (
+	EQ         ComparOpr = "EQ"
+	NE         ComparOpr = "NE"
+	GT         ComparOpr = "GT"
+	GE         ComparOpr = "GE"
+	LE         ComparOpr = "LE"
+	LT         ComparOpr = "LT"
+	BEGINSWITH ComparOpr = "BEGINSWITH"
+	NOT        ComparOpr = "NOT"
+	NA         ComparOpr = "NA"
+)
+
+func (c ComparOpr) String() string {
+	switch c {
+	case EQ:
+		return " = "
+	case NE:
+		return " != "
+	case GT:
+		return " > "
+	case GE:
+		return " >= "
+	case LE:
+		return " <= "
+	case LT:
+		return " < "
+	case BEGINSWITH:
+		return "beginsWith("
+	case NOT:
+		return " !"
+	}
+	return "NA"
+}
 
 func syslog(s string) {
 	slog.Log(logid, s)
@@ -142,52 +171,52 @@ func errorAction(err error) []action { // (bool, action string) {
 	return []action{fail}
 }
 
-func retryOp(err error) bool {
+func RetryOp(err error) bool {
 
 	//  github.com/aws/aws-sdk-go-v2/aws/Retryer
 	retryer := awsConfig.Retryer
 
-	alertlog(fmt.Sprintf("retryOp: [%T] %s", err, err))
+	alertlog(fmt.Sprintf("RetryOp: [%T] %s", err, err))
 
 	if retryer != nil {
 		if retryer().IsErrorRetryable(err) {
-			alertlog("retryOp: error is retryable...")
+			alertlog("RetryOp: error is retryable...")
 			for _, v := range []int{1, 2, 3} {
 				d, err := retryer().RetryDelay(v, err)
 				if err != nil {
-					fmt.Printf("retryOp:  Delay attempt %d:  %s", v, d.String())
+					fmt.Printf("RetryOp:  Delay attempt %d:  %s", v, d.String())
 				}
 			}
 		} else {
-			alertlog("retryOp: error is NOT retryable...")
+			alertlog("RetryOp: error is NOT retryable...")
 		}
-		alertlog(fmt.Sprintf("retryOp: max attempts: %d", retryer().MaxAttempts()))
+		alertlog(fmt.Sprintf("RetryOp: max attempts: %d", retryer().MaxAttempts()))
 	} else {
-		alertlog(fmt.Sprintf("retryOp: no Retryer defined. aws.Config max attempts: %d", awsConfig.RetryMaxAttempts))
+		alertlog(fmt.Sprintf("RetryOp: no Retryer defined. aws.Config max attempts: %d", awsConfig.RetryMaxAttempts))
 	}
 
 	for _, action := range errorAction(err) {
 
 		switch action {
 		case shortDelay:
-			alertlog("retryOp: short delay...")
+			alertlog("RetryOp: short delay...")
 			time.Sleep(20 * time.Second)
 		case longDelay:
-			alertlog("retryOp: long delay...")
+			alertlog("RetryOp: long delay...")
 			time.Sleep(60 * time.Second)
 		case retry:
-			alertlog("retryOp: retry...")
+			alertlog("RetryOp: retry...")
 			return true
 		// case fail:
 		// 	return false
 		case throttle_:
-			alertlog("retryOp: throttle...")
+			alertlog("RetryOp: throttle...")
 			// call throttle down api
 			throttle.Down()
 
 		}
 	}
-	alertlog("retryOp: no retry...")
+	alertlog("RetryOp: no retry...")
 	return false
 }
 
@@ -529,7 +558,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 			if err != nil {
 
-				if !retryOp(err) {
+				if !RetryOp(err) {
 					return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation or max retries exceeded", NonRetryOperErr, err)
 				}
 				// wait 1 seconds before processing again...
@@ -571,7 +600,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 				if err != nil {
 					retryErr = err
-					if !retryOp(err) {
+					if !RetryOp(err) {
 						return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation.", NonRetryOperErr, err)
 					}
 					// wait n seconds before reprocessing...
@@ -1027,31 +1056,22 @@ func crProjectionExpr(q *query.QueryHandle) *expression.ProjectionBuilder {
 
 }
 
-func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) error {
-
-	var (
-		// options
-		err error
-	)
+func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle, opt ...Option) error {
 
 	if q.Error() != nil {
 		return q.Error()
 	}
 
+	e, err := queryCache.fetchQuery(ctx, dh, q)
+	if err != nil {
+		return err
+	}
+	// options
 	for _, o := range opt {
 		switch strings.ToLower(o.Name) {
 		default:
 		}
 	}
-
-	// as this is db package (default DB) we can use the dbSrv value
-	client := GetDefaultDBHdl().(DynamodbHandle)
-	//client := dbSrv
-
-	if q.Error() != nil {
-		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %w", q.Error()))
-	}
-
 	// define projection based on struct passed via Select()
 	proj := crProjectionExpr(q)
 	//
@@ -1059,53 +1079,23 @@ func executeQuery(ctx context.Context, q *query.QueryHandle, opt ...Option) erro
 	if err != nil {
 		return err
 	}
-	pk, sk := q.GetPkSk()
-	if len(pk) == 0 {
 
-		return exScan(ctx, client, q, proj)
+	switch e.access {
+
+	case cGetItem:
+		return exGetItem(ctx, dh, q, e, av, proj)
+	case cQuery:
+		return exQuery(ctx, dh, q, e, proj)
+	case cScan:
+		return exScan(ctx, dh, q, proj)
 	}
 
-	if q.IndexSpecified() {
-		// gsi  do not enforce uniqueness so GetItem() is NA.  key() specifications perform query, no keys scan.
-		return exQuery(ctx, client, q, proj)
-	}
-
-	switch {
-
-	case len(pk) != 0 && len(sk) == 0 && tbl.KeyCnt(q.GetTable()) == 1:
-
-		return exGetItem(ctx, client, q, av, proj)
-
-	default:
-
-		if q.KeyCnt() == tbl.KeyCnt(q.GetTable()) {
-
-			sk, err := tbl.GetSK(q.GetTable())
-			if err != nil {
-				panic(err)
-			}
-			switch q.GetKeyComparOpr(sk) {
-
-			case query.EQ:
-
-				return exGetItem(ctx, client, q, av, proj)
-
-			default:
-
-				return exQuery(ctx, client, q, proj)
-			}
-
-		} else {
-
-			return exQuery(ctx, client, q, proj)
-		}
-
-	}
+	return fmt.Errorf("Inconsistency in db executeQuery()")
 
 }
 
 //func exGetItem(q *query.QueryHandle, av []types.AttributeValue) error {
-func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, av map[string]types.AttributeValue, proj *expression.ProjectionBuilder) error {
+func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, av map[string]types.AttributeValue, proj *expression.ProjectionBuilder) error {
 
 	if proj == nil {
 		return fmt.Errorf("Select must be specified in GetItem")
@@ -1162,7 +1152,7 @@ func exGetItem(ctx context.Context, client DynamodbHandle, q *query.QueryHandle,
 	return nil
 }
 
-func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, proj *expression.ProjectionBuilder) error {
 	//
 	var (
 		keyc   expression.KeyConditionBuilder
@@ -1176,7 +1166,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
 		//syslog(fmt.Sprintf("exQuery: restart"))
-		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId())))
+		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
 		q.SetRestart(false)
 
 	} else {
@@ -1194,61 +1184,60 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		syslog(fmt.Sprintf("exQuery: restart false."))
 	}
 
-	switch q.KeyCnt() {
+	switch len(q.GetKeys()) {
 	case 1:
-		keyc = expression.KeyEqual(expression.Key(q.GetPK()), expression.Value(q.GetKeyValue(q.GetPK())))
+		keyc = expression.KeyEqual(expression.Key(e.GetPK()), expression.Value(q.GetKeyValue(e.GetPK())))
 	case 2:
 		//
-		keyc = expression.KeyEqual(expression.Key(q.GetPK()), expression.Value(q.GetKeyValue(q.GetPK())))
-		switch q.GetKeyComparOpr(q.GetSK()) {
-		case query.EQ:
-			keyc = expression.KeyAnd(keyc, expression.KeyEqual(expression.Key(q.GetSK()), expression.Value(q.GetKeyValue(q.GetSK()))))
-		case query.GT:
-			keyc = expression.KeyAnd(keyc, expression.KeyGreaterThan(expression.Key(q.GetSK()), expression.Value(q.GetKeyValue(q.GetSK()))))
-		case query.LT:
-			keyc = expression.KeyAnd(keyc, expression.KeyLessThan(expression.Key(q.GetSK()), expression.Value(q.GetKeyValue(q.GetSK()))))
-		case query.GE:
-			keyc = expression.KeyAnd(keyc, expression.KeyGreaterThanEqual(expression.Key(q.GetSK()), expression.Value(q.GetKeyValue(q.GetSK()))))
-		case query.LE:
-			keyc = expression.KeyAnd(keyc, expression.KeyLessThanEqual(expression.Key(q.GetSK()), expression.Value(q.GetKeyValue(q.GetSK()))))
-		case query.BEGINSWITH:
-			//syslog(fmt.Sprintf("BEGINSWITH: %s %s ", q.GetSK(), q.GetKeyValue(q.GetSK()).(string)))
-			keyc = expression.KeyAnd(keyc, expression.KeyBeginsWith(expression.Key(q.GetSK()), q.GetKeyValue(q.GetSK()).(string)))
+		keyc = expression.KeyEqual(expression.Key(e.GetPK()), expression.Value(q.GetKeyValue(e.GetPK())))
+		switch ComparOpr(q.GetKeyComparOpr(e.GetSK())) {
+		case EQ:
+			keyc = expression.KeyAnd(keyc, expression.KeyEqual(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
+		case GT:
+			keyc = expression.KeyAnd(keyc, expression.KeyGreaterThan(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
+		case LT:
+			keyc = expression.KeyAnd(keyc, expression.KeyLessThan(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
+		case GE:
+			keyc = expression.KeyAnd(keyc, expression.KeyGreaterThanEqual(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
+		case LE:
+			keyc = expression.KeyAnd(keyc, expression.KeyLessThanEqual(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
+		case BEGINSWITH:
+			keyc = expression.KeyAnd(keyc, expression.KeyBeginsWith(expression.Key(e.GetSK()), q.GetKeyValue(e.GetSK()).(string)))
 		}
 	}
 
 	for i, n := range q.GetFilterAttr() {
 		if i == 0 {
-			switch n.ComparOpr() {
-			case query.BEGINSWITH:
+			switch ComparOpr(n.GetOprStr()) {
+			case BEGINSWITH:
 				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
-			case query.GT:
+			case GT:
 				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.LT:
+			case LT:
 				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.EQ:
+			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.NE:
+			case NE: //TODO : fix NE
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", n.ComparOpr())))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 
 		} else {
 
-			switch n.ComparOpr() {
-			case query.BEGINSWITH:
+			switch ComparOpr(n.GetOprStr()) {
+			case BEGINSWITH:
 				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
-			case query.GT:
+			case GT:
 				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.LT:
+			case LT:
 				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.EQ:
+			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.NE:
+			case NE: //TODO : fix NE
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", n.ComparOpr())))
+				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 			//flt = flt.And(f)
 			switch n.BoolCd() {
@@ -1297,7 +1286,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
 	}
 
-	if q.SKset() {
+	if len(e.GetSK()) > 0 {
 		input.ScanIndexForward = aws.Bool(q.IsScanForwardSet())
 	}
 	//
@@ -1346,7 +1335,7 @@ func exQuery(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, p
 	return nil
 }
 
-func exScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 	var err error
 
 	switch q.GetParallel() {
@@ -1386,7 +1375,7 @@ func exScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, pr
 }
 
 // exSingleScan - non-parallel scan. Scan of table or index.
-func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
 	slog.LogAlert(logid, fmt.Sprintf("exSingleScan: thread %d", q.Worker()))
 
@@ -1394,7 +1383,7 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
 		syslog(fmt.Sprintf("exSingleScan: restart"))
-		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId())))
+		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
 		q.SetRestart(false)
 
 	} else {
@@ -1418,36 +1407,36 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	}
 	for i, n := range q.GetFilterAttr() {
 		if i == 0 {
-			switch n.ComparOpr() {
-			case query.BEGINSWITH:
+			switch ComparOpr(n.GetOprStr()) {
+			case BEGINSWITH:
 				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
-			case query.GT:
+			case GT:
 				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.LT:
+			case LT:
 				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.EQ:
+			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.NE:
+			case NE:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", n.ComparOpr())))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 
 		} else {
 
-			switch n.ComparOpr() {
-			case query.BEGINSWITH:
+			switch ComparOpr(n.GetOprStr()) {
+			case BEGINSWITH:
 				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
-			case query.GT:
+			case GT:
 				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.LT:
+			case LT:
 				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.EQ:
+			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.NE:
+			case NE:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", n.ComparOpr())))
+				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 			//flt = flt.And(f)
 			switch n.BoolCd() {
@@ -1563,7 +1552,7 @@ func exSingleScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 }
 
 // exWorkerScan used by parallel scan`
-func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
 	worker := fmt.Sprintf("exWorkerScan: thread %d  totalSegments %d", q.Worker(), q.GetParallel())
 	slog.LogAlert(logid, worker)
@@ -1572,7 +1561,7 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
 		syslog(fmt.Sprintf("%s: restart", worker))
-		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, q.PgStateId(), q.Worker())))
+		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId(), q.Worker())))
 		q.SetRestart(false)
 
 	} else {
@@ -1595,36 +1584,36 @@ func exWorkerScan(ctx context.Context, client DynamodbHandle, q *query.QueryHand
 	}
 	for i, n := range q.GetFilterAttr() {
 		if i == 0 {
-			switch n.ComparOpr() {
-			case query.BEGINSWITH:
+			switch ComparOpr(n.GetOprStr()) {
+			case BEGINSWITH:
 				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
-			case query.GT:
+			case GT:
 				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.LT:
+			case LT:
 				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.EQ:
+			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.NE:
+			case NE:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", n.ComparOpr())))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 
 		} else {
 
-			switch n.ComparOpr() {
-			case query.BEGINSWITH:
+			switch ComparOpr(n.GetOprStr()) {
+			case BEGINSWITH:
 				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
-			case query.GT:
+			case GT:
 				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.LT:
+			case LT:
 				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.EQ:
+			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case query.NE:
+			case NE:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", n.ComparOpr())))
+				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 			//flt = flt.And(f)
 			switch n.BoolCd() {
@@ -1758,7 +1747,7 @@ func stringifyPgState(d map[string]types.AttributeValue) string {
 	return lek.String()
 }
 
-func savePgState(ctx context.Context, client DynamodbHandle, id uuid.UID, val string, worker ...int) error {
+func savePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val string, worker ...int) error {
 
 	var state string = "LastEvaluatedKey"
 
@@ -1778,7 +1767,7 @@ func savePgState(ctx context.Context, client DynamodbHandle, id uuid.UID, val st
 
 }
 
-func getPgState(ctx context.Context, id uuid.UID, worker ...int) string {
+func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker ...int) string {
 
 	var state string = "LastEvaluatedKey"
 
@@ -1793,10 +1782,10 @@ func getPgState(ctx context.Context, id uuid.UID, worker ...int) string {
 	}
 	var val Val
 
-	q := query.New("pgState", "getPgState")
+	q := query.New2("getPgState", "pgState")
 	q.Select(&val).Key("Id", id).Key("Name", state)
 
-	err := executeQuery(ctx, q)
+	err := executeQuery(ctx, client, q)
 	if err != nil {
 		panic(err)
 	}

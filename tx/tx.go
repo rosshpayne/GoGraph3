@@ -10,8 +10,10 @@ import (
 	"github.com/GoGraph/db"
 	"github.com/GoGraph/dbs"
 	param "github.com/GoGraph/dygparam"
+	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/uuid"
@@ -60,7 +62,7 @@ type TxHandle struct {
 	TransactionStart time.Time
 	TransactionEnd   time.Time
 	//
-	Err error
+	err []error
 }
 
 func (h *TxHandle) String() string {
@@ -100,7 +102,7 @@ func (h *TxHandle) String() string {
 // write capacity units compared to its transaction equivalent.
 func NewTx(tag string, m ...*mut.Mutation) *TxHandle {
 
-	tx := &TxHandle{Tag: tag, m: new(mut.Mutations), api: db.TransactionAPI, maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
+	tx := &TxHandle{Tag: tag, m: new(mut.Mutations), ctx: context.TODO(), api: db.TransactionAPI, maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
 	if tag == param.StatsSystemTag {
 		tx.admin = true
@@ -156,7 +158,7 @@ func NewSingleContext(ctx context.Context, tag string) *TxHandle {
 // New - default represents standard api
 func New(tag string, m ...*mut.Mutation) *TxHandle {
 
-	tx := &TxHandle{Tag: tag, api: db.StdAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
+	tx := &TxHandle{Tag: tag, api: db.StdAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
 	if tag == param.StatsSystemTag {
 		tx.admin = true
@@ -196,7 +198,7 @@ func NewContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 // NewBatch -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
 func NewBatch(tag string, m ...*mut.Mutation) *TxHandle {
 
-	tx := &TxHandle{Tag: tag, api: db.BatchAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
+	tx := &TxHandle{Tag: tag, api: db.BatchAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
 	if tag == param.StatsSystemTag {
 		tx.admin = true
@@ -236,7 +238,7 @@ func NewBatchContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHan
 // NewBatch -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
 func NewOptim(tag string, m ...*mut.Mutation) *TxHandle {
 
-	tx := &TxHandle{Tag: tag, api: db.OptimAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
+	tx := &TxHandle{Tag: tag, api: db.OptimAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
 	return tx.new(m...)
 }
@@ -275,6 +277,8 @@ func (q *TxHandle) GetErrors() []error {
 			}
 		}
 	}
+
+	es = append(es, q.err...)
 
 	return es
 }
@@ -338,8 +342,19 @@ func (h *TxHandle) MakeBatch() error {
 //
 // ****************************** New Mutation ************************************
 //
+// func (h *TxHandle) NewMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
+// 	m := mut.NewMutation(table, pk, sk, opr)
+// 	h.add(m)
+// 	return m
+// }
 func (h *TxHandle) NewMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
-	m := mut.NewMutation(table, pk, sk, opr)
+	keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
+	m := mut.NewMutation2(table, opr, keys)
+	h.add(m)
+	return m
+}
+func (h *TxHandle) NewMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key) *mut.Mutation {
+	m := mut.NewMutation2(table, opr, keys)
 	h.add(m)
 	return m
 }
@@ -376,6 +391,15 @@ func (h *TxHandle) NewTruncate(tbs []tbl.Name) {
 		h.add(m)
 	}
 
+}
+
+func (h *TxHandle) addErr(err error) {
+	h.err = append(h.err, err)
+}
+
+func (h *TxHandle) SetContext(ctx context.Context) *TxHandle {
+	h.ctx = ctx
+	return h
 }
 
 // func (h *TxHandle) NewBulkInsert(table tbl.Name) *mut.Mutation {
@@ -466,6 +490,16 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 
 	var err error
 
+	if errs := h.GetErrors(); len(errs) > 0 {
+
+		elog.Add("Tx", errs...)
+
+		if len(errs) > 1 {
+			return fmt.Errorf("Error in Tx setup: %w", errs[0])
+		}
+		return fmt.Errorf("Errors in Tx setup (see system log for complete list). First error: %w", errs[0])
+	}
+
 	if h.done {
 		syslog(fmt.Sprintf("Error: transaction %q has already been executed", h.Tag))
 		return fmt.Errorf("Transaction has already been executed.")
@@ -514,136 +548,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 
 }
 
-// ****************************** New Query API ************************************
-
-type QHandle struct {
-	dbHdl              db.Handle            // mysql handle, [default: either, spanner spanner.NewClient, dynamodb dynamodb.New]
-	options            []db.Option          // []db.Option
-	ctx                context.Context      // moved from QueryHandle.ctx. As set in tx.NewQuery*
-	*query.QueryHandle                      // GoGraph query handle - single thread
-	workers            []*query.QueryHandle // GoGraph query handle's for parallel scans - one per parallel thread
-}
-
-func NewQuery(tbln tbl.Name, label string, idx ...tbl.Name) *QHandle {
-	if err := tbl.IsRegistered(tbln); err != nil {
-		panic(err)
-	}
-
-	if len(idx) > 0 {
-		if err := tbl.IsRegistered(idx[0]); err != nil {
-			return nil
-		}
-		return &QHandle{QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
-	}
-	return &QHandle{QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
-}
-
-func NewQuery2(label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
-	if err := tbl.IsRegistered(tbln); err != nil {
-		panic(err)
-	}
-
-	if len(idx) > 0 {
-		if err := tbl.IsRegistered(idx[0]); err != nil {
-			panic(err)
-		}
-		return &QHandle{QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
-	}
-	return &QHandle{QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
-}
-
-func NewQueryContext(ctx context.Context, label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
-	if err := tbl.IsRegistered(tbln); err != nil {
-		panic(err)
-	}
-
-	if len(idx) > 0 {
-		if err := tbl.IsRegistered(idx[0]); err != nil {
-			panic(err)
-		}
-		return &QHandle{ctx: ctx, QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
-	}
-	return &QHandle{ctx: ctx, QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
-}
-
-func (h *QHandle) DB(s string, opt ...db.Option) *QHandle {
-	var err error
-	h.dbHdl, err = db.GetDBHdl(s)
-	if err != nil {
-		panic(err)
-	}
-	h.options = opt
-	return h
-}
-
-func (h *QHandle) Prepare() *QHandle {
-
-	h.SetPrepare()
-	return h
-}
-
-func (h *QHandle) Close() error {
-
-	return h.dbHdl.Close(h.QueryHandle)
-}
-
-//func (h *QHandle) ChanOutput(s interface{}) *QHandle {} // s is a chan ?. Can ChanOutput direct data onto s?
-
-func (h *QHandle) Workers() []*query.QueryHandle {
-
-	//  n workers requires n QueryHandle's
-
-	h.workers = make([]*query.QueryHandle, h.GetParallel())
-
-	r := reflect.ValueOf(h.Fetch()).Elem() // TODO: consider making slice parallel in size when client does
-
-	for i := 0; i < h.GetParallel(); i++ {
-
-		d := h.QueryHandle.Duplicate()
-		d.SetWorderId(i)
-
-		// ptx [][]rec
-		// operation we want to emulate in reflect is select(&[]rec) which will be assigned to q.fetch inteface{}
-		d.SetFetch(r.Index(i).Addr().Interface())
-
-		h.workers[i] = d
-
-	}
-
-	return h.workers
-
-}
-
-func (h *QHandle) Execute(w ...int) error {
-
-	if h.Error() != nil {
-		return h.Error()
-	}
-	// NewQueryContext takes precedence over dbHdl.ctx
-	ctx := h.ctx
-	if ctx == nil {
-		ctx = h.dbHdl.Ctx()
-	}
-
-	switch len(w) {
-	case 0:
-		return h.dbHdl.ExecuteQuery(ctx, h.QueryHandle, h.options...)
-	default:
-		return h.dbHdl.ExecuteQuery(ctx, h.workers[w[0]], h.options...)
-	}
-
-}
-
-// func (h *QHandle) Execute() error {
-// 	// NewQueryContext takes precedence over dbHdl.ctx
-// 	ctx := h.ctx
-// 	if ctx == nil {
-// 		ctx = h.dbHdl.Ctx()
-// 	}
-// 	return h.dbHdl.ExecuteQuery(ctx, h.QueryHandle, h.options...)
-// }
-
-////////////////////////////////////////////////// DML: MergeMutation ////////////
+////////////////////  MergeMutation. /////////////////////////
 
 func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *TxHandle {
 
@@ -651,6 +556,7 @@ func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut
 	// null source mutation from previous MergeMutation
 	h.sm = nil
 	h.am = nil
+
 	// assign active mutation with new mutation and add to active batch
 	if opr == mut.Merge {
 		panic(fmt.Errorf("Merge not supported in a MergeMutation operation. Use Insert, Update or Delete"))
@@ -658,6 +564,69 @@ func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut
 	h.am = mut.NewMutation(table, pk, sk, opr)
 
 	h.sm = h.FindSourceMutation(table, pk, sk)
+	if h.sm == nil {
+		h.add(h.am)
+	}
+
+	return h
+}
+
+func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key) *TxHandle {
+
+	h.mergeMut = true
+	// null source mutation from previous MergeMutation
+	h.sm = nil
+	h.am = nil
+	// assign active mutation with new mutation and add to active batch
+	if opr == mut.Merge {
+		h.addErr(fmt.Errorf("Error in Tx tag %q. Merge not supported in a MergeMutation operation. Use Insert, Update or Delete", h.Tag))
+		return h
+	}
+
+	// validate merge keys with actual table keys
+	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+	if err != nil {
+		h.addErr(fmt.Errorf("Error in finding table keys for table %q: %w", table, err))
+		return h
+	}
+
+	// check tableKeys match merge keys - we need to match all keys to find source mutation
+	if len(keys) != len(tableKeys) {
+		h.addErr(fmt.Errorf("Error in Tx tag %q. Number of keys supplied (%d) do not match number of keys on table (%d)", h.Tag, len(keys), len(tableKeys)))
+		return h
+	}
+	// generate ordered list of merge keys based on table key order. Tablekeys are ordered ie. pk, sk
+	mergeKeys := make([]key.Key, len(keys), len(keys))
+	for i, k := range keys {
+		var found, found2 bool
+		var mean string
+		for _, kk := range tableKeys {
+			if kk == k.Name {
+				found = true
+				mergeKeys[i] = k
+			}
+			if strings.ToUpper(kk) == strings.ToUpper(k.Name) {
+				found2 = true
+				mean = kk
+			}
+			if strings.ToUpper(kk[:len(kk)-1]) == strings.ToUpper(k.Name) {
+				found2 = true
+				mean = kk
+			}
+		}
+		if !found {
+			if found2 {
+				h.addErr(fmt.Errorf("Error in Tx tag %q. Specified merge key %q, is not a key for table %q. Do you mean %q", h.Tag, k.Name, table, mean))
+			} else {
+				h.addErr(fmt.Errorf("Error in Tx tag %q. Specified merge key %q, is not a key for table %q", h.Tag, k.Name, table))
+			}
+			return h
+		}
+	}
+
+	h.am = mut.NewMutation2(table, opr, mergeKeys)
+
+	h.sm = h.FindSourceMutation2(table, mergeKeys)
 	if h.sm == nil {
 		h.add(h.am)
 	}
@@ -679,6 +648,27 @@ func (h *TxHandle) FindSourceMutation(table tbl.Name, pk uuid.UID, sk string) *m
 	return h.m.FindMutation(table, pk, sk)
 }
 
+func (h *TxHandle) FindSourceMutation2(table tbl.Name, keys []key.Key) *mut.Mutation {
+
+	// cycle through batch of mutation batches .
+	for _, bm := range h.batch {
+
+		sm, err := bm.FindMutation2(table, keys)
+		if err != nil {
+			h.addErr(err)
+		}
+		if sm != nil {
+			return sm
+		}
+	}
+	// search active batch if source mutation not found.
+	s, err := h.m.FindMutation2(table, keys)
+	if err != nil {
+		h.addErr(err)
+	}
+	return s
+}
+
 func (h *TxHandle) AddCondition(cond mut.Cond, attr string, value ...interface{}) *TxHandle {
 	if h.sm == nil {
 		h.am.AddCondition(cond, attr, value)
@@ -694,12 +684,21 @@ func (h *TxHandle) AddMember(attr string, value interface{}, opr_ ...mut.MutOpr)
 	// am - active mutation
 	// bm - batch of batch mutations
 	// sm - source mutation
+
+	// abort if tx errors exist
+	if len(h.GetErrors()) > 0 {
+		return h
+	}
 	if !h.mergeMut {
 		panic(fmt.Errorf("tx.AddMember method can only be part of a MergeMutation operation. "))
 	}
-	// no source mutation exists - meaning no mergeMutation requirement
-	if h.sm == nil {
 
+	// no source mutation exists ie. no mergeMutation specified
+	if h.sm == nil {
+		if h.am == nil {
+			h.addErr(fmt.Errorf("AddMember error: h.am is nil"))
+			return h
+		}
 		h.am.AddMember(attr, value, opr_...)
 
 	} else {
@@ -802,6 +801,13 @@ func (h *TxHandle) AddMember(attr string, value interface{}, opr_ ...mut.MutOpr)
 						panic(fmt.Errorf("Expected member operator of Inc, Set, Add, Subtract got %q", opr))
 					}
 				}
+
+			case string:
+
+				if _, ok := value.(string); !ok {
+					panic(fmt.Errorf("AddMember2: Expected string got passed in value of %T", value))
+				}
+				sa[i].Value = value
 
 			case bool:
 
@@ -946,3 +952,138 @@ func (h *TxHandle) AddMember(attr string, value interface{}, opr_ ...mut.MutOpr)
 	}
 	return h
 }
+
+// ****************************** New Query API ************************************
+
+type QHandle struct {
+	dbHdl              db.Handle            // mysql handle, [default: either, spanner spanner.NewClient, dynamodb dynamodb.New]
+	options            []db.Option          // []db.Option
+	ctx                context.Context      // moved from QueryHandle.ctx. As set in tx.NewQuery*
+	*query.QueryHandle                      // GoGraph query handle - single thread
+	workers            []*query.QueryHandle // GoGraph query handle's for parallel scans - one per parallel thread
+}
+
+func NewQuery(tbln tbl.Name, label string, idx ...tbl.Name) *QHandle {
+	// if err := tbl.IsRegistered(tbln); err != nil {
+	// 	panic(err)
+	// }
+
+	if len(idx) > 0 {
+		// if err := tbl.IsRegistered(idx[0]); err != nil {
+		// 	return nil
+		// }
+		return &QHandle{QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
+	}
+	return &QHandle{QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
+}
+
+func NewQuery2(label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
+	// if err := tbl.IsRegistered(tbln); err != nil {
+	// 	panic(err)
+	// }
+
+	if len(idx) > 0 {
+		// if err := tbl.IsRegistered(idx[0]); err != nil {
+		// 	panic(err)
+		// }
+		return &QHandle{QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
+	}
+	return &QHandle{QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
+}
+
+func NewQueryContext(ctx context.Context, label string, tbln tbl.Name, idx ...tbl.Name) *QHandle {
+	// if err := tbl.IsRegistered(tbln); err != nil {
+	// 	panic(err)
+	// }
+
+	if len(idx) > 0 {
+		// if err := tbl.IsRegistered(idx[0]); err != nil {
+		// 	panic(err)
+		// }
+		return &QHandle{ctx: ctx, QueryHandle: query.New(tbln, label, idx[0]), dbHdl: db.GetDefaultDBHdl()}
+	}
+	return &QHandle{ctx: ctx, QueryHandle: query.New(tbln, label), dbHdl: db.GetDefaultDBHdl()}
+}
+
+func (h *QHandle) DB(s string, opt ...db.Option) *QHandle {
+	var err error
+	h.dbHdl, err = db.GetDBHdl(s)
+	if err != nil {
+		panic(err)
+	}
+	h.options = opt
+
+	return h
+}
+
+func (h *QHandle) RetryOp(e error) bool {
+
+	return db.RetryOp(e)
+}
+
+func (h *QHandle) Prepare() *QHandle {
+
+	h.SetPrepare()
+	return h
+}
+
+func (h *QHandle) Close() error {
+
+	return h.dbHdl.Close(h.QueryHandle)
+}
+
+//func (h *QHandle) ChanOutput(s interface{}) *QHandle {} // s is a chan ?. Can ChanOutput direct data onto s?
+
+func (h *QHandle) Workers() []*query.QueryHandle {
+
+	//  n workers requires n QueryHandle's
+
+	h.workers = make([]*query.QueryHandle, h.GetParallel())
+
+	r := reflect.ValueOf(h.Fetch()).Elem() // TODO: consider making slice parallel in size when client does
+
+	for i := 0; i < h.GetParallel(); i++ {
+
+		d := h.QueryHandle.Duplicate()
+		d.SetWorderId(i)
+
+		// ptx [][]rec
+		// operation we want to emulate in reflect is select(&[]rec) which will be assigned to q.fetch inteface{}
+		d.SetFetch(r.Index(i).Addr().Interface())
+
+		h.workers[i] = d
+
+	}
+
+	return h.workers
+
+}
+
+func (h *QHandle) Execute(w ...int) error {
+
+	if h.Error() != nil {
+		return h.Error()
+	}
+	// NewQueryContext takes precedence over dbHdl.ctx
+	ctx := h.ctx
+	if ctx == nil {
+		ctx = h.dbHdl.Ctx()
+	}
+
+	switch len(w) {
+	case 0:
+		return h.dbHdl.ExecuteQuery(ctx, h.QueryHandle, h.options...)
+	default:
+		return h.dbHdl.ExecuteQuery(ctx, h.workers[w[0]], h.options...)
+	}
+
+}
+
+// func (h *QHandle) Execute() error {
+// 	// NewQueryContext takes precedence over dbHdl.ctx
+// 	ctx := h.ctx
+// 	if ctx == nil {
+// 		ctx = h.dbHdl.Ctx()
+// 	}
+// 	return h.dbHdl.ExecuteQuery(ctx, h.QueryHandle, h.options...)
+// }

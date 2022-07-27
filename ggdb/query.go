@@ -7,7 +7,6 @@ import (
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/uuid"
 )
 
@@ -34,7 +33,7 @@ func FetchNodeContext(ctx context.Context, uid uuid.UID, subKey ...string) (blk.
 
 	stx := tx.NewQueryContext(ctx, "FetchNode", tbl.Block)
 
-	stx.Select(&d).Key("PKey", uid).Key("SortK", sortk, query.BEGINSWITH)
+	stx.Select(&d).Key("PKey", uid).Key("SortK", sortk, "BEGINSWITH")
 	if stx.Error() != nil {
 		return nil, err
 	}

@@ -62,9 +62,7 @@ func Report() {
 func PowerOn(ctx context.Context, wps *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 
 	defer wgEnd.Done()
-	//
-	// initialisation
-	//
+
 	stats := make([]interface{}, LIMIT, LIMIT)
 
 	StatCh = make(chan Stat)
@@ -72,7 +70,7 @@ func PowerOn(ctx context.Context, wps *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 	GetCh = make(chan Request)
 	PrintCh = make(chan struct{})
 
-	slog.Log("monitor: ", "Started")
+	slog.LogAlert("monitor", "Started")
 	wps.Done()
 
 	var (
@@ -209,17 +207,15 @@ func PowerOn(ctx context.Context, wps *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 
 		case <-PrintCh:
 
-			fmt.Printf("\n\nmonitor: %#v\n", stats)
 			if len(stats) > DBFetch {
 				if st := stats[DBFetch]; st != nil {
-					fmt.Printf("monitor: %#v\n", *(st.(*Fetch)))
-					slog.Log("monitor: ", fmt.Sprintf("monitor: %#v %#v\n", stats, *(st.(*Fetch))))
+					slog.LogAlert("monitor", fmt.Sprintf("monitor: %#v %#v\n", stats, *(st.(*Fetch))))
 				}
 			}
 
 		case <-ctx.Done():
 
-			slog.Log("monitor: ", "Powering down...")
+			slog.LogAlert("monitor", "Shutdown.")
 			return
 
 		}

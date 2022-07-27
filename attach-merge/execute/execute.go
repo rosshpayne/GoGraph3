@@ -11,7 +11,7 @@ import (
 	"time"
 
 	atds "github.com/GoGraph/attach-merge/ds"
-	"github.com/GoGraph/attach-merge/execute/event"
+	//"github.com/GoGraph/attach-merge/execute/event"
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
 	"github.com/GoGraph/ds"
@@ -19,8 +19,8 @@ import (
 	"github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	mon "github.com/GoGraph/monitor"
-	//"github.com/GoGraph/op"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
@@ -73,36 +73,36 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		t0      time.Time
 		ok      bool
 		op      *AttachOp
-		eAN     *event.AttachNode
+		//		eAN     *event.AttachNode
 	)
 	defer lmtr.EndR()
 	defer wg_.Done()
 
 	// remove following defer as it impacts performance.
 	// log Attach Event via defer
-	defer func() func() {
-		eAN = event.NewAttachNodeContext(ctx, edges[0].Puid, len(edges)) // 0:"EV$event",  1:EV$edge
-		//	eAN.LogStart()
-		return func() {
-			err = eAN.EventCommit(err)
-			if err != nil {
-				panic(err) //TODO: replace panic
-			}
-		}
-	}()()
+	// defer func() func() {
+	// 	eAN = event.NewAttachNodeContext(ctx, edges[0].Puid, len(edges)) // 0:"EV$event",  1:EV$edge
+	// 	//	eAN.LogStart()
+	// 	return func() {
+	// 		err = eAN.EventCommit(err)
+	// 		if err != nil {
+	// 			panic(err) //TODO: replace panic
+	// 		}
+	// 	}
+	// }()()
 
-	// // update state via defer
+	// update state via defer
 	defer func() func() {
 		// ideally op state should be part of edge join commit, but as its in a different database it must be a separate tx.
 		// Two tx are compensated by having the join process check on existence of edge before creating - only for the batch at restart though.
 		oTx := tx.New("op state").DB("mysql-GoGraph")
 		return func() {
-			et := eAN.NewTask("op-StateChange") // EV$task
+			//	et := eAN.NewTask("op-StateChange") // EV$task
 			// Persist state
 			oTx.Add(op.End(err)...) // Edge_Movies
 			err = oTx.Execute()
 			// log finish event
-			et.Finish(err) // 2: "EV$task"
+			//	et.Finish(err) // 2: "EV$task"
 			if err != nil {
 				errlog.Add(logid, fmt.Errorf("Error in execute oTx for attach node operation state: %w ", err))
 			}
@@ -180,10 +180,10 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	// source node type item from cache
 
 	// populate op with first entry in edges in case of an early error
-	op = &AttachOp{Puid: edges[0].Puid, Cuid: edges[0].Cuid, Sortk: edges[0].Sortk, Bid: edges[0].Bid}
+	//	op = &AttachOp{Puid: edges[0].Puid, Cuid: edges[0].Cuid, Sortk: edges[0].Sortk, Bid: edges[0].Bid}
 
 	gc := cache.GetCache()
-	pnd, err := gc.FetchNode(edges[0].Puid, types.GraphSN()+"|A#A#T")
+	pnd, err := gc.FetchNodeContext(ctx, edges[0].Puid, types.GraphSN()+"|A#A#T")
 	if err != nil {
 		handleErr(err)
 		return
@@ -232,7 +232,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		op = &AttachOp{Puid: e.Puid, Cuid: e.Cuid, Sortk: e.Sortk, Bid: e.Bid}
 
 		// all mutations will comprise put/inserts
-		err = AttachEdge(cTx, mt, pnd, uuid.UID(e.Cuid), uuid.UID(e.Puid), e.Sortk, pty, pTySN, checkMode, dip)
+		err = AttachEdge(ctx, cTx, mt, pnd, uuid.UID(e.Cuid), uuid.UID(e.Puid), e.Sortk, pty, pTySN, checkMode, dip)
 		if err != nil {
 			if errors.Is(err, edgeExistsErr) {
 				// database must be Spanner in checkMode. Abort attach process for this parent node.
@@ -271,7 +271,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 
 // sortK is parent's uid-pred to attach child node too. E.g. G#:S (sibling) or G#:F (friend) or A#G#:F It is the parent's attribute to attach the child node.
 // pTy is child type i.e. "Person". This could be derived from child's node cache data.
-func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pUID uuid.UID, sortK string, pty blk.TyAttrBlock, pTySN string, checkMode bool, dip map[string]*blk.DataItem) error {
+func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pUID uuid.UID, sortK string, pty blk.TyAttrBlock, pTySN string, checkMode bool, dip map[string]*blk.DataItem) error {
 	//
 
 	var (
@@ -316,7 +316,7 @@ func AttachEdge(cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pU
 	gc := cache.GetCache()
 	//
 	slog.Log("AttachEdge", fmt.Sprintf("Fetch Child node scalar data for cUID: %s  SortK: [%s]", cUID.Base64(), types.GraphSN()+"|A#A#"))
-	cnd, err := gc.FetchNode(cUID, types.GraphSN()+"|A#A#")
+	cnd, err := gc.FetchNodeContext(ctx, cUID, types.GraphSN()+"|A#A#")
 	if err != nil {
 		err := fmt.Errorf("Error fetching child scalar data: %w", err)
 		errlog.Add(logid, err)
@@ -673,7 +673,14 @@ func propagateMerge(cTx *tx.Handle, ty blk.TyAttrD, pUID uuid.UID, sortK string,
 		// }
 	}
 	//
-	merge := cTx.MergeMutation(tbl.EOP, tUID, sortk, mutop)
+	keys := []key.Key{key.Key{"SortK", sortk}, key.Key{"PKey", tUID}} // correct keys wrong order. Order is corrected in processing.
+	//keys := []key.Key{key.Key{"Sort", sortk}, key.Key{"PKey", tUID}} // incorrect key name. Passed
+	// keys := []key.Key{key.Key{"SortK", sortk}, key.Key{"PKey", sortk}} // incorrect key value. Passed
+	// keys = []key.Key{key.Key{"PKey", sortk}}                           // too few keys. Passed
+	//keys := []key.Key{key.Key{"Sortk", sortk}, key.Key{"PKey", tUID}, key.Key{"Key", tUID}} // too many keys
+	//merge := cTx.MergeMutation(tbl.EOP, tUID, sortk, mutop)
+	merge := cTx.MergeMutation2(tbl.EOP, mutop, keys)
+
 	//merge := cTx.NewInsert(tbl.EOP).AddMember("PKey", tUID).AddMember("SortK", sortk)
 
 	// add condition that detects if item/row already exists. If condition is false ie. item does not exist then condition error is raised.

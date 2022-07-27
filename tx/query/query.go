@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
@@ -11,24 +12,13 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
-type Equality = ComparOpr
-
-type ComparOpr byte
 type ScanOrder int8
 type Orderby int8
 type AccessTy byte
 type BoolCd byte
 
 const (
-	EQ ComparOpr = iota + 1
-	NE
-	GT
-	GE
-	LE
-	LT
-	BEGINSWITH
-	NOT
-	NA
+	NA string = "NA"
 	//
 	ASC     ScanOrder = 0 // default
 	Forward ScanOrder = 0
@@ -51,28 +41,6 @@ const (
 	//
 )
 
-func (c ComparOpr) String() string {
-	switch c {
-	case EQ:
-		return " = "
-	case NE:
-		return " != "
-	case GT:
-		return " > "
-	case GE:
-		return " >= "
-	case LE:
-		return " <= "
-	case LT:
-		return " < "
-	case BEGINSWITH:
-		return "beginsWith("
-	case NOT:
-		return " !"
-	}
-	return "NA"
-}
-
 type Attrty byte
 
 type Label string
@@ -94,7 +62,7 @@ type Attr struct {
 	param  string
 	value  interface{}
 	aty    Attrty // attribute type, e.g. Key, Filter, Fetch
-	eqy    ComparOpr
+	eqy    string
 	boolCd BoolCd // And, Or - appropriate for Filter only.
 }
 
@@ -104,6 +72,8 @@ type orderby struct {
 }
 type QueryHandle struct {
 	Tag string
+	//
+	err error
 	//ctx context.Context
 	//stateId util.UID - id for maintaining state
 	attr     []*Attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
@@ -120,14 +90,12 @@ type QueryHandle struct {
 	//
 	scan bool // NewScan specified
 	//
-	keycnt int
-	pk     string
-	sk     string
+	// pk     string
+	// sk     string
 	//	orderby  string
 	so       ScanOrder
 	orderBy  orderby
-	accessTy AccessTy
-	err      error
+	accessTy AccessTy // TODO: remove
 	// select() handlers
 	fetch   interface{} // used in Dynamodb Select()
 	select_ bool        // indicates Select() has been executed. Catches cases when Select() specified more than once.
@@ -165,6 +133,10 @@ func New2(label string, tbl tbl.Name, idx ...tbl.Name) *QueryHandle {
 // 	return &QueryHandle{Tag: label, ctx: ctx, tbl: tbl, accessTy: Null, css: true}
 // }
 
+// func (q *QueryHandle) SetDB(d driver.Handle) {
+// 	q.dbh = d
+// }
+
 func (q *QueryHandle) Duplicate() *QueryHandle {
 	d := QueryHandle{}
 	d.Tag = q.Tag
@@ -180,9 +152,8 @@ func (q *QueryHandle) Duplicate() *QueryHandle {
 	//
 	d.scan = q.scan
 	//
-	d.keycnt = q.keycnt
-	d.pk = q.pk
-	d.sk = q.sk
+	// d.pk = q.pk
+	// d.sk = q.sk
 	//	orderby  string
 	d.so = q.so
 	d.accessTy = q.accessTy
@@ -208,7 +179,7 @@ func (q *QueryHandle) qh() {}
 // Reset nullifies certain data after a prepared stmt execution, for later reprocessing
 func (q *QueryHandle) Reset() {
 	q.attr = nil
-	q.pk, q.sk = "", ""
+	//	q.pk, q.sk = "", ""
 }
 
 func (q *QueryHandle) Error() error {
@@ -247,12 +218,12 @@ func (q *QueryHandle) GetTag() string {
 	return q.Tag
 }
 
-func (q *QueryHandle) GetTable() tbl.Name {
-	return q.tbl
+func (q *QueryHandle) GetTable() string {
+	return string(q.tbl)
 }
 
-func (q *QueryHandle) GetTableName() tbl.Name {
-	return q.tbl
+func (q *QueryHandle) GetTableName() string {
+	return string(q.tbl)
 }
 
 func (q *QueryHandle) IndexSpecified() bool {
@@ -271,15 +242,15 @@ func (q *QueryHandle) GetParallel() int {
 	return q.parallel
 }
 
-func (q *QueryHandle) SKset() bool {
-	return len(q.sk) > 0
-}
-func (q *QueryHandle) GetIndex() tbl.Name {
-	return q.idx
+// func (q *QueryHandle) SKset() bool {
+// 	return len(q.sk) > 0
+// }
+func (q *QueryHandle) GetIndex() string {
+	return string(q.idx)
 }
 
-func (q *QueryHandle) GetIndexName() tbl.Name {
-	return q.idx
+func (q *QueryHandle) GetIndexName() string {
+	return string(q.idx)
 }
 
 func (q *QueryHandle) IsScanASCSet() bool {
@@ -306,10 +277,6 @@ func (q *QueryHandle) GetLimit() int {
 	return q.limit
 }
 
-func (q *QueryHandle) KeyCnt() int {
-	return q.keycnt
-}
-
 func (q *QueryHandle) Access() AccessTy {
 	return q.accessTy
 }
@@ -331,17 +298,17 @@ func (q *QueryHandle) SetFetchValue(v reflect.Value) {
 	reflect.ValueOf(q.fetch).Elem().Set(v)
 }
 
-func (q *QueryHandle) GetPkSk() (string, string) {
-	return q.pk, q.sk
-}
+// func (q *QueryHandle) GetPkSk() (string, string) {
+// 	return q.pk, q.sk
+// }
 
-func (q *QueryHandle) GetPK() string {
-	return q.pk
-}
+// func (q *QueryHandle) GetPK() string {
+// 	return q.pk
+// }
 
-func (q *QueryHandle) GetSK() string {
-	return q.sk
-}
+// func (q *QueryHandle) GetSK() string {
+// 	return q.sk
+// }
 
 func (q *QueryHandle) GetKeyValue(n string) interface{} {
 	return q.getValue(IsKey, n)
@@ -358,6 +325,16 @@ func (q *QueryHandle) getValue(t Attrty, n string) interface{} {
 		}
 	}
 	return nil
+}
+
+func (q *QueryHandle) GetKeys() []string {
+	var keys []string
+	for _, v := range q.attr {
+		if v.aty == IsKey {
+			keys = append(keys, v.name)
+		}
+	}
+	return keys
 }
 
 func (q *QueryHandle) SetEOD() {
@@ -437,7 +414,7 @@ func (q *QueryHandle) SetRestart(b bool) {
 // 	return q.varM[key]
 // }
 
-// func (q *QueryHandle) GetComparitor(n string) ComparOpr {
+// func (q *QueryHandle) GetComparitor(n string) string {
 // 	for _, v := range q.attr {
 // 		if v.name == n && v.aty == IsFilter {
 // 			return v.eqy
@@ -481,11 +458,8 @@ func (q *QueryHandle) GetWhereAttrs() []*Attr {
 }
 
 func (a *Attr) GetOprStr() string {
-	return a.eqy.String()
-}
-
-func (a *Attr) ComparOpr() ComparOpr {
-	return a.eqy
+	fmt.Println("GetOprStr: ", strings.ToUpper(a.eqy))
+	return strings.ToUpper(a.eqy)
 }
 
 func (a *Attr) AttrType() Attrty {
@@ -537,74 +511,16 @@ func (q *QueryHandle) Limit(l int) *QueryHandle {
 	return q
 }
 
-func (q *QueryHandle) Key(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+func (q *QueryHandle) Key(a string, v interface{}, e ...string) *QueryHandle {
 	// Input fields are fields used as key for query and filter attribute (when non-key)
 	// all var fields are addrVal fields, ie. return values from db.
-	var pk, sk string
 
-	obj := q.tbl
-	if len(q.idx) > 0 {
-		obj = q.idx
-	}
-
-	pk, sk, _ = tbl.GetKeys(obj)
-	//
-	if a != pk && a != sk {
-		q.err = fmt.Errorf("%q Not a key of %s ", a, obj)
-		return q
-	}
-	q.keycnt++
-	// set query condition
-	eqy := EQ
-	if len(e) > 0 && e[0] != EQ {
+	// delay all validation checks till execute() - as query has no access to db (tried but always run into import cycles which it must based on current design)
+	eqy := "EQ"
+	if len(e) > 0 {
 		eqy = e[0]
-
 	}
-	if a == pk {
-		q.pk = a
-	} else {
-		if a == sk {
-			q.sk = a
-		}
-	}
-	// switch a {
-	// case pk:
-	// 	q.pk = a
-	// 	switch eqy {
 
-	// 	case EQ:
-	// 		if len(sk) == 0 {
-	// 			q.accessTy = GetItem
-	// 		} else {
-	// 			if q.GetComparOpr(sk) == EQ {
-	// 				q.accessTy = GetItem
-	// 			} else {
-	// 				q.accessTy = Query
-	// 			}
-	// 		}
-
-	// 	}
-	// 	if eqy == EQ && len(sk) == 0 {
-	// 		q.accessTy = GetItem
-	// 	} else {
-	// 		if eqy == EQ && len(sk) > 0 {
-	// 			if q.GetComparOpr(sk) == EQ {
-	// 				q.accessTy = GetItem
-	// 			} else {
-	// 				q.accessTy = Query
-	// 			}
-	// 		}
-	// 	}
-
-	// case sk:
-
-	// 	q.sk = a
-	// 	if eqy == EQ && len(pk) > 0 {
-	// 		q.accessTy = Scan
-
-	// 	}
-	// }
-	//
 	at := &Attr{name: a, value: v, aty: IsKey, eqy: eqy}
 	q.attr = append(q.attr, at)
 
@@ -620,15 +536,15 @@ func (q *QueryHandle) PkeyAssigned() bool {
 	return false
 }
 
-func (q *QueryHandle) GetKeyComparOpr(sk string) ComparOpr {
+func (q *QueryHandle) GetKeyComparOpr(sk string) string {
 	return q.getComparOpr(IsKey, sk)
 }
 
-func (q *QueryHandle) GetFilterComparOpr(sk string) ComparOpr {
+func (q *QueryHandle) GetFilterComparOpr(sk string) string {
 	return q.getComparOpr(IsFilter, sk)
 }
 
-func (q *QueryHandle) getComparOpr(t Attrty, s string) ComparOpr {
+func (q *QueryHandle) getComparOpr(t Attrty, s string) string {
 	for _, a := range q.attr {
 		if a.name == s && a.aty == t {
 			return a.eqy
@@ -644,9 +560,9 @@ func (q *QueryHandle) Paginate(id uuid.UID, restart bool) *QueryHandle {
 	return q
 }
 
-func (q *QueryHandle) appendFilter(a string, v interface{}, bcd BoolCd, e ...ComparOpr) {
+func (q *QueryHandle) appendFilter(a string, v interface{}, bcd BoolCd, e ...string) {
 
-	eq := EQ
+	eq := "EQ"
 	if len(e) > 0 {
 		eq = e[0]
 	}
@@ -655,7 +571,7 @@ func (q *QueryHandle) appendFilter(a string, v interface{}, bcd BoolCd, e ...Com
 	q.attr = append(q.attr, at)
 
 }
-func (q *QueryHandle) Filter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+func (q *QueryHandle) Filter(a string, v interface{}, e ...string) *QueryHandle {
 
 	var found bool
 
@@ -682,7 +598,7 @@ func (q *QueryHandle) Filter(a string, v interface{}, e ...ComparOpr) *QueryHand
 	return q
 }
 
-func (q *QueryHandle) appendBoolFilter(a string, v interface{}, bcd BoolCd, e ...ComparOpr) *QueryHandle {
+func (q *QueryHandle) appendBoolFilter(a string, v interface{}, bcd BoolCd, e ...string) *QueryHandle {
 
 	var found bool
 
@@ -706,19 +622,19 @@ func (q *QueryHandle) appendBoolFilter(a string, v interface{}, bcd BoolCd, e ..
 	return q
 }
 
-func (q *QueryHandle) AndFilter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+func (q *QueryHandle) AndFilter(a string, v interface{}, e ...string) *QueryHandle {
 	return q.appendBoolFilter(a, v, AND, e...)
 
 }
 
-func (q *QueryHandle) OrFilter(a string, v interface{}, e ...ComparOpr) *QueryHandle {
+func (q *QueryHandle) OrFilter(a string, v interface{}, e ...string) *QueryHandle {
 	return q.appendBoolFilter(a, v, OR, e...)
 }
 
 func (q *QueryHandle) ScanOrder(so ScanOrder) *QueryHandle {
-	if !q.SKset() {
-		panic(fmt.Errorf("When using Sort() a sort key must be specified using Key()"))
-	}
+	// if !q.SKset() {
+	// 	panic(fmt.Errorf("When using Sort() a sort key must be specified using Key()"))
+	// }
 	q.so = so
 	return q
 }
@@ -803,10 +719,10 @@ func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 	return q
 }
 
-func (q *QueryHandle) HasInComparOpr() bool {
+func (q *QueryHandle) HasInstring() bool {
 	for _, v := range q.attr {
 		if v.aty == IsKey {
-			if v.eqy != EQ {
+			if strings.ToUpper(v.eqy) != "EQ" {
 				return false
 			}
 		}

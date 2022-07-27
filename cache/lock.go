@@ -160,32 +160,27 @@ func (g *GraphCache) LockNode(uid uuid.UID) {
 	e.Lock()
 
 }
-func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk ...string) (*NodeCache, error) {
-	return g.FetchForUpdateContext(context.TODO(), uid, sortk...)
+func (g *GraphCache) FetchForUpdate(uid uuid.UID, sortk string, ty ...string) (*NodeCache, error) {
+	return g.FetchForUpdateContext(context.TODO(), uid, sortk, ty...)
 }
 
 // FetchForUpdate is used as a substitute for database lock. Provided all db access is via this API (or similar) then all updates will be serialised preventing
 // mutliple concurrent updates from corrupting each other. It also guarantees consistency between cache and storage copies of the data.
 // FetchForUpdate performs a Query so returns multiple items. Typically we us this to access all scalar node attribute (e.g. sortk of "A#A#")
 // or all uid-pred and its propagated data (e.g. "A#:G")
-func (g *GraphCache) FetchForUpdateContext(ctx context.Context, uid uuid.UID, sortk ...string) (*NodeCache, error) {
-
-	var sortk_ string
+func (g *GraphCache) FetchForUpdateContext(ctx context.Context, uid uuid.UID, sortk string, ty ...string) (*NodeCache, error) {
 
 	g.Lock()
-	if len(sortk) > 0 {
-		sortk_ = sortk[0]
-	} else {
-		sortk_ = types.GraphSN() + "|A#"
-	}
 	uidb64 := uid.EncodeBase64()
 	e := g.cache[uidb64]
 
 	if e == nil { //|| e.NodeCache == nil || e.NodeCache.m == nil {
-		e = &entry{ready: make(chan struct{})}
+		e = &entry{}
 		g.addNode(uid, e)
 		g.Unlock()
+		// usually perform some IO operation here...now performed in isCached under an entry lock.
 		e.NodeCache = &NodeCache{m: make(map[SortKey]*blk.DataItem), Uid: uid, gc: g}
+		e.ready = make(chan struct{})
 		close(e.ready)
 	} else {
 		// all other threads wait on nonbuffered channel - until it is closed
@@ -200,13 +195,13 @@ func (g *GraphCache) FetchForUpdateContext(ctx context.Context, uid uuid.UID, so
 	// check sortk is cached
 	//
 	en := e.NodeCache
-	if cached, fetch := en.isCached(ctx, sortk_); !cached {
+	if cached, fetch := en.isCached(ctx, sortk, ty...); !cached {
 		var err error
 		switch fetch {
 		case single:
-			err = en.dbFetchItemContext(ctx, sortk_)
+			err = en.dbFetchItemContext(ctx, sortk)
 		case multi:
-			err = en.dbFetchSortKContext(ctx, sortk_)
+			err = en.dbFetchSortKContext(ctx, sortk)
 		}
 		if err != nil {
 			return nil, err
@@ -346,33 +341,38 @@ func (g *GraphCache) FetchForUpdateContext(ctx context.Context, uid uuid.UID, so
 // 	return e.NodeCache, nil
 // }
 
-func (g *GraphCache) FetchNode(uid uuid.UID, sortk ...string) (*NodeCache, error) {
-	return g.FetchNodeContext(context.TODO(), uid, sortk...)
+// ========================== TODO ===============================================
+
+// TODO: FetchNode(uid uuid.UID, sortk string, nTy ...string) (*NodeCache, error) {
+// whre nTy is the "expected" or "known" node type.
+
+// option to specify node type as in most (or a lot) of cases when querying a node the type is known
+// this will save a lookup of the node type in isCached.
+
+func (g *GraphCache) FetchNode(uid uuid.UID, sortk string, ty ...string) (*NodeCache, error) {
+	return g.FetchNodeContext(context.TODO(), uid, sortk, ty...)
 }
 
 // FetchNode complete or a subset of node data (for SORTK value) into cache.
 // Performs lock for sync (shared resource) and transactional perhpas.
 // If cache is already populated with Node data checks SORTK entry exists in cache - if not calls dbFetchSortK().
 // Lock is held long enough to read cached result then unlocked in calling routine.
-func (g *GraphCache) FetchNodeContext(ctx context.Context, uid uuid.UID, sortk ...string) (*NodeCache, error) {
+// ty - node type (short name)
+func (g *GraphCache) FetchNodeContext(ctx context.Context, uid uuid.UID, sortk string, ty ...string) (*NodeCache, error) {
 
 	logid := "FetchNodeContext"
-	var sortk_ string
 	slog.Log(logid, fmt.Sprintf("enter, UID %s, sortk [%s]", uid.Base64(), sortk))
 	g.Lock()
-	if len(sortk) > 0 {
-		sortk_ = sortk[0]
-	} else {
-		sortk_ = types.GraphSN() + "|A#"
-	}
 	uidb64 := uid.EncodeBase64()
 	e := g.cache[uidb64]
 
 	if e == nil { //|| e.NodeCache == nil || e.NodeCache.m == nil {
-		e = &entry{ready: make(chan struct{})}
+		e = &entry{}
 		g.addNode(uid, e)
 		g.Unlock()
+		// usually perform some IO operation here...now performed in isCached under an entry lock.
 		e.NodeCache = &NodeCache{m: make(map[SortKey]*blk.DataItem), Uid: uid, gc: g}
+		e.ready = make(chan struct{})
 		close(e.ready)
 	} else {
 		// all other threads wait on nonbuffered channel - until it is closed
@@ -388,13 +388,13 @@ func (g *GraphCache) FetchNodeContext(ctx context.Context, uid uuid.UID, sortk .
 	// check sortk is cached
 	//
 	en := e.NodeCache
-	if cached, fetch := en.isCached(ctx, sortk_); !cached {
+	if cached, fetch := en.isCached(ctx, sortk, ty...); !cached {
 		var err error
 		switch fetch {
 		case single:
-			err = en.dbFetchItemContext(ctx, sortk_)
+			err = en.dbFetchItemContext(ctx, sortk)
 		case multi:
-			err = en.dbFetchSortKContext(ctx, sortk_)
+			err = en.dbFetchSortKContext(ctx, sortk)
 		}
 		if err != nil {
 			return nil, err
@@ -431,34 +431,62 @@ func (nc *NodeCache) dbFetchSortKContext(ctx context.Context, sortk string) erro
 	if err != nil {
 		return err
 	}
+	slog.LogAlert("dbFetchSortK", fmt.Sprintf("Fetched %d items for %q\n", len(nb), nc.Uid.EncodeBase64()))
 	// add data items to node cache
 	for _, v := range nb {
+		slog.LogAlert("dbFetchSortK", fmt.Sprintf("Add to cache for %q UID: [%s] \n", nc.Uid.EncodeBase64(), v.Sortk))
 		nc.m[v.Sortk] = v
 	}
 
 	return nil
 }
 
-func (nc *NodeCache) isCached(ctx context.Context, sortk string) (bool, byte) {
+// isCached - check if sortk is cached.
+// Node type is required as the type determines the sortk entries for the node to check against
+// Node type, ty (long name) maybe provided in which case it does not need to be sourced from db/cache (GetType())
+func (nc *NodeCache) isCached(ctx context.Context, sortk string, ty ...string) (bool, byte) {
 	// 	return true, single
 	// }
 	logid := "isCached"
-	slog.Log(logid, fmt.Sprintf("enter... sortk: [%s]", sortk))
+	var ty_ string
+	if len(ty) > 0 {
+		ty_ = ty[0]
+	}
+
 	// node type
 	i := strings.Index(sortk, "|") + 1
 	graph := sortk[:i]
 	sortk_ := sortk[i:]
-	slog.Log(logid, fmt.Sprintf("graph: %s", graph))
-	slog.Log(logid, fmt.Sprintf("sortk_: %s", sortk_))
+	slog.Log(logid, fmt.Sprintf("sortk_ : %q", sortk_))
 	if sortk_ == "A#A#T" {
 		if _, ok := nc.m[sortk]; ok {
 			return true, single
 		}
+		if _, ok := nc.m[sortk_]; ok {
+			return true, single
+		}
 		return false, single
 	}
-	// long type name of current node
-	tyN, _ := nc.GetType()
 
+	// check if cache is empty (affects all sortk values)
+	if len(nc.m) == 0 {
+		// specific UID-PRED - A#G#:?",  A#G#:?#"
+		if len(sortk_) > 5 && sortk_[:5] == "A#G#:" && (strings.Count(sortk_, "#") == 2 || strings.Count(sortk_, "#") == 3) {
+			return false, single
+		}
+		// specific single propagation scalar data - A#G#:?#:N"
+		if len(sortk_) >= 5 && sortk_[:5] == "A#G#:" && strings.Count(sortk_, "#") == 3 && strings.Count(sortk_, ":") == 2 {
+			return false, single
+		}
+		slog.Log(logid, fmt.Sprintf("cache is empty return false, multi"))
+		return false, multi
+	}
+	// get node type from argument or query from cache/db.
+	if len(ty) == 0 {
+		// long type name of current node
+		slog.Log(logid, fmt.Sprintf("About to run GetType()"))
+		ty_, _ = nc.GetType()
+	}
 	if sortk_ == "A" || sortk_ == "A#" {
 		// complete node data in partition A - presume this is the first request.
 		slog.Log(logid, "return false, multi")
@@ -468,14 +496,14 @@ func (nc *NodeCache) isCached(ctx context.Context, sortk string) (bool, byte) {
 	// all scalar data in partition A
 	if sortk_ == "A#A" || sortk_ == "A#A#" {
 		cached := true
-		for _, v := range types.GetScalars(tyN, graph+"A#A#:") {
-			//	slog.Log(logid, fmt.Sprintf("*** getScalars : [%s]", v))
+		for _, v := range types.GetScalars(ty_, graph+"A#A#:") {
+			slog.Log(logid, fmt.Sprintf("*** getScalars : [%s]", v))
 			if _, ok := nc.m[v]; !ok {
 				cached = false
 				break
 			}
 		}
-		slog.Log(logid, fmt.Sprintf("return %v %v", cached, multi))
+		slog.Log(logid, fmt.Sprintf("*** getScalars cached %v", cached))
 		return cached, multi
 	}
 
@@ -484,17 +512,14 @@ func (nc *NodeCache) isCached(ctx context.Context, sortk string) (bool, byte) {
 		if _, ok := nc.m[sortk]; ok {
 			return true, single
 		}
-		fmt.Printf("isCached: return single for [%s] %s", sortk, nc.Uid.Base64())
 		return false, single
 	}
 
 	// all single propagation data -"A#G#"
 	if len(sortk_) == 4 && sortk_[:4] == "A#G#" {
 		cached := true
-		slog.Log(logid, fmt.Sprintf("GetSinglePropagatedScalarsAll : %s [%s]", tyN, sortk))
-
-		for _, v := range types.GetSinglePropagatedScalarsAll(tyN, sortk[:4]+":") {
-			slog.Log(logid, fmt.Sprintf("GetSinglePropagatedScalarsAll : %s", v))
+		//slog.Log(logid, fmt.Sprintf("GetSinglePropagatedScalarsAll : %s [%s]", ty_, sortk))
+		for _, v := range types.GetSinglePropagatedScalarsAll(ty_, sortk[:4]+":") {
 			if _, ok := nc.m[v]; !ok {
 				cached = false
 				break
@@ -505,12 +530,11 @@ func (nc *NodeCache) isCached(ctx context.Context, sortk string) (bool, byte) {
 
 	// all single propagation scalar data for specific uid-pred "A#G#:?#"
 	if len(sortk_) >= 4 && sortk_[:4] == "A#G#" && (strings.Count(sortk_, "#") == 2 || strings.Count(sortk_, "#") == 3) {
+
+		cached := true
 		u := strings.Split(sortk, "#")
 		uidpred := u[3][1:]
-		cached := true
-		slog.Log(logid, fmt.Sprintf("GetSinglePropagatedScalars : %s %s [%s]", tyN, uidpred, sortk))
-		for _, v := range types.GetSinglePropagatedScalars(tyN, uidpred, sortk) {
-			slog.Log(logid, fmt.Sprintf("GetSinglePropagatedScalars : %s", v))
+		for _, v := range types.GetSinglePropagatedScalars(ty_, uidpred, sortk) {
 			if _, ok := nc.m[v]; !ok {
 				cached = false
 				break
@@ -541,7 +565,7 @@ func (nc *NodeCache) isCached(ctx context.Context, sortk string) (bool, byte) {
 	// if len(sortk_) >= 5 && sortk_[:5] == "A#G#:" && strings.Count(sortk_, "#") == 5 {
 	// 	uidpred := sortk[strings.Index(sortk, "#:"):]
 	// 	cached := true
-	// 	for _, v := range types.GetDoublePropagatedScalars(tyN, uidpred[2:], sortk) {
+	// 	for _, v := range types.GetDoublePropagatedScalars(ty_, uidpred[2:], sortk) {
 	// 		if _, ok := nc.m[v]; !ok {
 	// 			cached = false
 	// 			break

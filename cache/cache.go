@@ -119,7 +119,7 @@ func (g *GraphCache) addNode(uid uuid.UID, e *entry) {
 
 }
 
-// touchNode records cache activity and maintains anLRU algorithm.
+// touchNode records cache activity and maintains an LRU algorithm.
 // used by addNode to determine which node to remove from cache when it need to purge an entry to maintina a fixed cache size
 // touchNode presumes the calling routine has a current GraphCache.Lock()
 func (g *GraphCache) touchNode(uid uuid.UID, e *entry) {
@@ -138,7 +138,7 @@ func (g *GraphCache) touchNode(uid uuid.UID, e *entry) {
 		return
 	}
 
-	// promote current uid using least number of moves to maintain fixed size cache.
+	// promote current uid using least number of moves to maintain fixed cache size.
 	if float64(idx)/float64(len(g.cNodes)) <= 0.5 {
 		// move bottom up
 		g.cNodes = append(g.cNodes, uidb64)
@@ -1124,6 +1124,33 @@ func (d *NodeCache) GetType() (tyN string, ok bool) {
 
 }
 
+// NewMutation is a helper function to create GoGraph related mutations - for tables registered in tbl package.
+func NewMutation(tab tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
+	var m *mut.Mutation
+	// not all table are represented in the Key table.
+	// Those that are not make use of the IsKey member attribute
+	kpk, ksk, _ := tbl.GetKeys(tab)
+
+	// first two elements of mutations must be a PK and SK or a blank SK "__"
+	switch opr {
+	case mut.Update:
+		m = mut.NewUpdate(tab)
+	case mut.Insert:
+		m = mut.NewInsert(tab)
+	}
+	if len(kpk) > 0 {
+
+		m.AddMember(kpk, []byte(pk), mut.IsKey)
+		if len(ksk) > 0 {
+			m.AddMember(ksk, sk, mut.IsKey)
+		} else {
+			m.AddMember("__", "")
+		}
+	}
+
+	return m
+}
+
 // PropagationTarget determines the target for scalar propagation. It is either the UID-PRED item in the parent block or an overflow
 // batch item in the overflow block.
 // PropagationTarget is responsible for creating the Overflow Block (OBlock) and Overflow Batches (OBatch) which are simply database items
@@ -1173,7 +1200,8 @@ func (pn *NodeCache) PropagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK
 		// entry 2: Nill batch entry - required for Dynamodb to establish List attributes
 		s := batchSortk(id)
 		syslog(fmt.Sprintf("PropagationTarget: create Overflow Batch - sortk %s index %d", s, index))
-		upd := mut.NewMutation(tbl.EOP, oUID, s, mut.Insert)
+
+		upd := NewMutation(tbl.EOP, oUID, s, mut.Insert)
 		upd.AddMember("Nd", nilUID)
 		upd.AddMember("XF", xf)
 		upd.AddMember("ASZ", 0)
@@ -1182,7 +1210,7 @@ func (pn *NodeCache) PropagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK
 		//di.Id[index] += 1
 		//r := mut.IdSet{Value: di.Id}
 		//upd = mut.NewMutation(tbl.EOP, pUID, sortK, r)
-		upd = mut.NewMutation(tbl.EOP, pUID, sortK, mut.Update)
+		upd = NewMutation(tbl.EOP, pUID, sortK, mut.Update)
 		upd.AddMember("Id", di.Id, mut.Set)
 		txh.Add(upd)
 
@@ -1207,7 +1235,7 @@ func (pn *NodeCache) PropagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK
 			m.AddMember("SortK", "OV")
 		}
 		// add oblock to parent UID-PRED, Nd
-		upd := mut.NewMutation(tbl.EOP, pUID, sortK, mut.Update) // update performs append operation based on attribute names
+		upd := NewMutation(tbl.EOP, pUID, sortK, mut.Update)
 		o := make([][]byte, 1, 1)
 		o[0] = oUID
 		x := make([]int64, 1, 1)
@@ -1236,7 +1264,7 @@ func (pn *NodeCache) PropagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK
 		//
 		s := batchSortk(1)
 		syslog(fmt.Sprintf("PropagationTarget: create Overflow Batch - sortk %s index %d", s, index))
-		upd = mut.NewMutation(tbl.EOP, oUID, s, mut.Insert)
+		upd = NewMutation(tbl.EOP, oUID, s, mut.Insert)
 		upd.AddMember("Nd", nilUID)
 		upd.AddMember("XF", xf)
 		upd.AddMember("ASZ", 0)
@@ -1258,7 +1286,7 @@ func (pn *NodeCache) PropagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK
 		if updXF {
 			// s := mut.XFSet{Value: di.XF}
 			// upd := mut.NewMutation(tbl.EOP, pUID, sortK, s)
-			upd := mut.NewMutation(tbl.EOP, pUID, sortK, mut.Update)
+			upd := NewMutation(tbl.EOP, pUID, sortK, mut.Update)
 			upd.AddMember("XF", di.XF, mut.Set)
 			txh.Add(upd)
 		}

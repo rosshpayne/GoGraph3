@@ -28,9 +28,6 @@ const (
 	//
 	Type Name = "GoGraphSS"
 	//
-	// Edge              Name = "Edge_"
-	// EdgeChild         Name = "EdgeChild_"
-	//	Mongr             Name = "mon_gr"
 	Event             Name = "EV$event"
 	TaskEv            Name = "EV$task"
 	RunStat           Name = "runStats"
@@ -71,11 +68,7 @@ func init() {
 		TblName: key{"PKey", "SortK"},
 		Block:   key{"PKey", "SortK"},
 		Type:    key{"PKey", "SortK"},
-		// EOP:        key{"PKey", "SortK"},
-		// NodeScalar: key{"PKey", "SortK"},
 		Event: key{"eid", "id"},
-		// Reverse:    key{"PKey", "SortK"},
-		//State: key{pk: "Name"},
 		State: key{pk: "Id", sk: "Name"},
 	}
 
@@ -91,7 +84,7 @@ func Set(tblname string) {
 	EOP = t
 	NodeScalar = t
 	Reverse = t
-	Register(t, "PKey", "SortK")
+	register(t, "PKey", "SortK")
 }
 
 func SetEdgeNames(g string) (Name, Name) {
@@ -99,12 +92,12 @@ func SetEdgeNames(g string) (Name, Name) {
 	// Regstier tables/indexes
 	//
 	tblEdge = edge + Name(g) + edgePost
-	Register(tblEdge, "Bid", "Puid")
-	RegisterIndex(IdxName("bid_cnt"), Name(tblEdge), "Bid", "Cnt")
+	register(tblEdge, "Bid", "Puid")
+	registerIndex(IdxName("bid_cnt"), Name(tblEdge), "Bid", "Cnt")
 
 	tblEdgeChild = edgeChild + Name(g) + edgePost
-	Register(tblEdgeChild, "Puid", "SortK_Cuid")
-	RegisterIndex(IdxName("status_idx"), Name(tblEdgeChild), "Puid", "Status")
+	register(tblEdgeChild, "Puid", "SortK_Cuid")
+	registerIndex(IdxName("status_idx"), Name(tblEdgeChild), "Puid", "Status")
 
 	return tblEdge, tblEdgeChild
 }
@@ -129,7 +122,7 @@ func KeyCnt(t Name) int {
 
 }
 
-func Register(t Name, pk string, sk ...string) {
+func register(t Name, pk string, sk ...string) {
 	var k key
 	if len(sk) > 0 {
 		k = key{pk, sk[0]} // must be of type util.UID
@@ -141,7 +134,7 @@ func Register(t Name, pk string, sk ...string) {
 	keysync.Unlock()
 }
 
-func RegisterIndex(idx IdxName, t Name, pk string, sk ...string) {
+func registerIndex(idx IdxName, t Name, pk string, sk ...string) {
 	var k key
 	if len(sk) > 0 {
 		k = key{pk, sk[0]} // must be of type util.UID

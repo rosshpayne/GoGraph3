@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	// "github.com/aws/aws-sdk-go/aws"
 	// "github.com/aws/aws-sdk-go/aws/session"
 	// "github.com/aws/aws-sdk-go/service/dynamodb"
@@ -85,7 +86,7 @@ func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...Option) {
 		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}
 
-	dbRegistry[DefaultDB].Handle = DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
+	dbRegistry[DefaultDB].Handle = &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
 
 	// define dbSrv used by db package (dynamodb specific) internals - not ideal solution, would rather
 	// source from dbRegistry but this could be expensive at runtime. This works only because
@@ -100,42 +101,63 @@ func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...Option) {
 	//
 	go throttleSrv.PowerOn(ctx_, &wpStart, ctxEnd, appThrottle)
 
-	syslog(fmt.Sprintf("waiting for db internal service [throttle] to start...."))
+	alertlog(fmt.Sprintf("waiting for db internal service [throttle] to start...."))
 	wpStart.Wait()
-
+	alertlog(fmt.Sprintf("db internal service [throttle] started."))
 }
 
 // Execute dml (see ExecuteQuery). TODO: make prepare a db.Option
-func (h DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api API, prepare bool, opt ...Option) error {
+func (h *DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api API, prepare bool, opt ...Option) error {
 
-	// ctx as set in tx.NewQuery*
 	if ctx == nil {
 		ctx = h.ctx // initiated context
 	}
 	return execute(ctx, h.Client, bs, tag, api, h.cfg, opt...)
 }
 
-func (h DynamodbHandle) ExecuteQuery(ctx context.Context, qh *query.QueryHandle, o ...Option) error {
-
-	return executeQuery(ctx, qh, o...)
+func (h *DynamodbHandle) ExecuteQuery(ctx context.Context, qh *query.QueryHandle, o ...Option) error {
+	if ctx == nil {
+		ctx = h.ctx // initiated context
+	}
+	return executeQuery(ctx, h, qh, o...)
 }
 
-func (h DynamodbHandle) Close(q *query.QueryHandle) error {
+func (h *DynamodbHandle) Close(q *query.QueryHandle) error {
 
 	return nil
 }
 
-func (h DynamodbHandle) Ctx() context.Context {
+func (h *DynamodbHandle) Ctx() context.Context {
 	return h.ctx
 }
 
-func (h DynamodbHandle) CloseTx(m []*mut.Mutations) {}
+func (h *DynamodbHandle) CloseTx(m []*mut.Mutations) {}
 
-func (h DynamodbHandle) String() string {
+func (h *DynamodbHandle) String() string {
 	if dbRegistry[0].Default {
 		return dbRegistry[0].Name + " [default]"
 	} else {
 		return dbRegistry[0].Name + " [not default]"
 	}
+
+}
+
+func (h *DynamodbHandle) GetTableKeys(ctx context.Context, table string) ([]string, error) {
+
+	var pk, sk string
+
+	te, err := tabCache.fetchTableDesc(ctx, h, table)
+	if err != nil {
+		return nil, fmt.Errorf("GetTableKeys() error: %w", err)
+	}
+	for _, v := range te.dto.Table.KeySchema {
+		if v.KeyType == types.KeyTypeHash {
+			pk = *v.AttributeName
+		} else {
+			sk = *v.AttributeName
+		}
+	}
+
+	return []string{pk, sk}, nil
 
 }

@@ -72,8 +72,8 @@ func Get(state string) (string, error) {
 	qtx := tx.NewQuery(tbl.State, "State").DB("mysql-gograph", []db.Option{db.Option{Name: "singlerow", Val: true}}...)
 
 	qtx.Select(result).Key("Name", getState(state))
-	syslog.Log("state", fmt.Sprintf("get state data for %s", getState(state)))
-	fmt.Sprintf("get state data Name =  %q", getState(state))
+
+	syslog.Log("state", fmt.Sprintf("get state data for [%s]", getState(state)))
 
 	err = qtx.Execute()
 	if err != nil {
@@ -94,6 +94,7 @@ func Get(state string) (string, error) {
 		// 	syslog.Log("state: ", fmt.Sprintf("No state data found for %s", getState(state)))
 		// 	return "", err
 		// }
+		syslog.Log("state", fmt.Sprintf("Error [%s]", err))
 		panic(err)
 	}
 	fmt.Println("Rows returned in sate.Get().+++++.")

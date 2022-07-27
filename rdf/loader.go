@@ -123,6 +123,22 @@ func main() { //(f io.Reader) error { // S P O
 	verifyCh = make(chan verifyNd, 3)
 	saveCh = make(chan savePayload, 12)
 
+	// start any syslog services
+	err := slog.Start()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		panic(err)
+	} else {
+		fmt.Println("\n no error ")
+	}
+
+	//
+	f, err := os.Open(*inputFile)
+	if err != nil {
+		fmt.Printf("Error opening file %q, %s", *inputFile, err)
+		return
+	}
+
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -218,22 +234,6 @@ func main() { //(f io.Reader) error { // S P O
 		return
 	}
 	param.Environ = *environ
-
-	// start any syslog services
-	err = slog.Start()
-	if err != nil {
-		fmt.Println("Error: ", err)
-		panic(err)
-	} else {
-		fmt.Println("\n no error ")
-	}
-
-	//
-	f, err := os.Open(*inputFile)
-	if err != nil {
-		fmt.Printf("Error opening file %q, %s", *inputFile, err)
-		return
-	}
 
 	// dump program parameters to syslog
 	syslog(fmt.Sprintf("Argument: table: %s", *tblgraph))

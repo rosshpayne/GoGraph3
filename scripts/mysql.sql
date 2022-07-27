@@ -25,17 +25,39 @@ drop table EdgeChild_Movies;
  
  alter table  EdgeChild_Movies add primary key (Puid, SortK_Cuid);
  
- drop table State$;
- create table State$ (
+ drop table Run$Operation;
+ create table Run$Operation (
  Graph varchar(8) not null,
- Name varchar(80) not null,
- Value varchar(256) not null,
+ TableName varchar(60) not null,
+ Operation varchar(80) not null,
+ Status varchar(256) not null,
  Created DateTime,
  LastUpdated DateTime,
  RunId Binary(16));
  
- alter table State$ add primary key (Graph, Name);
  
+ alter table Run$Operation add primary key (Graph, TableName, Operation);
+ alter table Run$Operation add unique key (RunId);
+ 
+ drop table Run$State;
+ create table Run$State (
+ RunId Binary(16),
+ Name varchar(30) not null, 
+ Value varchar(60) not null, 
+ LastUpdated Date not null);
+ 
+ alter table Run$State add primary key (RunId, Name);
+  
+ drop table Run$Run;
+ create table Run$Run (
+ RunId Binary(16),
+ RunId_ Binary(16),
+ Created Date not null);
+ 
+ alter table Run$Run add primary key (RunId,RunId_);
+  
+  
+  
   # base event related columns
  drop table EV$event;
  create table EV$event (

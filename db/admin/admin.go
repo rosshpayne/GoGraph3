@@ -25,10 +25,10 @@ import (
 	"github.com/GoGraph/tx"
 )
 
-const logid = "dbadmin: "
+const logid = "dbadmin"
 
-func syslog(s string) {
-	slog.Log(logid, s)
+func alertlog(s string) {
+	slog.LogAlert(logid, s)
 }
 
 // type statPK struct {
@@ -63,6 +63,7 @@ func Cancel() {
 }
 
 func Persist() {
+	alertlog("About to persist dynamodb statistics")
 	// stop snapshot save
 	ctxCancel()
 	// wait for snap save goroutine to respond to cancel
@@ -70,6 +71,7 @@ func Persist() {
 	// print and save
 	PrintStats()
 	saveStats()
+	alertlog("dynamodb statistics saved")
 }
 
 func snapStats(ctxSnap context.Context, snapInterval int) {
@@ -77,7 +79,7 @@ func snapStats(ctxSnap context.Context, snapInterval int) {
 	go func() {
 		defer wgSnap.Done()
 
-		slog.Log(logid, "snapStats service started.")
+		alertlog("snapStats service started.")
 		for {
 			select {
 
@@ -85,7 +87,7 @@ func snapStats(ctxSnap context.Context, snapInterval int) {
 				saveStats(false)
 
 			case <-ctxSnap.Done():
-				slog.Log(logid, "snapStats service shutdown.")
+				alertlog("snapStats service shutdown.")
 				return
 			}
 		}
@@ -112,7 +114,7 @@ func saveStats(final_ ...bool) {
 
 	stats.Save.Lock()
 	defer stats.Save.Unlock()
-	slog.Log(logid, "saveStats...")
+	alertlog("saveStats...")
 
 	// default is zero argument for last save (at end of program).
 	if len(final_) == 0 || (len(final_) > 0 && final_[0]) {

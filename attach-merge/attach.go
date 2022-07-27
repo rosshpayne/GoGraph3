@@ -85,6 +85,16 @@ func main() {
 		tstart, tend   time.Time
 		err            error
 	)
+
+	// start any syslog services - dependency on runid
+	err = slog.Start()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		panic(err)
+	} else {
+		fmt.Println("\n no error ")
+	}
+
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -166,15 +176,6 @@ func main() {
 	if err != nil {
 		fmt.Println(fmt.Sprintf("Error in  MakeRunId() : %s", err))
 		return
-	}
-
-	// start any syslog services - dependency on runid
-	err = slog.Start()
-	if err != nil {
-		fmt.Println("Error: ", err)
-		panic(err)
-	} else {
-		fmt.Println("\n no error ")
 	}
 
 	// edgeCh = make(chan *ds.Edge, 20)
@@ -380,7 +381,7 @@ func fetchParentNode(qtx *tx.QHandle) []pNodeBid {
 		// note: Sort for Dynamodb is based on SortKey .. sort(sortOrder)
 		//       Sort for SQL DB is based on attributes in Select.. sortk(sortOrder, col ...cols)
 		// TODO: should each db haave its own tx parser - to cope with what will be a difference Sort()
-		qtx.Select(&result).Key("Bid", bid).Filter("Cnt", 0, query.GT).OrderBy("Cnt", query.Desc) // Sort(query.DESC) //.Consistent(false)
+		qtx.Select(&result).Key("Bid", bid).Filter("Cnt", 0, "GT").OrderBy("Cnt", query.Desc) // Sort(query.DESC) //.Consistent(false)
 
 		err = qtx.Execute()
 		if err != nil && !errors.Is(err, query.NoDataFoundErr) {

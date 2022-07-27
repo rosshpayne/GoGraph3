@@ -1,0 +1,2 @@
+mysql --host=mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com --port=3306 --user=admin --password=gjIe8Hl9SFD1g3ahyu6F --database GoGraph 
+#--init-command="start transaction"

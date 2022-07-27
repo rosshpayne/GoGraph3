@@ -279,23 +279,23 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		defer wgSnap.Done()
 		// wait for grmgr to start for loop
 		wpStart.Wait()
-		slog.Log(logid, "Report-snapshot Powering up...")
+		alertlog("Report-snapshot Powering up...")
 		for {
 			select {
 			case t := <-time.After(time.Duration(snapInterval) * time.Second):
 				snapCh <- t
 			case <-ctxSnap.Done():
-				slog.Log(logid, "Report-snapshot Shutdown.")
+				alertlog("Report-snapshot Shutdown.")
 				return
 			}
 		}
 
 	}()
 
-	slog.Log(logid, "Waiting for gr monitor to start...")
+	alertlog("Waiting for gr monitor to power up...")
 	// wait for snap interrupter to start
 	wgStart.Wait()
-	slog.Log(logid, "Fully powered up...")
+	alertlog("Started.")
 	wpStart.Done()
 
 	for {
@@ -451,21 +451,22 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 		case <-ctx.Done():
 			cancelSnap()
-			slog.Log(param.Logid, "Waiting for snap to shutdown...")
+			alertlog("Waiting for internal snap service to shutdown...")
 			wgSnap.Wait()
-			slog.Log("grmgr: ", fmt.Sprintf("Number of map entries not deleted: %d %d %d ", len(rLimit), len(rCnt), len(rWait)))
+			alertlog("Internal snap service shutdown")
+			alertlog(fmt.Sprintf("Number of map entries not deleted: %d %d %d ", len(rLimit), len(rCnt), len(rWait)))
 			for k, _ := range rLimit {
-				slog.Log("grmgr: ", fmt.Sprintf("rLimit Map Entry: %s", k))
+				alertlog(fmt.Sprintf("rLimit Map Entry: %s", k))
 			}
 			for k, _ := range rCnt {
-				slog.Log("grmgr: ", fmt.Sprintf("rCnt Map Entry: %s", k))
+				alertlog(fmt.Sprintf("rCnt Map Entry: %s", k))
 			}
 			for k, _ := range rWait {
-				slog.Log("grmgr: ", fmt.Sprintf("rWait Map Entry: %s", k))
+				alertlog(fmt.Sprintf("rWait Map Entry: %s", k))
 			}
 			// TODO: Done should be in a separate select. If a request and Done occur simultaneously then go will randomly pick one.
 			// separating them means we have control. Is that the solution. Ideally we should control outside of uuid func().
-			slog.Log(logid, "Shutdown.")
+			alertlog("Shutdown.")
 			return
 
 		}

@@ -61,7 +61,7 @@ func Start() error {
 }
 
 func Stop() {
-	fmt.Println("\nsyslog STOP")
+	Log("syslog", "Shutting down syslog service")
 	wrt.Stop()
 }
 
@@ -76,7 +76,7 @@ func newLogr(prefix string, logType string) *log.Logger {
 	s.WriteByte(':')
 
 	if iow == nil {
-		panic(fmt.Errorf("syslog: syslog.Start() before using syslog"))
+		panic(fmt.Errorf("execute syslog.Start() before using syslog"))
 	}
 
 	logr := log.New(iow, s.String(), logrFlags)

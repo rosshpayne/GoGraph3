@@ -23,6 +23,8 @@ type DBHandle interface {
 	CloseTx([]*mut.Mutations)
 	Ctx() context.Context
 	String() string
+	//
+	GetTableKeys(context.Context, string) ([]string, error)
 }
 
 type RegistryT struct {

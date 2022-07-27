@@ -28,7 +28,7 @@ func (a *AttachOp) Start() []dbs.Mutation {
 //func (a *AttachOp) End(err error) []*mut.Mutation {
 func (a *AttachOp) Update(err error) []dbs.Mutation {
 
-	sk := a.Sortk + "|" + a.Cuid.String()
+	sk := a.Sortk + "|" + string(a.Cuid.EncodeBase64())
 
 	if err != nil {
 
@@ -55,7 +55,7 @@ func (a *AttachOp) Update(err error) []dbs.Mutation {
 //func (a *AttachOp) End(err error) []*mut.Mutation {
 func (a *AttachOp) End(err error) []dbs.Mutation {
 
-	sk := a.Sortk + "|" + a.Cuid.String()
+	sk := a.Sortk + "|" + string(a.Cuid.Base64())
 
 	if err != nil {
 

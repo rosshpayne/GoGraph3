@@ -1,0 +1,18 @@
+Argument: table: GoGraph.sdk2.test-r3
+Argument: batch size: 400
+Argument: stats: 0
+Argument: env: prd
+Argument: debug: 
+Argument: concurrent: 6
+Argument: showsql: 0
+Argument: graph: Movies
+Argument: reduced logging: 1
+Region =  us-east-1
+create new alert logr for prefix:  DB
+*** create new logr for prefix: [DB]
+create new alert logr for prefix:  dbThrottle
+*** create new logr for prefix: [dbThrottle]
+Successfully pinged database..
+create new alert logr for prefix:  main
+*** create new logr for prefix: [main]
+Error in determining load status: "Operation" Not a key of Run$Operation 

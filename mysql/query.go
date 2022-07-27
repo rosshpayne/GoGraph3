@@ -61,6 +61,27 @@ func closePrepStmt(client *sql.DB, q *query.QueryHandle) (err error) {
 	return nil
 }
 
+func sqlOpr(o string) string {
+
+	switch o {
+	case "EQ":
+		return "="
+	case "NE":
+		return "!="
+	case "LE":
+		return "<="
+	case "GE":
+		return ">="
+	case "LT":
+		return "<"
+	case "GT":
+		return ">"
+	case "NOT":
+		return "not"
+	}
+	return o
+}
+
 // executeQuery handles one stmt per tx.NewQuery*()
 // the idea of multiple queries to a tx needs to be considered so tx has []QueryHandle
 func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt ...db.Option) error {
@@ -89,31 +110,39 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 		return fmt.Errorf(fmt.Sprintf("Cannot execute query because of error %s", q.Error()))
 	}
 
+	// validate query metadata in query.QueryHandle
+	err = validateInput(q)
+	if err != nil {
+		return err
+	}
 	// generate SQL statement
 
 	// define projection based on struct passed via Select()
 	s := crProjection(q)
+	fmt.Println("sql: ", s.String())
 
 	s.WriteString(" from ")
 	s.WriteString(string(q.GetTable()))
 	s.WriteString(" where ")
 	//
+	fmt.Println("sql: ", s.String())
 	var whereVals []interface{}
 	wa := len(q.GetWhereAttrs())
 	for i, v := range q.GetWhereAttrs() {
 		s.WriteString(v.Name())
-		s.WriteString(v.GetOprStr())
+		s.WriteString(sqlOpr(v.GetOprStr()))
 		s.WriteByte('?')
 		whereVals = append(whereVals, v.Value())
 		if wa > 0 && i < wa-1 {
 			s.WriteString(" and ")
 		}
 	}
+	fmt.Println("sql: ", s.String())
 	//
 	if q.HasOrderBy() {
 		s.WriteString(q.OrderByString())
 	}
-
+	fmt.Println("sql: ", s.String())
 	if q.Prepare() {
 
 		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))
@@ -197,5 +226,15 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	if q.Prepare() {
 		q.Reset()
 	}
+	return nil
+}
+
+func validateInput(q *query.QueryHandle) error {
+	// validate Keys attributes - TODO implement
+
+	// validate Filter attributes - TODO implement
+
+	// validate Projection attributes- TODO implement
+
 	return nil
 }

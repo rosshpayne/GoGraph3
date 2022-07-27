@@ -14,6 +14,7 @@ import (
 	"github.com/GoGraph/grmgr"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
@@ -73,6 +74,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 
 	var b bool
 
+	syslog(fmt.Sprintf("dp : pUID %s ,   Ty %s  ", pUID.Base64(), ty))
+
 	ty, b = types.GetTyLongNm(ty)
 	if b == false {
 		panic(fmt.Errorf("cache.GetType() errored. Could not find long type name for short name %s", ty))
@@ -90,8 +93,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		psortk := concat(types.GraphSN(), "|A#G#:", v.C)
 		syslog(fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 
-		// fetch cUIDs belonging to the 1:1 UID-PRED on the parent. (Parent: Fm, Person) 1:1 attr is Performance in both cases
-		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk, ty)
+		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
 			if nc != nil {
 				nc.Unlock()
@@ -177,7 +179,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 						}
 						mutdml = mut.Insert
 
-						// process each cuid within embedded and overflow batch
+						// process each cuid within embedded or each overflow batch array
 						// only handle 1:1 attribute types which means only one entity defined in propagated data
 						for _, cuid := range nd {
 
@@ -186,8 +188,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 							// }
 							//fmt.Printf("cuid: %s\n", uuid.UID(cuid).String())
 							// fetch 1:1 node propagated data and assign to pnode
-							// load cache with node's uid-pred and propagated data - only some of which maybe relevant
-							ncc, err := gc.FetchNodeContext(ctx, cuid, types.GraphSN()+"|A#G#", v.Ty)
+							// load cache with node's uid-pred and propagated data
+							ncc, err := gc.FetchNodeContext(ctx, cuid, types.GraphSN()+"|A#G#")
 							if err != nil {
 								if errors.Is(err, NoDataFound) {
 									slog.LogAlert(logid, fmt.Sprintf("DP error: No items found for cUID:  %s, sortk: %s ", cuid, types.GraphSN()+"|A#G#"))
@@ -199,7 +201,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 							}
 							// prevent any async process from purging or modifying the cache
 
-							// fetch propagated scalar data
+							// fetch propagated scalar data from parant's uid-pred child node.
 							for _, t := range types.TypeC.TyC[v.Ty] {
 
 								// ignore scalar attributes and 1:M UID predicates
@@ -223,8 +225,12 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 								// this commened out section populates the Nd values of the child nodes. Not sure what value this is.
 								//
 								sk_ := concat(types.GraphSN(), "|", sk)
+								//
+								// define keys as defined in table. This is checked and changed if necessary in MergeMutation2
+								keys := []key.Key{key.Key{"SortK", psk}, key.Key{"PKey", pUID}}
+
 								for k, m := range ncc.GetMap() {
-									//search for uid-pred entry in cache
+									//search for uid-pred entry in cache - TODO replace loop with map[sortk] access -if k,ok:=ncc.GetMap()[sk_];ok {
 									if k == sk_ {
 										// because of 1:1 there will only be one child uid for uid node.
 										ptxlk.Lock()
@@ -234,7 +240,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 										v := make([][]byte, 1)
 										v[0] = n[0]
 										//fmt.Printf("PromoteUID: %s %s %T [%s] %v \n", psortk+"#"+sk[2:], k, m, n[1], xf[1])
-										merge := ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml)
+										merge := ptx.MergeMutation2(tbl.EOP, mutdml, keys)
 										merge.AddMember("Nd", v).AddMember("XF", xf_) //.AddMember("Id", nl)
 										ptxlk.Unlock()
 									}
@@ -264,7 +270,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 											// rather than a PUT followed by lots of UPDATES.
 											// As all operations are PUTs we can configure TX BATCH operation.
 											// As all operations are PUTs load is idempotent, meaning repeated operations on same Pkey, Sortk is safe.
-
 											ptxlk.Lock()
 											switch t_.DT {
 
@@ -276,7 +281,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 												v[0] = s[0]
 												nv := make([]bool, 1, 1)
 												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
+												//ptx.mMergeMutationContext(tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
+												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LS", v).AddMember("XBl", nv)
 
 											case "I":
 
@@ -285,7 +291,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 												v[0] = s[0]
 												nv := make([]bool, 1, 1)
 												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LI", v).AddMember("XBl", nv)
+												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LI", v).AddMember("XBl", nv)
 
 											case "F":
 												s, bl := m.GetULF()
@@ -293,7 +299,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 												v[0] = s[0]
 												nv := make([]bool, 1, 1)
 												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LF", v).AddMember("XBl", nv)
+												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LF", v).AddMember("XBl", nv)
 
 											case "B":
 												s, bl := m.GetULB()
@@ -301,7 +307,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 												v[0] = s[0]
 												nv := make([]bool, 1, 1)
 												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LB", v).AddMember("XBl", nv)
+												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LB", v).AddMember("XBl", nv)
 
 											case "Bl":
 												s, bl := m.GetULBl()
@@ -309,7 +315,10 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 												v[0] = s[0]
 												nv := make([]bool, 1, 1)
 												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LBl", v).AddMember("XBl", nv)
+												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LBl", v).AddMember("XBl", nv)
+											}
+											if len(ptx.GetErrors()) > 0 {
+												elog.Add(logid, ptx.GetErrors()...)
 											}
 											ptxlk.Unlock()
 										}
@@ -351,26 +360,17 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		elog.Add(logid, fmt.Errorf("DP -  1:1 attribute not found for type %q in node %q ", ty, pUID))
 		return
 	}
+
 	//
-	// post: update IX to Y - TODO incorporate in above ptx not separate as below.
-	//
-	ptx := tx.NewSingle("IXFlag")
 	if err != nil {
+		ptx := tx.NewSingle("IXFlag")
 		// update IX to E (errored) TODO: could create a Remove API
 		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
-		fmt.Printf("x")
-
-	} else {
-		//TODO: implement Remove. In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
-		//syslog(fmt.Sprintf("Propagate: remove IX attribute for %s %s", pUID, ty))
-		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-		fmt.Printf(".")
-	}
-
-	ptx.Execute()
-	if err != nil {
-		if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
-			elog.Add(logid, err)
+		ptx.Execute()
+		if err != nil {
+			if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
+				elog.Add(logid, err)
+			}
 		}
 	}
 	//

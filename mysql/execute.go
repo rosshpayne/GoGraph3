@@ -46,7 +46,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 	add := func(err error) {
 		errs = append(errs, err)
 	}
-
+	fmt.Println("===mysql execute====")
 	mutM = make(map[sqlHashValT]*sql.Stmt)
 
 	// prepare all mutations if tx.prepare() specified
@@ -167,6 +167,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 func genSqlStmt(m *mut.Mutation) sqlStmt {
 
 	sqlstmt := genSQLStatement(m)
+	fmt.Println("mysql sql: ", sqlstmt)
 	//prep.sql = sqlstmt.sql
 	// convert uuid.UID to []byte. TODO: is this necessary?
 	for i, v := range sqlstmt.params {

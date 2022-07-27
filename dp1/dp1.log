@@ -1,0 +1,44 @@
+Argument: table: GoGraph.sdk2.test-r3
+Argument: batch size: 400
+Argument: stats: 0
+Argument: env: prd
+Argument: debug: 
+Argument: concurrent: 6
+Argument: showsql: 0
+Argument: graph: Movies
+Argument: reduced logging: 1
+Region =  us-east-1
+create new alert logr for prefix:  DB
+*** create new logr for prefix: [DB]
+create new alert logr for prefix:  dbThrottle
+*** create new logr for prefix: [dbThrottle]
+Successfully pinged database..
+GraphShortName:  m
+*** create new logr for prefix: [main]
+create new alert logr for prefix:  grmgr
+*** create new logr for prefix: [grmgr]
+create new alert logr for prefix:  errlog
+*** create new logr for prefix: [errlog]
+create new alert logr for prefix:  monitor
+*** create new logr for prefix: [monitor]
+Main ty:  P
+create new alert logr for prefix:  dbadmin
+*** create new logr for prefix: [dbadmin]
+create new alert logr for prefix:  dbFetchItem
+*** create new logr for prefix: [dbFetchItem]
+create new alert logr for prefix:  dp
+*** create new logr for prefix: [dp]
+create new alert logr for prefix:  dbFetchSortK
+*** create new logr for prefix: [dbFetchSortK]
+create new alert logr for prefix:  FetchOvflBatch
+*** create new logr for prefix: [FetchOvflBatch]
+Main ty:  Fm
+create new critical logr for prefix:  DBExecute: 
+*** create new logr for prefix: [DBExecute: ]
+panic: FetchNode error: FetchNode: DB system error in Query of exQuery. operation error DynamoDB: Query, exceeded maximum number of attempts, 3, https response error StatusCode: 500, RequestID: DV8V1T0413G8363OUVR0D6D9RJVV4KQNSO5AEMVJF66Q9ASUAAJG, InternalServerError: Internal server error
+
+goroutine 294673 [running]:
+main.Propagate.func2.1({0x0, 0x0, {0xc000346530, 0x10, 0x10}, 0xc000269e00}, {{0xc00009b580, 0x10}, {0x8819b1, 0x2}, ...})
+	/home/ec2-user/environment/dev/GoGraph/dp1/dp.go:198 +0x1f18
+created by main.Propagate.func2
+	/home/ec2-user/environment/dev/GoGraph/dp1/dp.go:154 +0x1c5
