@@ -66,7 +66,7 @@ func newMySQL(dsn string) (*sql.DB, error) {
 	if err != nil {
 		panic(err.Error()) // TODO: proper error handling
 	}
-	fmt.Println("Successfully pinged database..")
+
 	return mdb, err
 }
 

@@ -114,7 +114,6 @@ func saveStats(final_ ...bool) {
 
 	stats.Save.Lock()
 	defer stats.Save.Unlock()
-	alertlog("saveStats...")
 
 	// default is zero argument for last save (at end of program).
 	if len(final_) == 0 || (len(final_) > 0 && final_[0]) {

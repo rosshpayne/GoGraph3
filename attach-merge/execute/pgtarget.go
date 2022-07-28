@@ -12,6 +12,7 @@ import (
 	param "github.com/GoGraph/dygparam"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
@@ -68,7 +69,9 @@ func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload,
 
 		// update batch Id in parent UID
 		//txh.NewMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember2("Id", di.Id, mut.Set)
-		txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Id", di.Id, mut.Set)
+		keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
+		//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Id", di.Id, mut.Set)
+		txh.MergeMutation2(tbl.EOP, mut.Update, keys).AddMember("Id", di.Id, mut.Set)
 
 		return s
 	}
@@ -94,9 +97,10 @@ func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload,
 		x[0] = blk.OvflBlockUID
 		i := make([]int64, 1, 1)
 		i[0] = 1
-
+		keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
 		// update OUID to parent node's UID-PRED  - note: default operation for update is to append to array types
-		txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Nd", o).AddMember("XF", x).AddMember("Id", i) //.AddMember("N", 1, mut.Inc) only icrement N when adding actual child nodes not overflow blocks
+		//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Nd", o).AddMember("XF", x).AddMember("Id", i) //.AddMember("N", 1, mut.Inc) only icrement N when adding actual child nodes not overflow blocks
+		txh.MergeMutation2(tbl.EOP, mut.Update, keys).AddMember("Nd", o).AddMember("XF", x).AddMember("Id", i) //.AddMember("N", 1, mut.Inc) only icrement N when adding actual child nodes not overflow blocks
 
 		// update cache with overflow block entry to keep state in sync.
 		di.Nd = append(di.Nd, oUID)
@@ -119,7 +123,9 @@ func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload,
 			di.XF[index] = blk.OvflBlockUID
 			// s := mut.XFSet{Value: di.XF}
 			// upd := mut.MergeMutation(tbl.EOP, pUID, sortK, s)
-			txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("XF", di.XF, mut.Set)
+			keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
+			//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("XF", di.XF, mut.Set)
+			txh.MergeMutation2(tbl.EOP, mut.Update, keys).AddMember("XF", di.XF, mut.Set)
 		}
 
 	}

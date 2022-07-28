@@ -410,7 +410,7 @@ func (nc *NodeCache) dbFetchItem(sortk string) error {
 //dbFetchItem loads sortk attribute from database and enters into cache
 func (nc *NodeCache) dbFetchItemContext(ctx context.Context, sortk string) error {
 
-	slog.LogAlert("dbFetchItem", fmt.Sprintf("dbFetchItem for %q UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
+	slog.Log("dbFetchItem", fmt.Sprintf("dbFetchItem for %q UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
 	nb, err := ggdb.FetchNodeItemContext(ctx, nc.Uid, sortk)
 	if err != nil {
 		return err
@@ -426,15 +426,13 @@ func (nc *NodeCache) dbFetchSortK(sortk string) error {
 //dbFetchSortK loads sortk attribute from database and enters into cache
 func (nc *NodeCache) dbFetchSortKContext(ctx context.Context, sortk string) error {
 
-	slog.LogAlert("dbFetchSortK", fmt.Sprintf("dbFetchSortK for %q UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
 	nb, err := ggdb.FetchNodeContext(ctx, nc.Uid, sortk)
 	if err != nil {
 		return err
 	}
-	slog.LogAlert("dbFetchSortK", fmt.Sprintf("Fetched %d items for %q\n", len(nb), nc.Uid.EncodeBase64()))
+	slog.Log("dbFetchSortK", fmt.Sprintf("Fetched %d items for %q\n", len(nb), nc.Uid.EncodeBase64()))
 	// add data items to node cache
 	for _, v := range nb {
-		slog.LogAlert("dbFetchSortK", fmt.Sprintf("Add to cache for %q UID: [%s] \n", nc.Uid.EncodeBase64(), v.Sortk))
 		nc.m[v.Sortk] = v
 	}
 

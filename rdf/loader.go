@@ -166,7 +166,7 @@ func main() { //(f io.Reader) error { // S P O
 			wpEnd.Wait()
 
 			tend := time.Now()
-			syslog(fmt.Sprintf("Terminated.....Duration: %s", tstart.Sub(tend).String()))
+			syslog(fmt.Sprintf("Terminated.....Duration: %s", tend.Sub(tstart).String()))
 			os.Exit(2)
 		}
 	}()

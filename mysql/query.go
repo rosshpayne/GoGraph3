@@ -119,13 +119,11 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 
 	// define projection based on struct passed via Select()
 	s := crProjection(q)
-	fmt.Println("sql: ", s.String())
 
 	s.WriteString(" from ")
 	s.WriteString(string(q.GetTable()))
 	s.WriteString(" where ")
 	//
-	fmt.Println("sql: ", s.String())
 	var whereVals []interface{}
 	wa := len(q.GetWhereAttrs())
 	for i, v := range q.GetWhereAttrs() {
@@ -137,12 +135,10 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 			s.WriteString(" and ")
 		}
 	}
-	fmt.Println("sql: ", s.String())
 	//
 	if q.HasOrderBy() {
 		s.WriteString(q.OrderByString())
 	}
-	fmt.Println("sql: ", s.String())
 	if q.Prepare() {
 
 		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))

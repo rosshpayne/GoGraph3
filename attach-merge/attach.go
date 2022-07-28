@@ -434,7 +434,7 @@ func fetchChildEdges(qtx *tx.QHandle, puid uuid.UID) ([]*ds.Edge, error) {
 		return nil, err
 	}
 
-	slog.LogAlert(logid, fmt.Sprintf("Query returns : %d  for Puid: %s", len(result), puid.Base64()))
+	slog.Log(logid, fmt.Sprintf("Query returns : %d  for Puid: %s", len(result), puid.Base64()))
 
 	// if len(result) == 0 {
 

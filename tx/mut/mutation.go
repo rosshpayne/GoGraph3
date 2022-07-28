@@ -162,7 +162,6 @@ type Mutation struct {
 type Mutations []dbs.Mutation //*Mutation
 
 func (im *Mutations) GetMutation(i int) *Mutation {
-	fmt.Println("GetMutation: len(*im): ", len(*im))
 	return (*im)[i].(*Mutation)
 }
 
@@ -543,12 +542,10 @@ func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.Key) (*Mutation, e
 			for _, attr := range sm.ms {
 
 				// evaluate Partition Key and Sortk types (for DYnamodb these are scalar types, number, string, [])
-				fmt.Printf("k.Name, attr.Name %q %q\n", k.Name, attr.Name)
 				if k.Name != attr.Name {
 					continue
 				}
 
-				fmt.Printf("k.Value.(type) %T\n", k.Value)
 				switch x := k.Value.(type) {
 
 				case int64:
@@ -591,29 +588,22 @@ func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.Key) (*Mutation, e
 						if av, ok := attr.Value.([]uint8); !ok {
 							return nil, fmt.Errorf("find mutation attribute %q. Expected a binary ([]uint8) type but is a %T type", attr.Name, attr.Value)
 						} else if bytes.Equal([]byte(x), []byte(av)) {
-							fmt.Println("r--- matched ----")
 							match++
 						}
 					} else if bytes.Equal([]byte(x), []byte(av)) {
-						fmt.Println("x--- matched ----")
 						match++
 					}
 				}
-				fmt.Println("match len(keys) ", match, len(keys))
 				break
 			}
-			fmt.Println("xx match len(keys) ", match, len(keys))
 			if match == len(keys) {
-				fmt.Println("==== Found original mutation =======")
 				return sm, nil
 			}
 		}
 	}
 
 	if match == len(keys) {
-		fmt.Println("====+ Found original mutation =======")
 		return sm, nil
 	}
-	fmt.Println("++++++ Did not find original mutation =+++++=")
 	return nil, nil
 }

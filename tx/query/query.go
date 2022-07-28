@@ -458,7 +458,6 @@ func (q *QueryHandle) GetWhereAttrs() []*Attr {
 }
 
 func (a *Attr) GetOprStr() string {
-	fmt.Println("GetOprStr: ", strings.ToUpper(a.eqy))
 	return strings.ToUpper(a.eqy)
 }
 

@@ -373,40 +373,32 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, pnd *cach
 		x[0] = blk.ChildUID
 		i := make([]int64, 1, 1)
 		i[0] = 0
+		keys := []key.Key{key.Key{"SortK", sortK}, key.Key{"PKey", pUID}}
 		// this will create an insert mutation if no mutation exists. If mutation exists then member data will be merged (usually appended)into existing mutation member values.
 		// As its an insert the MergeMutation will overwrite the associated item in the db, hence should only be used for initial load unless a read operation is undertaken to load the mutation values.
-		cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("Nd", c).AddMember("XF", x).AddMember("Id", i).AddMember("N", 1, mut.Inc).AddMember("P", types.GraphSN()+"|"+apAttrNm).AddMember("Ty", pTySN)
+		//	cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("Nd", c).AddMember("XF", x).AddMember("Id", i).AddMember("N", 1, mut.Inc).AddMember("P", types.GraphSN()+"|"+apAttrNm).AddMember("Ty", pTySN)
+		cTx.MergeMutation2(tbl.EOP, mutop, keys).AddMember("Nd", c).AddMember("XF", x).AddMember("Id", i).AddMember("N", 1, mut.Inc).AddMember("P", types.GraphSN()+"|"+apAttrNm).AddMember("Ty", pTySN)
+
 		// for spanner, use stdMut of update with Set mutopr for all arrays. mutopr of Set works with dynamodb (stdMut Insert), as it will the value of mutopr is ignored.
 		//	cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("Nd", c,mut.Set).AddMember("XF", x,mut.Set).AddMember("Id", i,mut.Set).AddMember("N", 1, mut.Inc)
 
 	} else {
 
+		keys := []key.Key{key.Key{"SortK", py.Osortk}, key.Key{"PKey", py.TUID}}
+		// in overflow block - special case of tx.Append as it will set XF to OvflItemFull if Nd/XF exceeds  params.OvfwBatchSize  .
+		// propagateTarget() will use OvfwBatchSize to create a new batch next time it is executed.
+		cuid := make([][]byte, 1)
+		cuid[0] = cUID
+		xf := make([]int64, 1)
+		xf[0] = int64(blk.ChildUID)
+
+		// append to overflow batch - ASZ records number of items in overflow batch (max: param.OvfwBatchSize (~300))
+		//cTx.MergeMutation(tbl.EOP, py.TUID, py.Osortk, mutop).AddMember("Nd", cuid).AddMember("XF", xf).AddMember("ASZ", 1, mut.Inc)
+		cTx.MergeMutation2(tbl.EOP, mutop, keys).AddMember("Nd", cuid).AddMember("XF", xf).AddMember("ASZ", 1, mut.Inc)
+
 		// Randomly chooses an overflow block. However before it can choose random it must create a set of overflow blocks
 		// which relies upon an Overflow batch limit being reached and a new batch created.
-		if py.Random {
-
-			// all overflow blocks have been created. randomly select one.
-			c := make([][]byte, 1, 1)
-			c[0] = cUID
-			x := make([]int64, 1, 1)
-			x[0] = blk.ChildUID
-			// again, MergeMutation for Overflow is insert which will overwrite associated pkey,sortk item. This is fine for initial load but cannot be used
-			// for incremental loads as it does not first source from database - TODO: maybe should implement this.
-			cTx.MergeMutation(tbl.EOP, py.TUID, py.Osortk, mutop).AddMember("Nd", c).AddMember("XF", x).AddMember("ASZ", 1, mut.Inc)
-
-			//cTx.MergeMutation(tbl.EOP, py.TUID, py.Osortk, mutop).AddMembers(&<struct>)
-
-		} else {
-
-			// in overflow block - special case of tx.Append as it will set XF to OvflItemFull if Nd/XF exceeds  params.OvfwBatchSize  .
-			// propagateTarget() will use OvfwBatchSize to create a new batch next time it is executed.
-			cuid := make([][]byte, 1)
-			cuid[0] = cUID
-			xf := make([]int64, 1)
-			xf[0] = int64(blk.ChildUID)
-
-			// append to overflow batch - ASZ records number of items in overflow batch (max: param.OvfwBatchSize (~300))
-			cTx.MergeMutation(tbl.EOP, py.TUID, py.Osortk, mutop).AddMember("Nd", cuid).AddMember("XF", xf).AddMember("ASZ", 1, mut.Inc)
+		if !py.Random {
 
 			// update XF flag in parent UID-PRED if overflow batch size exceeds limit. This will result in a new batch being created in propagationTarget().
 			err = checkOBatchSizeLimitReached(cTx, cUID, py)
@@ -414,9 +406,12 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, pnd *cach
 				return err // panic(err)
 			}
 		}
+
+		keys = []key.Key{key.Key{"SortK", sortK}, key.Key{"PKey", pUID}}
 		// increment N in parent UID-PRED, which maintains total of all attached nodes.
 		// Note it is not just the number of elements in the UID-PRED Nd (which could be mantained with ASZ - maybe)
-		cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("N", 1, mut.Inc)
+		//cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("N", 1, mut.Inc)
+		cTx.MergeMutation2(tbl.EOP, mutop, keys).AddMember("N", 1, mut.Inc)
 
 	}
 
