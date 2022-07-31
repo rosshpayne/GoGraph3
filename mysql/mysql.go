@@ -8,6 +8,7 @@ import (
 	"github.com/GoGraph/db"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 
@@ -164,7 +165,7 @@ func (h MySQL) String() string {
 
 }
 
-func (h MySQL) GetTableKeys(ctx context.Context, table string) ([]string, error) {
+func (h MySQL) GetTableKeys(ctx context.Context, table string) ([]key.TableKey, error) {
 	return nil, nil
 }
 

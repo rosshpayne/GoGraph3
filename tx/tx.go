@@ -197,23 +197,10 @@ func NewContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 
 // NewBatch -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
 func NewBatch(tag string, m ...*mut.Mutation) *TxHandle {
-
-	tx := &TxHandle{Tag: tag, api: db.BatchAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
-
-	if tag == param.StatsSystemTag {
-		tx.admin = true
-	}
-	if len(m) > 0 {
-		for _, v := range m {
-			tx.Add(v)
-		}
-	}
-
-	return tx
-
+	return NewBatchContext(context.TODO(), tag, m...)
 }
 
-// NewBatch -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
+// NewBatchContext -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
 func NewBatchContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 
 	if ctx == nil {
@@ -550,6 +537,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 
 ////////////////////  MergeMutation. /////////////////////////
 
+// MergeMutation - deprecate this func. Refers to keys by name and type so is not generic. Use MergeMutation2.
 func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *TxHandle {
 
 	h.mergeMut = true
@@ -571,6 +559,9 @@ func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut
 	return h
 }
 
+// MergeMutation2 will merge the current mutation with a previously defined source mutation based on the table and key(s) values.
+// Array data types will be appended too, and numbers will be driven by mut.MutOpr. Other types will overwrite exising values.
+// Supplied key values will be validated against table definitions.
 func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key) *TxHandle {
 
 	h.mergeMut = true
@@ -595,23 +586,29 @@ func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key
 		h.addErr(fmt.Errorf("Error in Tx tag %q. Number of keys supplied (%d) do not match number of keys on table (%d)", h.Tag, len(keys), len(tableKeys)))
 		return h
 	}
-	// generate ordered list of merge keys based on table key order. Tablekeys are ordered ie. pk, sk
-	mergeKeys := make([]key.Key, len(keys), len(keys))
-	for i, k := range keys {
+	// generate ordered list of merge keys based on table key order and argument keys.
+	mergeKeys := make([]key.MergeKey, len(keys), len(keys))
+
+	// keys are not necessarily correctly ordered as per table definition
+	for _, k := range keys {
 		var found, found2 bool
 		var mean string
-		for _, kk := range tableKeys {
-			if kk == k.Name {
+
+		// tableKeys are correctly ordered based on table def ie. pk, sk
+		for ii, kk := range tableKeys {
+			if kk.Name == k.Name {
 				found = true
-				mergeKeys[i] = k
+				mergeKeys[ii].Name = k.Name
+				mergeKeys[ii].Value = k.Value
+				mergeKeys[ii].DBtype = kk.DBtype
 			}
-			if strings.ToUpper(kk) == strings.ToUpper(k.Name) {
+			if strings.ToUpper(kk.Name) == strings.ToUpper(k.Name) {
 				found2 = true
-				mean = kk
+				mean = kk.Name
 			}
-			if strings.ToUpper(kk[:len(kk)-1]) == strings.ToUpper(k.Name) {
+			if strings.ToUpper(kk.Name[:len(kk.Name)-1]) == strings.ToUpper(k.Name) {
 				found2 = true
-				mean = kk
+				mean = kk.Name
 			}
 		}
 		if !found {
@@ -624,7 +621,7 @@ func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key
 		}
 	}
 
-	h.am = mut.NewMutation2(table, opr, mergeKeys)
+	h.am = mut.NewMutation2(table, opr, keys)
 
 	h.sm = h.FindSourceMutation2(table, mergeKeys)
 	if h.sm == nil {
@@ -648,7 +645,7 @@ func (h *TxHandle) FindSourceMutation(table tbl.Name, pk uuid.UID, sk string) *m
 	return h.m.FindMutation(table, pk, sk)
 }
 
-func (h *TxHandle) FindSourceMutation2(table tbl.Name, keys []key.Key) *mut.Mutation {
+func (h *TxHandle) FindSourceMutation2(table tbl.Name, keys []key.MergeKey) *mut.Mutation {
 
 	// cycle through batch of mutation batches .
 	for _, bm := range h.batch {

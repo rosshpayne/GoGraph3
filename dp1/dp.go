@@ -63,6 +63,11 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return s.String()
 	}
 
+	mergeMutation := func(h *tx.Handle, tbl tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
+		keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
+		return h.MergeMutation2(tbl, opr, keys)
+	}
+
 	var (
 		nc          *cache.NodeCache
 		err         error
@@ -73,8 +78,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 	gc := cache.GetCache()
 
 	var b bool
-
-	syslog(fmt.Sprintf("dp : pUID %s ,   Ty %s  ", pUID.Base64(), ty))
 
 	ty, b = types.GetTyLongNm(ty)
 	if b == false {
@@ -108,8 +111,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 			break
 		}
 
-		// in case of lots of children reaches overflow limit (param: EmbeddedChildNodes) - create a channel for each overflow block so
-		// processing can be conducted concurrently.
+		// in case of lots of children reaches overflow limit (param: EmbeddedChildNodes) - create a channel for each overflow block
 		bChs, err := nc.MakeChannels(psortk)
 		if err != nil {
 			elog.Add(logid, err)
@@ -172,10 +174,10 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 						switch py.Bid {
 						case 0: //embedded
 							nd, _, _ = py.DI.GetNd() // TODO: what about xf - for child node edges that have been soft deleted
-							slog.LogAlert("dp", fmt.Sprintf("About to propagate to embedded pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
+							slog.Log("dp", fmt.Sprintf("About to propagate to embedded pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 						default: // overflow batch
 							nd, _ = py.DI.GetOfNd()
-							slog.LogAlert("dp", fmt.Sprintf("About to propagate to overflow pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
+							slog.Log("dp", fmt.Sprintf("About to propagate to overflow pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 						}
 						mutdml = mut.Insert
 
@@ -226,8 +228,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 								//
 								sk_ := concat(types.GraphSN(), "|", sk)
 								//
-								// define keys as defined in table. This is checked and changed if necessary in MergeMutation2
-								keys := []key.Key{key.Key{"SortK", psk}, key.Key{"PKey", pUID}}
+								// define keys as defined in table. This is checked and changed if necessary in MergeMutation
 
 								for k, m := range ncc.GetMap() {
 									//search for uid-pred entry in cache - TODO replace loop with map[sortk] access -if k,ok:=ncc.GetMap()[sk_];ok {
@@ -240,7 +241,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 										v := make([][]byte, 1)
 										v[0] = n[0]
 										//fmt.Printf("PromoteUID: %s %s %T [%s] %v \n", psortk+"#"+sk[2:], k, m, n[1], xf[1])
-										merge := ptx.MergeMutation2(tbl.EOP, mutdml, keys)
+										merge := mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml)
 										merge.AddMember("Nd", v).AddMember("XF", xf_) //.AddMember("Id", nl)
 										ptxlk.Unlock()
 									}
@@ -254,74 +255,70 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 
 									for k, m := range ncc.GetMap() {
 
-										//fmt.Println("k, compare ", k, compare)
-										if k == compare {
-
-											sk := concat(sk, "#:", t_.C)
-											//fmt.Println("=============== k, compare , sk ", k, compare, sk)
-											switch py.Batch {
-											case 0: // batchId 0 is embedded cuids
-												psk = concat(psortk, "#", sk[2:])
-											default: // overflow
-												psk = concat(psortk, "%", strconv.Itoa(py.Batch), "#", sk[2:])
-											}
-
-											// MergeMutation will combine all operations on PKey, SortK into a single PUT
-											// rather than a PUT followed by lots of UPDATES.
-											// As all operations are PUTs we can configure TX BATCH operation.
-											// As all operations are PUTs load is idempotent, meaning repeated operations on same Pkey, Sortk is safe.
-											ptxlk.Lock()
-											switch t_.DT {
-
-											case "S":
-
-												s, bl := m.GetULS()
-												v := make([]string, 1, 1)
-												// for 1:1 there will only be one entry in []string
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												//ptx.mMergeMutationContext(tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
-												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LS", v).AddMember("XBl", nv)
-
-											case "I":
-
-												s, bl := m.GetULI()
-												v := make([]int64, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LI", v).AddMember("XBl", nv)
-
-											case "F":
-												s, bl := m.GetULF()
-												v := make([]float64, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LF", v).AddMember("XBl", nv)
-
-											case "B":
-												s, bl := m.GetULB()
-												v := make([][]byte, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LB", v).AddMember("XBl", nv)
-
-											case "Bl":
-												s, bl := m.GetULBl()
-												v := make([]bool, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation2(tbl.EOP, mutdml, keys).AddMember("LBl", v).AddMember("XBl", nv)
-											}
-											if len(ptx.GetErrors()) > 0 {
-												elog.Add(logid, ptx.GetErrors()...)
-											}
-											ptxlk.Unlock()
+										if k != compare {
+											continue
 										}
+
+										sk := concat(sk, "#:", t_.C)
+
+										switch py.Batch {
+										case 0: // batchId 0 is embedded cuids
+											psk = concat(psortk, "#", sk[2:])
+										default: // overflow
+											psk = concat(psortk, "%", strconv.Itoa(py.Batch), "#", sk[2:])
+										}
+
+										// MergeMutation will combine all operations on PKey, SortK into a single PUT
+										// rather than a PUT followed by lots of UPDATES.
+										// As all operations are PUTs we can configure TX BATCH operation.
+										// As all operations are PUTs load is idempotent, meaning repeated operations on same Pkey, Sortk is safe.
+										ptxlk.Lock()
+										switch t_.DT {
+
+										case "S":
+
+											s, bl := m.GetULS()
+											v := make([]string, 1, 1)
+											// for 1:1 there will only be one entry in []string
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
+
+										case "I":
+
+											s, bl := m.GetULI()
+											v := make([]int64, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LI", v).AddMember("XBl", nv)
+
+										case "F":
+											s, bl := m.GetULF()
+											v := make([]float64, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LF", v).AddMember("XBl", nv)
+
+										case "B":
+											s, bl := m.GetULB()
+											v := make([][]byte, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LB", v).AddMember("XBl", nv)
+
+										case "Bl":
+											s, bl := m.GetULBl()
+											v := make([]bool, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LBl", v).AddMember("XBl", nv)
+										}
+										ptxlk.Unlock()
 									}
 								}
 							}

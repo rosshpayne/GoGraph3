@@ -175,6 +175,12 @@ func NewInsert(tab tbl.Name) *Mutation {
 
 }
 
+func NewDelete(tab tbl.Name) *Mutation {
+
+	return &Mutation{tbl: tab, opr: Delete}
+
+}
+
 // NewMerge
 // This operation is equivalent in a no-SQL Put operation as put will insert if new or update if present.
 // However for SQL database it will perform an update, if not present, then insert.
@@ -515,7 +521,7 @@ func (bm *Mutations) FindMutation(table tbl.Name, pk uuid.UID, sk string) *Mutat
 }
 
 // FindMutation searches the associated batch of mutations based on argument values.
-func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.Key) (*Mutation, error) {
+func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.MergeKey) (*Mutation, error) {
 	var (
 		ok    bool
 		sm    *Mutation
@@ -549,44 +555,92 @@ func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.Key) (*Mutation, e
 				switch x := k.Value.(type) {
 
 				case int64:
+					if k.DBtype != "N" {
+						switch k.DBtype {
+						case "B":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a binary type, supplied a number type", attr.Name)
+						case "S":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a string type,  supplied a number type", attr.Name)
+						}
+					}
 					if av, ok := attr.Value.(int64); !ok {
-						return nil, fmt.Errorf("find mutation attribute %q. Expected an int64 type but supplied a %T type", attr.Name, attr.Value)
+						return nil, fmt.Errorf("in find mutation attribute %q. Expected an int64 type but supplied a %T type", attr.Name, attr.Value)
 					} else if x == av {
 						match++
 					}
 
 				case int:
+					if k.DBtype != "N" {
+						switch k.DBtype {
+						case "B":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a binary type, supplied a number type", attr.Name)
+						case "S":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a string type,  supplied a number type", attr.Name)
+						}
+					}
 					if av, ok := attr.Value.(int); !ok {
-						return nil, fmt.Errorf("find mutation attribute %q. Expected an int type but supplied a %T type", attr.Name, attr.Value)
+						return nil, fmt.Errorf("in find mutation attribute %q. Expected an int type but supplied a %T type", attr.Name, attr.Value)
 					} else if x == av {
 						match++
 					}
 
 				case float64:
+					if k.DBtype != "N" {
+						switch k.DBtype {
+						case "B":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a binary type, supplied a number type", attr.Name)
+						case "S":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a string type,  supplied a number type", attr.Name)
+						}
+					}
 					if av, ok := attr.Value.(float64); !ok {
-						return nil, fmt.Errorf("find mutation attribute %q. Expected a float64 type but supplied a %T type", attr.Name, attr.Value)
+						return nil, fmt.Errorf("in find mutation attribute %q. Expected a float64 type but supplied a %T type", attr.Name, attr.Value)
 					} else if x == av {
 						match++
 					}
 
 				case string:
+					if k.DBtype != "S" {
+						switch k.DBtype {
+						case "B":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a binary type, supplied a string type", attr.Name)
+						case "N":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a number type, supplied a string type", attr.Name)
+						}
+					}
 					if av, ok := attr.Value.(string); !ok {
-						return nil, fmt.Errorf("find mutation attribute %q. Expected a string type but suppled a %T type", attr.Name, attr.Value)
+						return nil, fmt.Errorf("in find mutation attribute %q. Expected a string type but suppled a %T type", attr.Name, attr.Value)
 					} else if x == av {
 						match++
 					}
 
 				case []byte:
+					if k.DBtype != "B" {
+						switch k.DBtype {
+						case "S":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a string type, supplied a binary type", attr.Name)
+						case "N":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a number type, supplied a binary type", attr.Name)
+						}
+					}
 					if av, ok := attr.Value.([]byte); !ok {
-						return nil, fmt.Errorf("find mutation attribute %q. Expected a binary ([]byte type but is a %T type", attr.Name, attr.Value)
+						return nil, fmt.Errorf("in find mutation attribute %q. Expected a binary ([]byte type but is a %T type", attr.Name, attr.Value)
 					} else if bytes.Equal(x, av) {
 						match++
 					}
 
 				case uuid.UID:
+					if k.DBtype != "B" {
+						switch k.DBtype {
+						case "S":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a string type, supplied a binary type", attr.Name)
+						case "N":
+							return nil, fmt.Errorf("value is of wrong datatype for %q. Expected a number type, supplied a binary type", attr.Name)
+						}
+					}
 					if av, ok := attr.Value.(uuid.UID); !ok {
 						if av, ok := attr.Value.([]uint8); !ok {
-							return nil, fmt.Errorf("find mutation attribute %q. Expected a binary ([]uint8) type but is a %T type", attr.Name, attr.Value)
+							return nil, fmt.Errorf("in find mutation attribute %q. Expected a binary ([]uint8) type but is a %T type", attr.Name, attr.Value)
 						} else if bytes.Equal([]byte(x), []byte(av)) {
 							match++
 						}

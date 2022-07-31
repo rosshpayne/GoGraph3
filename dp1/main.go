@@ -117,6 +117,7 @@ func main() {
 		case <-appSignal:
 			// broadcast kill switch to all context aware goroutines including mysql
 			cancel()
+			syslog(`Terminated....set run status to "S"`)
 			err = setRunStatus(nil, "S", nil)
 			if err != nil {
 				fmt.Printf("Error setting load status: %s\n", err)
@@ -124,7 +125,7 @@ func main() {
 			wpEnd.Wait()
 
 			tend := time.Now()
-			syslog(fmt.Sprintf("Terminated.....Duration: %s", tstart.Sub(tend).String()))
+			syslog(fmt.Sprintf("Terminated.....Duration: %s", tend.Sub(tstart).String()))
 			os.Exit(2)
 		}
 	}()
@@ -238,13 +239,17 @@ func main() {
 				return
 			}
 		}
-		addRun(ctx, stateId, runid)
+		err = addRun(ctx, stateId, runid)
+		if err != nil {
+			elog.Add(fmt.Sprintf("Error in addRun(): %s", err))
+			return
+		}
 	}
 
 	// batch size
 	if batchSize != nil {
-		if *batchSize > 200 {
-			*batchSize = 200
+		if *batchSize > 400 {
+			*batchSize = 400
 		}
 		param.DPbatch = *batchSize
 	}
@@ -315,8 +320,8 @@ func main() {
 	var wgc sync.WaitGroup
 	limiterDP := grmgr.New("dp", *parallel)
 
-	for k, _ := range dpTy {
-		syslog(fmt.Sprintf(" Type containing 1:1 type: %s", k))
+	for k, s := range dpTy {
+		syslog(fmt.Sprintf(" Type containing 1:1 type: %d, %s", k, s))
 	}
 	if len(dpTy) == 0 {
 		syslog(fmt.Sprintf(" No 1:1 Types found"))
@@ -324,7 +329,7 @@ func main() {
 	syslog(fmt.Sprintf("Start double propagation processing...%#v", dpTy))
 
 	if restart {
-		tyState, err = getState(ctx, runid)
+		tyState, err = getState(ctx, stateId)
 		if err != nil {
 			alertlog(fmt.Sprintf("Error in getState(): %s", err))
 			return
@@ -416,7 +421,7 @@ func getRunStatus(ctx context.Context) (string, uuid.UID, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	alertlog(fmt.Sprintln("getRunStatus: run$state - Operation: DP  status: %s   runid: %s", status.Status, uuid.UID(status.RunId).Base64()))
+	alertlog(fmt.Sprintf("getRunStatus: run$state - Operation: DP  status: %s   runid: %s", status.Status, uuid.UID(status.RunId).Base64()))
 	return status.Status, status.RunId, nil
 }
 
@@ -427,12 +432,12 @@ func setRunStatus(ctx context.Context, status string, err_ error, runid ...uuid.
 	if strings.IndexAny(status, "ERSC") == -1 {
 		panic(fmt.Errorf("setRunStatus : value is empty"))
 	}
-	// runid supplied if its the first time - ie. perform an insert
+	// runid supplied if it is the first time - ie. perform an insert
 	switch len(runid) > 0 {
 
 	case true: // first run
 		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
-		m := ftx.NewInsert("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Value", status).AddMember("RunId", runid[0])
+		m := ftx.NewInsert("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("RunId", runid[0])
 		m.AddMember("Created", "$CURRENT_TIMESTAMP$")
 		err = ftx.Execute()
 		if err != nil {
@@ -442,7 +447,7 @@ func setRunStatus(ctx context.Context, status string, err_ error, runid ...uuid.
 	case false: // restart
 		// merge, preserving original runid which also happens to be the stateId used by the tx package for paginated queries.
 		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
-		ftx.NewMerge("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Name", "DP", mut.IsKey).AddMember("Value", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
+		ftx.NewMerge("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
 		err = ftx.Execute()
 		if err != nil {
 			return err
@@ -468,6 +473,7 @@ func getState(ctx context.Context, runid uuid.UID) (string, error) {
 
 	err = ftx.Execute()
 	if err != nil {
+		alertlog(fmt.Sprintf("getState: RunId: %s ", runid.Base64()))
 		return "", err
 	}
 	alertlog(fmt.Sprintf("getState: RunId: %s  TypeName:  %q", runid, status.Value))
@@ -490,9 +496,9 @@ func setState(ctx context.Context, stateId uuid.UID, ty string) error {
 func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 
 	var err error
-	alertlog(fmt.Sprintf("addRun: StateId: %s  RunId:  %q", stateid, runid))
+	alertlog(fmt.Sprintf("addRun: StateId: %s  RunId:  %q", stateid.Base64(), runid.Base64()))
 	ftx := tx.New("addRun").DB("mysql-goGraph")
-	ftx.NewInsert("Run$Run").AddMember("RunId", stateid, mut.IsKey).AddMember("RunId_", runid, mut.IsKey).AddMember("Created", "$CURRENT_TIMESTAMP$")
+	ftx.NewInsert("Run$Run").AddMember("RunId", stateid, mut.IsKey).AddMember("Associated_RunId", runid, mut.IsKey).AddMember("Created", "$CURRENT_TIMESTAMP$")
 	err = ftx.Execute()
 	if err != nil {
 		return err
@@ -530,10 +536,6 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- Scanned, id uuid
 
 	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
 	ptx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart)
-
-	if ptx.Error() != nil {
-		panic(ptx.Error())
-	}
 
 	// paginate() has access to EOD(). EOD should therefore validate Paginate is in use.
 	for !ptx.EOD() {

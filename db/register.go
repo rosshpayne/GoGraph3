@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 )
@@ -24,7 +25,7 @@ type DBHandle interface {
 	Ctx() context.Context
 	String() string
 	//
-	GetTableKeys(context.Context, string) ([]string, error)
+	GetTableKeys(context.Context, string) ([]key.TableKey, error)
 }
 
 type RegistryT struct {

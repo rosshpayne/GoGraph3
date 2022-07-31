@@ -44,17 +44,17 @@ drop table EdgeChild_Movies;
  RunId Binary(16),
  Name varchar(30) not null, 
  Value varchar(60) not null, 
- LastUpdated Date not null);
+ LastUpdated DateTime not null);
  
  alter table Run$State add primary key (RunId, Name);
   
  drop table Run$Run;
  create table Run$Run (
  RunId Binary(16),
- RunId_ Binary(16),
- Created Date not null);
+ Associated_RunId Binary(16),
+ Created DateTime not null);
  
- alter table Run$Run add primary key (RunId,RunId_);
+ alter table Run$Run add primary key (RunId,Associated_RunId);
   
   
   

@@ -18,6 +18,7 @@ import (
 	throttle "github.com/GoGraph/db/internal/throttleSrv"
 	"github.com/GoGraph/db/stats"
 	"github.com/GoGraph/dbs"
+	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/uuid"
 	//"github.com/GoGraph/tbl"
@@ -1165,23 +1166,10 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		//syslog(fmt.Sprintf("exQuery: restart"))
+		slog.LogAlert("exQuery", "restart: retrieve pg state...")
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
 		q.SetRestart(false)
 
-	} else {
-
-		// if we have got here (without error) then we must have successfully processed last batch, so commit its savepoint (lastevaluatedkey)
-		// if we don't get to save this state then the last batch will be reprocessed - as Elasticsearch is idempotent this is not an issue.
-		// saving lastEvaluatedKey minimises the amount of reprocessing in the event of an interruption to the ES load.
-		if len(q.PgStateValS()) > 0 {
-			syslog(fmt.Sprintf("exQuery: load pg state..."))
-			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
-			if err != nil {
-				panic(err)
-			}
-		}
-		syslog(fmt.Sprintf("exQuery: restart false."))
 	}
 
 	switch len(q.GetKeys()) {
@@ -1306,10 +1294,23 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		q.SetPgStateValS("")
 		q.SetPgStateValI(nil)
 		q.SetEOD()
+		// err := deletePgState(ctx, client, q.PgStateId())
+		// if err != nil {
+		// 	elog.Add(fmt.Sprintf("Error in deletePgState: %s", err))
+		// }
 
 	} else {
 
-		syslog(fmt.Sprintf("exQuery: LastEvaluatedKey != 0"))
+		// save old pg state before assigning latest
+		if q.PgStateValI() != nil {
+			slog.LogAlert("exQuery", " save pg state...")
+			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
+			if err != nil {
+				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
+				return err
+			}
+		}
+
 		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 		q.SetPgStateValI(result.LastEvaluatedKey)
 	}
@@ -1386,18 +1387,6 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
 		q.SetRestart(false)
 
-	} else {
-
-		// if we have got here (without error) then we must have successfully processed last batch, so commit its savepoint (lastevaluatedkey)
-		// if we don't get to save this state then the last batch will be reprocessed - as Elasticsearch is idempotent this is not an issue.
-		// saving lastEvaluatedKey minimises the amount of reprocessing in the event of an interruption to the ES load.
-		if len(q.PgStateValS()) > 0 {
-			syslog(fmt.Sprintf("exSingleScan: load pg state..."))
-			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
-			if err != nil {
-				panic(err)
-			}
-		}
 	}
 
 	var flt, f expression.ConditionBuilder
@@ -1506,6 +1495,16 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 	} else {
 
+		// save old pg state before assigning latest
+		if q.PgStateValI() != nil {
+			slog.LogAlert("exQuery", " save pg state...")
+			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
+			if err != nil {
+				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
+				return err
+			}
+		}
+
 		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 		q.SetPgStateValI(result.LastEvaluatedKey)
 	}
@@ -1564,18 +1563,6 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId(), q.Worker())))
 		q.SetRestart(false)
 
-	} else {
-
-		// if we have got here (without error) then we must have successfully processed last batch, so commit its savepoint (lastevaluatedkey)
-		// if we don't get to save this state then the last batch will be reprocessed - as Elasticsearch is idempotent this is not an issue.
-		// saving lastEvaluatedKey minimises the amount of reprocessing in the event of an interruption to the ES load.
-		if len(q.PgStateValS()) > 0 {
-			syslog(fmt.Sprintf("%s: load pg state...", worker))
-			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS(), q.Worker())
-			if err != nil {
-				panic(err)
-			}
-		}
 	}
 
 	var flt, f expression.ConditionBuilder
@@ -1676,6 +1663,16 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 	} else {
 
+		// save old pg state before assigning latest
+		if q.PgStateValI() != nil {
+			slog.LogAlert("exQuery", " save pg state...")
+			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS(), q.Worker())
+			if err != nil {
+				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
+				return err
+			}
+		}
+
 		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 		q.SetPgStateValI(result.LastEvaluatedKey)
 	}
@@ -1747,6 +1744,26 @@ func stringifyPgState(d map[string]types.AttributeValue) string {
 	return lek.String()
 }
 
+func txPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val string, worker ...int) error {
+
+	var state string = "LastEvaluatedKey"
+
+	syslog(fmt.Sprintf("savePgState id: %s ", id.Base64()))
+
+	m := mut.NewInsert("pgState")
+	if len(worker) > 0 {
+		state += "-w" + strconv.Itoa(worker[0])
+	}
+	m.AddMember("Id", id, mut.IsKey).AddMember("Name", state, mut.IsKey).AddMember("Value", val).AddMember("Updated", "$CURRENT_TIMESTAMP$")
+
+	// add single mutation to mulitple-mutation configuration usually performed within a tx.
+	mt := mut.Mutations([]dbs.Mutation{m})
+	bs := []*mut.Mutations{&mt}
+
+	return execTransaction(ctx, client.Client, bs, "internal-state", StdAPI)
+
+}
+
 func savePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val string, worker ...int) error {
 
 	var state string = "LastEvaluatedKey"
@@ -1758,6 +1775,26 @@ func savePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val s
 		state += "-w" + strconv.Itoa(worker[0])
 	}
 	m.AddMember("Id", id, mut.IsKey).AddMember("Name", state, mut.IsKey).AddMember("Value", val).AddMember("Updated", "$CURRENT_TIMESTAMP$")
+
+	// add single mutation to mulitple-mutation configuration usually performed within a tx.
+	mt := mut.Mutations([]dbs.Mutation{m})
+	bs := []*mut.Mutations{&mt}
+
+	return execTransaction(ctx, client.Client, bs, "internal-state", StdAPI)
+
+}
+
+func deletePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker ...int) error {
+
+	var state string = "LastEvaluatedKey"
+
+	syslog(fmt.Sprintf("deletePgState id: %s ", id.Base64()))
+
+	m := mut.NewDelete("pgState")
+	if len(worker) > 0 {
+		state += "-w" + strconv.Itoa(worker[0])
+	}
+	m.AddMember("Id", id, mut.IsKey).AddMember("Name", state, mut.IsKey)
 
 	// add single mutation to mulitple-mutation configuration usually performed within a tx.
 	mt := mut.Mutations([]dbs.Mutation{m})

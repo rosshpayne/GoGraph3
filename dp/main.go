@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -24,7 +25,7 @@ import (
 	"github.com/GoGraph/run"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
+	tx "github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/types"
@@ -34,8 +35,7 @@ import (
 )
 
 const (
-	logid  = param.Logid
-	loadId = "DP Load"
+	logid = param.Logid
 )
 
 var (
@@ -89,6 +89,8 @@ func main() {
 		restart bool
 		ls      string
 		status  string
+
+		tyState string
 	)
 
 	//start syslog services (if any)
@@ -99,6 +101,7 @@ func main() {
 
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// setup concurrent routine to capture OS signals.
 	appSignal := make(chan os.Signal, 3)
@@ -113,11 +116,12 @@ func main() {
 		select {
 		case <-appSignal:
 			// broadcast kill switch to all context aware goroutines including mysql
-			err = setLoadStatus(nil, loadId, "S", nil)
+			cancel()
+			syslog(`Terminated....set run status to "S"`)
+			err = setRunStatus(nil, "S", nil)
 			if err != nil {
 				fmt.Printf("Error setting load status: %s\n", err)
 			}
-			cancel()
 			wpEnd.Wait()
 
 			tend := time.Now()
@@ -130,8 +134,12 @@ func main() {
 	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Init(ctx)
 
-	tbl.Register("pgState", "Id", "Name")
-	tbl.Register("State$", "Graph", "Name")
+	//	tbl.Register("pgState", "Id", "Name")
+	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
+	// TODO: use introspection in dynmaodb so tables do not need to be registered
+	// tbl.Register("Run$Operation", "Graph")
+	// tbl.Register("Run$Run", "RunId")
+	// tbl.Register("Run$State", "RunId")
 
 	param.ReducedLog = false
 	if *reduceLog == 1 {
@@ -172,7 +180,9 @@ func main() {
 		return
 	}
 
-	// create run identifier
+	// each run has its own run identifer which allows each run can to have its own runstats (runid is the key).
+	// The very first run stores the runid as it a stateId, to which all state data is associated for this and all subsequent runs,
+	// until the run is marked as coomplete.
 	runid, err = run.New(logid, "dp")
 	if err != nil {
 		fmt.Println(fmt.Sprintf("Error in  MakeRunId() : %s", err))
@@ -182,26 +192,28 @@ func main() {
 	// set graph and type data
 	err = types.SetGraph(*graph)
 	if err != nil {
-		alertlog(fmt.Sprintf("Error in SetGraph: %s ", err.Error()))
+		syslog(fmt.Sprintf("Error in SetGraph: %s ", err.Error()))
 		fmt.Printf("Error in SetGraph: %s\n", err)
 		return
 	}
-	fmt.Println("GraphShortName: ", types.GraphSN())
+
 	// check state of processing, restart?
-	ls, stateId, err = getLoadStatus(ctx, loadId)
+	ls, stateId, err = getRunStatus(ctx)
 	if err != nil {
 
 		if errors.Is(err, query.NoDataFoundErr) {
 
-			// first time
-			err = setLoadStatus(ctx, loadId, "R", nil, runid)
+			// first run...
+			err = setRunStatus(ctx, "R", nil, runid)
 			if err != nil {
+				alertlog(fmt.Sprintf("Error setting load status: %s\n", err))
 				fmt.Printf("Error setting load status: %s\n", err)
 				return
 			}
 			stateId = runid
 
 		} else {
+			alertlog(fmt.Sprintf("Error in determining load status: %s\n", err))
 			fmt.Printf("Error in determining load status: %s\n", err)
 			return
 		}
@@ -210,28 +222,34 @@ func main() {
 
 		switch ls {
 		case "C":
+			alertlog("Load is already completed. Abort this run.")
 			fmt.Println("Load is already completed. Abort this run.")
 			return
 		case "R":
+			alertlog("Currently loading..aborting this run")
 			fmt.Println("Currently loading..aborting this run")
 			return
 		case "S", "E":
+			alertlog("Previous load errored or was terminated, will now rerun")
 			fmt.Println("Previous load errored or was terminated, will now rerun")
 			restart = true
-			err = setLoadStatus(ctx, loadId, "R", nil)
+			err = setRunStatus(ctx, "R", nil)
 			if err != nil {
 				fmt.Printf("Error setting load status: %s\n", err)
 				return
 			}
 		}
+		err = addRun(ctx, stateId, runid)
+		if err != nil {
+			elog.Add(logid, fmt.Errorf("Error in addRun(): %w", err))
+			return
+		}
 	}
-	fmt.Println(stateId.Base64(), restart)
-	syslog(fmt.Sprintf("runid: %s", runid.Base64()))
 
 	// batch size
 	if batchSize != nil {
-		if *batchSize > 500 {
-			*batchSize = 500
+		if *batchSize > 400 {
+			*batchSize = 400
 		}
 		param.DPbatch = *batchSize
 	}
@@ -248,10 +266,10 @@ func main() {
 
 	syslog(fmt.Sprintf("runid: %v", runid.Base64()))
 
-	if param.DB == param.Dynamodb {
-		// Regstier index
-		tbl.RegisterIndex(tbl.IdxName("TyIX"), tbl.Name("GoGraph"), "Ty", "IX") // Ty prepended with GraphSN()
-	}
+	// if param.DB == param.Dynamodb {
+	// 	// Regstier index
+	// 	tbl.RegisterIndex(tbl.IdxName("TyIX"), tbl.Name("GoGraph"), "Ty", "IX") // Ty prepended with GraphSN()
+	// }
 	//
 	// start services
 	//
@@ -269,10 +287,12 @@ func main() {
 	syslog("All services started. Proceed with attach processing")
 
 	has11 := make(map[string]struct{})
-	dpTy := make(map[string]struct{}) // TODO: why not a []string??
+	var dpTy sort.StringSlice
 
+	// k: type long name, v: block.TyAttrD{}
 	for k, v := range types.TypeC.TyC {
 		for _, vv := range v {
+			// consider uid-pred attributes only
 			if vv.Ty == "" {
 				continue
 			}
@@ -288,52 +308,65 @@ func main() {
 		for _, vv := range v {
 			if _, ok := has11[vv.Ty]; ok {
 				if sn, ok := types.GetTyShortNm(k); ok {
-					dpTy[sn] = struct{}{}
+					dpTy = append(dpTy, sn)
 				}
 			}
 		}
 	}
 
+	// sort types containing 1:1 attributes and dp process in sort order.
+	dpTy.Sort()
+
 	var wgc sync.WaitGroup
-	// channel used to sync DP processing with a new db Fetch. Replaces sleep() wait
-	DPbatchCompleteCh := make(chan struct{})
 	limiterDP := grmgr.New("dp", *parallel)
 
-	for k, _ := range dpTy {
-		syslog(fmt.Sprintf(" Type containing 1:1 type: %s", k))
+	for k, s := range dpTy {
+		syslog(fmt.Sprintf(" Type containing 1:1 type: %d, %s", k, s))
 	}
 	if len(dpTy) == 0 {
 		syslog(fmt.Sprintf(" No 1:1 Types found"))
 	}
 	syslog(fmt.Sprintf("Start double propagation processing...%#v", dpTy))
 
+	if restart {
+		tyState, err = getState(ctx, stateId)
+		if err != nil {
+			alertlog(fmt.Sprintf("Error in getState(): %s", err))
+			return
+		}
+	}
+
 	// allocate cache for node data
 	cache.NewCache()
 
 	tstart = time.Now()
-	time.Sleep(5 * time.Second)
-	for ty, _ := range dpTy {
 
-		ty := ty
+	for _, ty := range dpTy {
+
+		if restart && ty < tyState {
+			continue
+		}
+		if restart && ty > tyState {
+			setState(ctx, stateId, ty)
+		} else if !restart {
+			setState(ctx, stateId, ty)
+		}
+
 		b := 0
 		// loop until channel closed, proceed to next type
-		for n := range FetchNodeCh(ctx, ty, stateId, restart, DPbatchCompleteCh) {
+		for n := range FetchNodeCh(ctx, ty, stateId, restart) {
+
+			pkey := n.PKey
+			ty := n.Ty[strings.Index(n.Ty, "|")+1:]
 			b++
 			wgc.Add(1)
-			n := n
 			limiterDP.Ask()
 			<-limiterDP.RespCh()
 
-			go Propagate(ctx, limiterDP, &wgc, n, ty, has11)
+			go Propagate(ctx, limiterDP, &wgc, pkey, ty, has11)
 
-			if b == param.DPbatch {
-				// finished batch - wait for remaining DPs to finish and alert scanner to fetch next batch
-				wgc.Wait()
-				DPbatchCompleteCh <- struct{}{}
-				b = 0
-			}
 		}
-		// wait got last DP process to complete i.e. run post delete, so it will not be fetched again in FetchNode query.
+		// wait till last DP process is complete
 		wgc.Wait()
 	}
 
@@ -345,7 +378,7 @@ func main() {
 	} else {
 		status = "C"
 	}
-	err = setLoadStatus(ctx, loadId, status, err)
+	err = setRunStatus(ctx, status, err)
 	syslog(fmt.Sprintf("setLoadstatus...."))
 	if err != nil {
 		elog.Add("SetLoadStatus", fmt.Errorf("Error setting load status to %s: %w", status, err))
@@ -370,41 +403,41 @@ func main() {
 
 //type PKey []byte
 
-func getLoadStatus(ctx context.Context, id string) (string, uuid.UID, error) {
+func getRunStatus(ctx context.Context) (string, uuid.UID, error) {
 
 	var err error
 
 	type Status struct {
-		Value string
-		RunId []byte
+		Status string
+		RunId  []byte
 	}
 	var status Status
 	opt := db.Option{Name: "singlerow", Val: true}
 	// check if ES load completed
-	ftx := tx.NewQueryContext(ctx, "GetLoadStatus", "State$").DB("mysql-goGraph", []db.Option{opt}...)
-	ftx.Select(&status).Key("Graph", types.GraphSN()).Key("Name", id) // other values: "E","R"
+	ftx := tx.NewQueryContext(ctx, "GetRunStatus", "Run$Operation").DB("mysql-goGraph", []db.Option{opt}...)
+	ftx.Select(&status).Key("Graph", types.GraphSN()).Key("TableName", *table).Key("Operation", "DP") // other values: "E","R"
 
 	err = ftx.Execute()
 	if err != nil {
 		return "", nil, err
 	}
-	alertlog(fmt.Sprintln("getLoadStatus: STATE$ - Name: [%s] status: %s   runid: %s", id, status.Value, uuid.UID(status.RunId).Base64()))
-	return status.Value, status.RunId, nil
+	alertlog(fmt.Sprintf("getRunStatus: run$state - Operation: DP  status: %s   runid: %s", status.Status, uuid.UID(status.RunId).Base64()))
+	return status.Status, status.RunId, nil
 }
 
-func setLoadStatus(ctx context.Context, id string, status string, err_ error, runid ...uuid.UID) error {
+func setRunStatus(ctx context.Context, status string, err_ error, runid ...uuid.UID) error {
 
 	var err error
 
 	if strings.IndexAny(status, "ERSC") == -1 {
-		panic(fmt.Errorf("setLoadStatus : value is empty"))
+		panic(fmt.Errorf("setRunStatus : value is empty"))
 	}
-	// runid supplied if its the first time - ie. perform an insert
+	// runid supplied if it is the first time - ie. perform an insert
 	switch len(runid) > 0 {
 
 	case true: // first run
-		ftx := tx.New("setLoadStatus").DB("mysql-goGraph")
-		m := ftx.NewInsert("State$").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("Name", id, mut.IsKey).AddMember("Value", status).AddMember("RunId", runid[0])
+		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
+		m := ftx.NewInsert("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("RunId", runid[0])
 		m.AddMember("Created", "$CURRENT_TIMESTAMP$")
 		err = ftx.Execute()
 		if err != nil {
@@ -413,8 +446,8 @@ func setLoadStatus(ctx context.Context, id string, status string, err_ error, ru
 
 	case false: // restart
 		// merge, preserving original runid which also happens to be the stateId used by the tx package for paginated queries.
-		ftx := tx.New("setLoadStatus").DB("mysql-goGraph")
-		ftx.NewMerge("State$").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("Name", id, mut.IsKey).AddMember("Value", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
+		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
+		ftx.NewMerge("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
 		err = ftx.Execute()
 		if err != nil {
 			return err
@@ -425,11 +458,64 @@ func setLoadStatus(ctx context.Context, id string, status string, err_ error, ru
 
 }
 
-func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool, DPbatchCompleteCh <-chan struct{}) <-chan uuid.UID {
+func getState(ctx context.Context, runid uuid.UID) (string, error) {
 
-	dpCh := make(chan uuid.UID)
+	var err error
 
-	go ScanForDPitems(ty, dpCh, DPbatchCompleteCh)
+	type Status struct {
+		Value string
+	}
+	var status Status
+	opt := db.Option{Name: "singlerow", Val: true}
+	// check if ES load completed
+	ftx := tx.NewQueryContext(ctx, "getState", "Run$State").DB("mysql-goGraph", []db.Option{opt}...)
+	ftx.Select(&status).Key("RunId", runid).Key("Name", "Type")
+
+	err = ftx.Execute()
+	if err != nil {
+		alertlog(fmt.Sprintf("getState: RunId: %s ", runid.Base64()))
+		return "", err
+	}
+	alertlog(fmt.Sprintf("getState: RunId: %s  TypeName:  %q", runid, status.Value))
+	return status.Value, nil
+}
+
+func setState(ctx context.Context, stateId uuid.UID, ty string) error {
+
+	var err error
+	alertlog(fmt.Sprintf("setState: RunId: %s  TypeName:  %q", stateId, ty))
+	ftx := tx.New("setState").DB("mysql-goGraph")
+	ftx.NewMerge("Run$State").AddMember("RunId", stateId, mut.IsKey).AddMember("Name", "Type").AddMember("Value", ty).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
+	err = ftx.Execute()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func addRun(ctx context.Context, stateid, runid uuid.UID) error {
+
+	var err error
+	alertlog(fmt.Sprintf("addRun: StateId: %s  RunId:  %q", stateid.Base64(), runid.Base64()))
+	ftx := tx.New("addRun").DB("mysql-goGraph")
+	ftx.NewInsert("Run$Run").AddMember("RunId", stateid, mut.IsKey).AddMember("Associated_RunId", runid, mut.IsKey).AddMember("Created", "$CURRENT_TIMESTAMP$")
+	err = ftx.Execute()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type Scanned struct {
+	PKey uuid.UID
+	Ty   string
+}
+
+func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan Scanned {
+
+	dpCh := make(chan Scanned, 50) // no buffer to reduce likelihood of doube dp processing.
+
+	go ScanForDPitems(ctx, ty, dpCh, stateId, restart)
 
 	return dpCh
 
@@ -441,7 +527,7 @@ type Unprocessed struct {
 type PKey []byte
 
 // ScanForDPitems fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
-func ScanForDPitems(ty string, dpCh chan<- uuid.UID, DPbatchCompleteCh <-chan struct{}) {
+func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- uuid.UID, DPbatchCompleteCh <-chan struct{}) {
 
 	// Option 1: uses an index query. For restartability purposes we mark each processed item, in this case by deleting its IX attribute, which has the
 	//           affect of removing the item from the index. The index therefore will contain only unprocessed items.
@@ -485,9 +571,8 @@ func ScanForDPitems(ty string, dpCh chan<- uuid.UID, DPbatchCompleteCh <-chan st
 
 		rec := []Unprocessed{}
 
-		stx = tx.NewQuery2("dpScan", tbl.Block, "TyIX")
+		stx = tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
 		if err != nil {
-			close(dpCh)
 			elog.Add(logid, err)
 			return
 		}

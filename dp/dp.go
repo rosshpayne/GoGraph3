@@ -14,6 +14,7 @@ import (
 	"github.com/GoGraph/grmgr"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
@@ -62,6 +63,11 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return s.String()
 	}
 
+	mergeMutation := func(h *tx.Handle, tbl tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
+		keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
+		return h.MergeMutation2(tbl, opr, keys)
+	}
+
 	var (
 		nc          *cache.NodeCache
 		err         error
@@ -90,8 +96,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		psortk := concat(types.GraphSN(), "|A#G#:", v.C)
 		syslog(fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 
-		// fetch cUIDs belonging to the 1:1 UID-PRED on the parent. (Parent: Fm, Person) 1:1 attr is Performance in both cases
-		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk, ty)
+		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
 			if nc != nil {
 				nc.Unlock()
@@ -106,8 +111,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 			break
 		}
 
-		// in case of lots of children reaches overflow limit (param: EmbeddedChildNodes) - create a channel for each overflow block so
-		// processing can be conducted concurrently.
+		// in case of lots of children reaches overflow limit (param: EmbeddedChildNodes) - create a channel for each overflow block
 		bChs, err := nc.MakeChannels(psortk)
 		if err != nil {
 			elog.Add(logid, err)
@@ -170,14 +174,14 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 						switch py.Bid {
 						case 0: //embedded
 							nd, _, _ = py.DI.GetNd() // TODO: what about xf - for child node edges that have been soft deleted
-							slog.LogAlert("dp", fmt.Sprintf("About to propagate to embedded pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
+							slog.Log("dp", fmt.Sprintf("About to propagate to embedded pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 						default: // overflow batch
 							nd, _ = py.DI.GetOfNd()
-							slog.LogAlert("dp", fmt.Sprintf("About to propagate to overflow pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
+							slog.Log("dp", fmt.Sprintf("About to propagate to overflow pUID [%s]   Ty %q ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 						}
 						mutdml = mut.Insert
 
-						// process each cuid within embedded and overflow batch
+						// process each cuid within embedded or each overflow batch array
 						// only handle 1:1 attribute types which means only one entity defined in propagated data
 						for _, cuid := range nd {
 
@@ -186,8 +190,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 							// }
 							//fmt.Printf("cuid: %s\n", uuid.UID(cuid).String())
 							// fetch 1:1 node propagated data and assign to pnode
-							// load cache with node's uid-pred and propagated data - only some of which maybe relevant
-							ncc, err := gc.FetchNodeContext(ctx, cuid, types.GraphSN()+"|A#G#", v.Ty)
+							// load cache with node's uid-pred and propagated data
+							ncc, err := gc.FetchNodeContext(ctx, cuid, types.GraphSN()+"|A#G#")
 							if err != nil {
 								if errors.Is(err, NoDataFound) {
 									slog.LogAlert(logid, fmt.Sprintf("DP error: No items found for cUID:  %s, sortk: %s ", cuid, types.GraphSN()+"|A#G#"))
@@ -199,7 +203,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 							}
 							// prevent any async process from purging or modifying the cache
 
-							// fetch propagated scalar data
+							// fetch propagated scalar data from parant's uid-pred child node.
 							for _, t := range types.TypeC.TyC[v.Ty] {
 
 								// ignore scalar attributes and 1:M UID predicates
@@ -223,8 +227,11 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 								// this commened out section populates the Nd values of the child nodes. Not sure what value this is.
 								//
 								sk_ := concat(types.GraphSN(), "|", sk)
+								//
+								// define keys as defined in table. This is checked and changed if necessary in MergeMutation
+
 								for k, m := range ncc.GetMap() {
-									//search for uid-pred entry in cache
+									//search for uid-pred entry in cache - TODO replace loop with map[sortk] access -if k,ok:=ncc.GetMap()[sk_];ok {
 									if k == sk_ {
 										// because of 1:1 there will only be one child uid for uid node.
 										ptxlk.Lock()
@@ -234,7 +241,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 										v := make([][]byte, 1)
 										v[0] = n[0]
 										//fmt.Printf("PromoteUID: %s %s %T [%s] %v \n", psortk+"#"+sk[2:], k, m, n[1], xf[1])
-										merge := ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml)
+										merge := mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml)
 										merge.AddMember("Nd", v).AddMember("XF", xf_) //.AddMember("Id", nl)
 										ptxlk.Unlock()
 									}
@@ -248,71 +255,70 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 
 									for k, m := range ncc.GetMap() {
 
-										//fmt.Println("k, compare ", k, compare)
-										if k == compare {
-
-											sk := concat(sk, "#:", t_.C)
-											//fmt.Println("=============== k, compare , sk ", k, compare, sk)
-											switch py.Batch {
-											case 0: // batchId 0 is embedded cuids
-												psk = concat(psortk, "#", sk[2:])
-											default: // overflow
-												psk = concat(psortk, "%", strconv.Itoa(py.Batch), "#", sk[2:])
-											}
-
-											// MergeMutation will combine all operations on PKey, SortK into a single PUT
-											// rather than a PUT followed by lots of UPDATES.
-											// As all operations are PUTs we can configure TX BATCH operation.
-											// As all operations are PUTs load is idempotent, meaning repeated operations on same Pkey, Sortk is safe.
-
-											ptxlk.Lock()
-											switch t_.DT {
-
-											case "S":
-
-												s, bl := m.GetULS()
-												v := make([]string, 1, 1)
-												// for 1:1 there will only be one entry in []string
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
-
-											case "I":
-
-												s, bl := m.GetULI()
-												v := make([]int64, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LI", v).AddMember("XBl", nv)
-
-											case "F":
-												s, bl := m.GetULF()
-												v := make([]float64, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LF", v).AddMember("XBl", nv)
-
-											case "B":
-												s, bl := m.GetULB()
-												v := make([][]byte, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LB", v).AddMember("XBl", nv)
-
-											case "Bl":
-												s, bl := m.GetULBl()
-												v := make([]bool, 1, 1)
-												v[0] = s[0]
-												nv := make([]bool, 1, 1)
-												nv[0] = bl[0]
-												ptx.MergeMutation(tbl.EOP, pUID, psk, mutdml).AddMember("LBl", v).AddMember("XBl", nv)
-											}
-											ptxlk.Unlock()
+										if k != compare {
+											continue
 										}
+
+										sk := concat(sk, "#:", t_.C)
+
+										switch py.Batch {
+										case 0: // batchId 0 is embedded cuids
+											psk = concat(psortk, "#", sk[2:])
+										default: // overflow
+											psk = concat(psortk, "%", strconv.Itoa(py.Batch), "#", sk[2:])
+										}
+
+										// MergeMutation will combine all operations on PKey, SortK into a single PUT
+										// rather than a PUT followed by lots of UPDATES.
+										// As all operations are PUTs we can configure TX BATCH operation.
+										// As all operations are PUTs load is idempotent, meaning repeated operations on same Pkey, Sortk is safe.
+										ptxlk.Lock()
+										switch t_.DT {
+
+										case "S":
+
+											s, bl := m.GetULS()
+											v := make([]string, 1, 1)
+											// for 1:1 there will only be one entry in []string
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
+
+										case "I":
+
+											s, bl := m.GetULI()
+											v := make([]int64, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LI", v).AddMember("XBl", nv)
+
+										case "F":
+											s, bl := m.GetULF()
+											v := make([]float64, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LF", v).AddMember("XBl", nv)
+
+										case "B":
+											s, bl := m.GetULB()
+											v := make([][]byte, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LB", v).AddMember("XBl", nv)
+
+										case "Bl":
+											s, bl := m.GetULBl()
+											v := make([]bool, 1, 1)
+											v[0] = s[0]
+											nv := make([]bool, 1, 1)
+											nv[0] = bl[0]
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LBl", v).AddMember("XBl", nv)
+										}
+										ptxlk.Unlock()
 									}
 								}
 							}
@@ -351,26 +357,17 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		elog.Add(logid, fmt.Errorf("DP -  1:1 attribute not found for type %q in node %q ", ty, pUID))
 		return
 	}
+
 	//
-	// post: update IX to Y - TODO incorporate in above ptx not separate as below.
-	//
-	ptx := tx.NewSingle("IXFlag")
 	if err != nil {
+		ptx := tx.NewSingle("IXFlag")
 		// update IX to E (errored) TODO: could create a Remove API
 		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
-		fmt.Printf("x")
-
-	} else {
-		//TODO: implement Remove. In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
-		//syslog(fmt.Sprintf("Propagate: remove IX attribute for %s %s", pUID, ty))
-		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-		fmt.Printf(".")
-	}
-
-	ptx.Execute()
-	if err != nil {
-		if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
-			elog.Add(logid, err)
+		ptx.Execute()
+		if err != nil {
+			if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
+				elog.Add(logid, err)
+			}
 		}
 	}
 	//

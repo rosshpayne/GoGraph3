@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/GoGraph/db/internal/throttleSrv"
+	"github.com/GoGraph/tbl/key"
 	thtle "github.com/GoGraph/throttle"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
@@ -142,22 +143,32 @@ func (h *DynamodbHandle) String() string {
 
 }
 
-func (h *DynamodbHandle) GetTableKeys(ctx context.Context, table string) ([]string, error) {
+func (h *DynamodbHandle) GetTableKeys(ctx context.Context, table string) ([]key.TableKey, error) {
 
-	var pk, sk string
+	var idx int // dynamodb allows upto two keys
 
 	te, err := tabCache.fetchTableDesc(ctx, h, table)
 	if err != nil {
 		return nil, fmt.Errorf("GetTableKeys() error: %w", err)
 	}
+	tabKey := make([]key.TableKey, len(te.dto.Table.KeySchema), len(te.dto.Table.KeySchema))
 	for _, v := range te.dto.Table.KeySchema {
 		if v.KeyType == types.KeyTypeHash {
-			pk = *v.AttributeName
+			idx = 0
+			tabKey[0].Name = *v.AttributeName
 		} else {
-			sk = *v.AttributeName
+			idx = 1
+			tabKey[1].Name = *v.AttributeName
+		}
+
+		// get the key data type
+		for _, vv := range te.dto.Table.AttributeDefinitions {
+			if *vv.AttributeName == *v.AttributeName {
+				tabKey[idx].DBtype = string(vv.AttributeType) // "S","N","B"
+			}
 		}
 	}
 
-	return []string{pk, sk}, nil
+	return tabKey, nil
 
 }
