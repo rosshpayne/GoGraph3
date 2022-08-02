@@ -113,7 +113,7 @@ func (g *GraphCache) addNode(uid uuid.UID, e *entry) {
 	if len(g.cNodes) > g.cMaxSize-1 {
 		// purge oldest Node from cache - as determined by LRU implemented by touchNode()
 		delete(g.cache, g.cNodes[0])
-		slog.Log(logid, fmt.Sprintf("purge node :%s", g.cNodes[0]))
+		slog.Log(logid, fmt.Sprintf("addNode: %s - purge node :%s", uidb64, g.cNodes[0]))
 		g.cNodes = g.cNodes[1:]
 	}
 
@@ -122,10 +122,42 @@ func (g *GraphCache) addNode(uid uuid.UID, e *entry) {
 // touchNode records cache activity and maintains an LRU algorithm.
 // used by addNode to determine which node to remove from cache when it need to purge an entry to maintina a fixed cache size
 // touchNode presumes the calling routine has a current GraphCache.Lock()
-func (g *GraphCache) touchNode(uid uuid.UID, e *entry) {
+func (g *GraphCache) touchNode(uid uuid.UID) {
 	const logid = "touchNode"
 	var idx int
 	uidb64 := uid.EncodeBase64()
+	slog.Log(logid, fmt.Sprintf("touch node :%s", uidb64))
+	// read from most current entry (top of slice)
+	for i := len(g.cNodes) - 1; i >= 0; i-- {
+		if bytes.Equal([]byte(g.cNodes[i]), []byte(uidb64)) {
+			idx = i
+		}
+	}
+
+	if float64(idx)/float64(len(g.cNodes)) < 0.4 {
+		return
+	}
+
+	// promote current uid using least number of moves to maintain fixed cache size.
+	if float64(idx)/float64(len(g.cNodes)) <= 0.5 {
+		// move bottom up
+		g.cNodes = append(g.cNodes, uidb64)
+		// remove entry
+		copy(g.cNodes[1:], g.cNodes[:idx])
+		// keep fixed cache size
+		g.cNodes = g.cNodes[1:]
+	} else {
+		// move top down
+		copy(g.cNodes[idx:], g.cNodes[idx+1:])
+		// modify top entry
+		g.cNodes[len(g.cNodes)-1] = uidb64
+	}
+}
+
+// purgeNodeLRU delete node from GraphCache.cNodes (LRU array of cached uids)
+func (g *GraphCache) purgeNodeLRU(uidb64 uuid.UIDb64) {
+	const logid = "purgeNodeLRU"
+	var idx int
 
 	// read from most current entry (top of slice)
 	for i := len(g.cNodes) - 1; i >= 0; i-- {
@@ -152,6 +184,8 @@ func (g *GraphCache) touchNode(uid uuid.UID, e *entry) {
 		// modify top entry
 		g.cNodes[len(g.cNodes)-1] = uidb64
 	}
+
+	delete(g.cache, uidb64)
 }
 
 func (n *NodeCache) GetMap() map[SortKey]*blk.DataItem {

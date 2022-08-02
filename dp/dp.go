@@ -98,10 +98,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 
 		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
-			if nc != nil {
-				nc.Unlock()
-				nc.CachePurge()
-			}
 			if errors.Is(err, NoDataFound) {
 				syslog(fmt.Sprintf("No items found for pUID:  %s, sortk: %s ", pUID.Base64(), psortk))
 				err = nil
@@ -110,6 +106,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 			elog.Add(logid, fmt.Errorf("dp FetchForUpdate() error for pUID %q sortk: %q: %w", pUID.Base64(), psortk, err))
 			break
 		}
+		defer nc.Unlock()
 
 		// in case of lots of children reaches overflow limit (param: EmbeddedChildNodes) - create a channel for each overflow block
 		bChs, err := nc.MakeChannels(psortk)
@@ -271,52 +268,31 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 										// MergeMutation will combine all operations on PKey, SortK into a single PUT
 										// rather than a PUT followed by lots of UPDATES.
 										// As all operations are PUTs we can configure TX BATCH operation.
-										// As all operations are PUTs load is idempotent, meaning repeated operations on same Pkey, Sortk is safe.
+										// As all operations are PUTs load is idempotent
 										ptxlk.Lock()
 										switch t_.DT {
 
 										case "S":
 
 											s, bl := m.GetULS()
-											v := make([]string, 1, 1)
-											// for 1:1 there will only be one entry in []string
-											v[0] = s[0]
-											nv := make([]bool, 1, 1)
-											nv[0] = bl[0]
-											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LS", v).AddMember("XBl", nv)
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LS", s[:1]).AddMember("XBl", bl[:1])
 
 										case "I":
 
 											s, bl := m.GetULI()
-											v := make([]int64, 1, 1)
-											v[0] = s[0]
-											nv := make([]bool, 1, 1)
-											nv[0] = bl[0]
-											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LI", v).AddMember("XBl", nv)
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LI", s[:1]).AddMember("XBl", bl[:1])
 
 										case "F":
 											s, bl := m.GetULF()
-											v := make([]float64, 1, 1)
-											v[0] = s[0]
-											nv := make([]bool, 1, 1)
-											nv[0] = bl[0]
-											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LF", v).AddMember("XBl", nv)
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LF", s[:1]).AddMember("XBl", bl[:1])
 
 										case "B":
 											s, bl := m.GetULB()
-											v := make([][]byte, 1, 1)
-											v[0] = s[0]
-											nv := make([]bool, 1, 1)
-											nv[0] = bl[0]
-											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LB", v).AddMember("XBl", nv)
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LB", s[:1]).AddMember("XBl", bl[:1])
 
 										case "Bl":
 											s, bl := m.GetULBl()
-											v := make([]bool, 1, 1)
-											v[0] = s[0]
-											nv := make([]bool, 1, 1)
-											nv[0] = bl[0]
-											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LBl", v).AddMember("XBl", nv)
+											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LBl", s[:1]).AddMember("XBl", bl[:1])
 										}
 										ptxlk.Unlock()
 									}
@@ -358,9 +334,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return
 	}
 
-	//
+	ptx := tx.NewSingle("IXFlag")
 	if err != nil {
-		ptx := tx.NewSingle("IXFlag")
 		// update IX to E (errored) TODO: could create a Remove API
 		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
 		ptx.Execute()
@@ -369,10 +344,18 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 				elog.Add(logid, err)
 			}
 		}
+	} else {
+		//Remove index entry by removing attribute
+		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
+		//syslog(fmt.Sprintf("Propagate: remove IX attribute for %s %s", pUID, ty))
+		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
+		fmt.Printf(".")
 	}
-	//
-	if nc != nil {
-		nc.Unlock()
-		nc.CachePurge()
+	ptx.Execute()
+	if err != nil {
+		if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
+			elog.Add(logid, err)
+		}
 	}
+
 }

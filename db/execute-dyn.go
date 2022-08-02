@@ -1080,7 +1080,7 @@ func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle,
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("")
 	switch e.access {
 
 	case cGetItem:
@@ -1294,10 +1294,12 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		q.SetPgStateValS("")
 		q.SetPgStateValI(nil)
 		q.SetEOD()
-		// err := deletePgState(ctx, client, q.PgStateId())
-		// if err != nil {
-		// 	elog.Add(fmt.Sprintf("Error in deletePgState: %s", err))
-		// }
+		if q.PgStateValI() != nil {
+			err := deletePgState(ctx, client, q.PgStateId())
+			if err != nil {
+				elog.Add(fmt.Sprintf("Error in deletePgState: %s", err))
+			}
+		}
 
 	} else {
 

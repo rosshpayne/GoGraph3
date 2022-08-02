@@ -49,7 +49,7 @@ const (
 	DB       = 2
 
 	// cache size measured in number of nodes
-	CacheSize = 500
+	CacheSize = 800
 
 	// number of log entries before updating log table
 	//ESlogCommit = 20

@@ -184,7 +184,7 @@ func (g *GraphCache) FetchForUpdateContext(ctx context.Context, uid uuid.UID, so
 		close(e.ready)
 	} else {
 		// all other threads wait on nonbuffered channel - until it is closed
-		g.touchNode(uid, e)
+		g.touchNode(uid)
 		g.Unlock()
 		<-e.ready
 	}
@@ -376,7 +376,7 @@ func (g *GraphCache) FetchNodeContext(ctx context.Context, uid uuid.UID, sortk s
 		close(e.ready)
 	} else {
 		// all other threads wait on nonbuffered channel - until it is closed
-		g.touchNode(uid, e)
+		g.touchNode(uid)
 		g.Unlock()
 		<-e.ready
 	}
@@ -616,6 +616,7 @@ func (n *NodeCache) ClearNodeCache() {
 // }
 func (g *GraphCache) ClearNodeCache(uid uuid.UID) {
 
+	uidb64 := uid.EncodeBase64()
 	// purging a node UID from global cache.
 	// GC will purge the entry value, once all variables referencing it go out-of-scope.
 	// Until then there can be upto two versions of the node cache present in memory.
@@ -634,15 +635,16 @@ func (g *GraphCache) ClearNodeCache(uid uuid.UID) {
 	g.Lock()
 	defer g.Unlock()
 
-	if e, ok = g.cache[uid.EncodeBase64()]; !ok {
+	if e, ok = g.cache[uidb64]; !ok {
 		//	slog.Log("ClearNodeCache: ", fmt.Sprintf("node %q not in cache", uid.Base64()))
 		return
 	}
 	e.Lock()
 	e.stale = true
-	//	slog.Log("ClearNodeCache: ", fmt.Sprintf("delete %q from cache", uid.Base64()))
-	delete(g.cache, uid.EncodeBase64())
 	e.Unlock()
+	//	slog.Log("ClearNodeCache: ", fmt.Sprintf("delete %q from cache", uid.Base64()))
+	delete(g.cache, uidb64)
+	g.purgeNodeLRU(uidb64)
 
 }
 

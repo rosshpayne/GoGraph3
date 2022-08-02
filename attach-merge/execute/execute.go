@@ -668,7 +668,7 @@ func propagateMerge(cTx *tx.Handle, ty blk.TyAttrD, pUID uuid.UID, sortK string,
 		// }
 	}
 	//
-	fmt.Println(sortk)
+
 	keys := []key.Key{key.Key{"SortK", sortk}, key.Key{"PKey", tUID}} // correct keys wrong order. Order is corrected in processing.
 	//keys := []key.Key{key.Key{"SortK", tUID}, key.Key{"PKey", tUID}} // incorrect data type
 	//keys := []key.Key{key.Key{"Sort", sortk}, key.Key{"PKey", tUID}} // incorrect key name. Passed

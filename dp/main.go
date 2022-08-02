@@ -89,8 +89,6 @@ func main() {
 		restart bool
 		ls      string
 		status  string
-
-		tyState string
 	)
 
 	//start syslog services (if any)
@@ -315,7 +313,9 @@ func main() {
 	}
 
 	// sort types containing 1:1 attributes and dp process in sort order.
-	dpTy.Sort()
+	// not strictly necessary for this version of main but used to keep in sync
+	// with other versions (dp1 etc)
+	//dpTy.Sort()
 
 	var wgc sync.WaitGroup
 	limiterDP := grmgr.New("dp", *parallel)
@@ -328,13 +328,7 @@ func main() {
 	}
 	syslog(fmt.Sprintf("Start double propagation processing...%#v", dpTy))
 
-	if restart {
-		tyState, err = getState(ctx, stateId)
-		if err != nil {
-			alertlog(fmt.Sprintf("Error in getState(): %s", err))
-			return
-		}
-	}
+	DPbatchCompleteCh := make(chan struct{})
 
 	// allocate cache for node data
 	cache.NewCache()
@@ -343,30 +337,26 @@ func main() {
 
 	for _, ty := range dpTy {
 
-		if restart && ty < tyState {
-			continue
-		}
-		if restart && ty > tyState {
-			setState(ctx, stateId, ty)
-		} else if !restart {
-			setState(ctx, stateId, ty)
-		}
-
+		ty := ty
 		b := 0
 		// loop until channel closed, proceed to next type
-		for n := range FetchNodeCh(ctx, ty, stateId, restart) {
-
-			pkey := n.PKey
-			ty := n.Ty[strings.Index(n.Ty, "|")+1:]
+		for n := range FetchNodeCh(ctx, ty, stateId, restart, DPbatchCompleteCh) {
 			b++
 			wgc.Add(1)
+			n := n
 			limiterDP.Ask()
 			<-limiterDP.RespCh()
 
-			go Propagate(ctx, limiterDP, &wgc, pkey, ty, has11)
+			go Propagate(ctx, limiterDP, &wgc, n, ty, has11)
 
+			if b == param.DPbatch {
+				// finished batch - wait for remaining DPs to finish and alert scanner to fetch next batch
+				wgc.Wait()
+				DPbatchCompleteCh <- struct{}{}
+				b = 0
+			}
 		}
-		// wait till last DP process is complete
+		// wait got last DP process to complete i.e. run post delete, so it will not be fetched again in FetchNode query.
 		wgc.Wait()
 	}
 
@@ -511,11 +501,11 @@ type Scanned struct {
 	Ty   string
 }
 
-func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan Scanned {
+func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool, DPbatchCompleteCh <-chan struct{}) <-chan uuid.UID {
 
-	dpCh := make(chan Scanned, 50) // no buffer to reduce likelihood of doube dp processing.
+	dpCh := make(chan uuid.UID)
 
-	go ScanForDPitems(ctx, ty, dpCh, stateId, restart)
+	go ScanForDPitems(ctx, ty, dpCh, DPbatchCompleteCh)
 
 	return dpCh
 
