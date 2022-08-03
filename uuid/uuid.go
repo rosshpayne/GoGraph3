@@ -1,6 +1,7 @@
 package uuid
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 
@@ -12,6 +13,29 @@ type UIDb64 string
 type UIDstring string
 
 type UID []byte
+
+var (
+	eod UID = makeUID()
+)
+
+func makeUID() UID {
+	u, err := MakeUID()
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
+func (u *UID) EOD() bool {
+	if bytes.Equal(*u, eod) {
+		return true
+	}
+	return false
+}
+
+func SendEOD() UID {
+	return eod
+}
 
 func MakeUID() (UID, error) {
 	u := guuid.NewV4()

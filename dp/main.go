@@ -338,25 +338,26 @@ func main() {
 	for _, ty := range dpTy {
 
 		ty := ty
-		b := 0
+
 		// loop until channel closed, proceed to next type
-		for n := range FetchNodeCh(ctx, ty, stateId, restart, DPbatchCompleteCh) {
-			b++
+		for uid := range FetchNodeCh(ctx, ty, stateId, restart, DPbatchCompleteCh) {
+
+			// check for end-of-data (a batch in this case)
+			if uid.EOD() {
+				// wait for all dp processes to complete and execute their post op
+				wgc.Wait()
+				// sync with scan function
+				DPbatchCompleteCh <- struct{}{}
+				continue
+			}
 			wgc.Add(1)
-			n := n
+			n := uid
 			limiterDP.Ask()
 			<-limiterDP.RespCh()
 
 			go Propagate(ctx, limiterDP, &wgc, n, ty, has11)
 
-			if b == param.DPbatch {
-				// finished batch - wait for remaining DPs to finish and alert scanner to fetch next batch
-				wgc.Wait()
-				DPbatchCompleteCh <- struct{}{}
-				b = 0
-			}
 		}
-		// wait got last DP process to complete i.e. run post delete, so it will not be fetched again in FetchNode query.
 		wgc.Wait()
 	}
 
@@ -556,7 +557,7 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- uuid.UID, DPbatc
 	defer close(dpCh)
 
 	for {
-
+		b++
 		slog.Log(logid, fmt.Sprintf("ScanForDPitems for type %q started. Batch %d", ty, b))
 
 		rec := []Unprocessed{}
@@ -577,13 +578,12 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- uuid.UID, DPbatc
 		for _, v := range rec {
 			dpCh <- v.PKey
 		}
-
 		// exit loop when #fetched items less than limit
 		if len(rec) < param.DPbatch {
 			slog.LogAlert(logid, fmt.Sprintf("#items %q exiting fetch loop", ty))
 			break
 		}
-		b++
+		dpCh <- uuid.SendEOD()
 
 		slog.LogAlert(logid, "Waiting on last DP to finish..")
 		<-DPbatchCompleteCh
