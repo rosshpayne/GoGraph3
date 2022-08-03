@@ -13,9 +13,11 @@ type UIDb64 string
 type UIDstring string
 
 type UID []byte
+type UIDB []byte
 
 var (
-	eod UID = makeUID()
+	eod UID = makeUID() // end-of-data
+	eob UID = makeUID() // end-of-batch
 )
 
 func makeUID() UID {
@@ -33,8 +35,19 @@ func (u *UID) EOD() bool {
 	return false
 }
 
+func (u *UID) EOB() bool {
+	if bytes.Equal(*u, eob) {
+		return true
+	}
+	return false
+}
+
 func SendEOD() UID {
 	return eod
+}
+
+func SendEOB() UID {
+	return eob
 }
 
 func MakeUID() (UID, error) {

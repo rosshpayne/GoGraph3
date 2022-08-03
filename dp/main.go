@@ -342,8 +342,8 @@ func main() {
 		// loop until channel closed, proceed to next type
 		for uid := range FetchNodeCh(ctx, ty, stateId, restart, DPbatchCompleteCh) {
 
-			// check for end-of-data (a batch in this case)
-			if uid.EOD() {
+			// check for end-of-batch
+			if uid.EOB() {
 				// wait for all dp processes to complete and execute their post op
 				wgc.Wait()
 				// sync with scan function
@@ -583,7 +583,7 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- uuid.UID, DPbatc
 			slog.LogAlert(logid, fmt.Sprintf("#items %q exiting fetch loop", ty))
 			break
 		}
-		dpCh <- uuid.SendEOD()
+		dpCh <- uuid.SendEOB()
 
 		slog.LogAlert(logid, "Waiting on last DP to finish..")
 		<-DPbatchCompleteCh
