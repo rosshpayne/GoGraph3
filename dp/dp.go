@@ -334,28 +334,20 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return
 	}
 
-	ptx := tx.NewSingle("IXFlag")
+	etx := tx.NewSingle("IXFlag")
 	if err != nil {
+		elog.Add(logid, err)
 		// update IX to E (errored) TODO: could create a Remove API
-		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
-		ptx.Execute()
-		if err != nil {
-			if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
-				elog.Add(logid, err)
-			}
-		}
+		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
+
 	} else {
-		//Remove index entry by removing attribute
+		//Remove index entry of processed item by removing the IX attribute
 		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
-		//syslog(fmt.Sprintf("Propagate: remove IX attribute for %s %s", pUID, ty))
-		ptx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-		fmt.Printf(".")
+		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
 	}
-	ptx.Execute()
+	err = etx.Execute()
 	if err != nil {
-		if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
-			elog.Add(logid, err)
-		}
+		elog.Add(logid, err)
 	}
 
 }

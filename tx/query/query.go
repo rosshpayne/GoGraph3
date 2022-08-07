@@ -500,7 +500,7 @@ func (a *Attr) Filter() bool {
 // 	return q
 // }
 
-func (q *QueryHandle) Consistent(b bool) *QueryHandle {
+func (q *QueryHandle) ReadConsistency(b bool) *QueryHandle {
 	q.css = b
 	return q
 }
@@ -660,23 +660,29 @@ func (q *QueryHandle) OrderByString() string {
 
 }
 
+// Select specified the destination variable for the query data. Can be specified multiple times for a query.
 func (q *QueryHandle) Select(a interface{}) *QueryHandle {
 
 	if q.err != nil {
 		return q
 	}
 
-	if q.select_ && !q.prepare {
-		panic(fmt.Errorf("Select already specified. Only one Select permitted."))
-	}
+	// if q.select_ && !q.prepare {
+	// 	panic(fmt.Errorf("Select already specified. Only one Select permitted."))
+	// }
 
-	q.select_ = true
+	// q.select_ = true
 
 	f := reflect.TypeOf(a)
 	if f.Kind() != reflect.Ptr {
 		panic(fmt.Errorf("Fetch argument: not a pointer"))
 	}
 	//save addressable component of interface argument
+
+	if q.fetch != nil {
+		q.fetch = a
+		return q
+	}
 	q.fetch = a
 
 	s := f.Elem()

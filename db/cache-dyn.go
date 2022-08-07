@@ -122,6 +122,8 @@ func (p *queryCacheT) fetchQuery(ctx context.Context, dh *DynamodbHandle, q *que
 		if err != nil {
 			return nil, fmt.Errorf("Validation Error for query [tag: %q]: %w", q.Tag, err)
 		}
+		//err = q.validateQueryInput(q, d)
+
 		err = e.assignAccessMethod(q, d)
 		if err != nil {
 			p.Lock()

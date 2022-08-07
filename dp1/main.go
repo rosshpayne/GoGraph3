@@ -14,6 +14,7 @@ import (
 	"time"
 
 	//"github.com/GoGraph/attach/anmgr"
+	//"github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
 	"github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
@@ -49,6 +50,11 @@ var (
 	reduceLog = flag.Int("rlog", 1, "Reduced Logging [1: enable 0: disable]")
 	batchSize = flag.Int("bs", 20, "Scan batch size [defaut: 20]")
 )
+
+type UnprocRec struct {
+	PKey uuid.UID
+	Ty   string
+}
 
 var (
 	runId int64
@@ -334,6 +340,7 @@ func main() {
 			alertlog(fmt.Sprintf("Error in getState(): %s", err))
 			return
 		}
+		fmt.Println("ty: ", tyState)
 	}
 
 	// allocate cache for node data
@@ -352,25 +359,29 @@ func main() {
 			setState(ctx, stateId, ty)
 		}
 
-		b := 0
-		// loop until channel closed, proceed to next type
-		for n := range FetchNodeCh(ctx, ty, stateId, restart) {
+		// loop until channel closed, then proceed to next type
 
-			pkey := n.PKey
-			ty := n.Ty[strings.Index(n.Ty, "|")+1:]
-			b++
-			wgc.Add(1)
-			limiterDP.Ask()
-			<-limiterDP.RespCh()
+		for un := range UnprocessedCh(ctx, ty, stateId, restart) {
 
-			go Propagate(ctx, limiterDP, &wgc, pkey, ty, has11)
+			for _, u := range un {
 
+				pkey := u.PKey
+				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
+
+				wgc.Add(1)
+				limiterDP.Ask()
+				<-limiterDP.RespCh()
+
+				go Propagate(ctx, limiterDP, &wgc, pkey, ty, has11)
+			}
 		}
 		// wait till last DP process is complete
 		wgc.Wait()
 	}
 
-	limiterDP.Unregister()
+	//LoadFromStage(ctx, stateId, false)
+
+	//limiterDP.Unregister()
 	monitor.Report()
 	elog.PrintErrors()
 	if elog.RunErrored() {
@@ -506,14 +517,9 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 	return nil
 }
 
-type Scanned struct {
-	PKey uuid.UID
-	Ty   string
-}
+func UnprocessedCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan []UnprocRec {
 
-func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan Scanned {
-
-	dpCh := make(chan Scanned, 50) // no buffer to reduce likelihood of doube dp processing.
+	dpCh := make(chan []UnprocRec, 1) // NB: only use 0 or 1 for buffer size
 
 	go ScanForDPitems(ctx, ty, dpCh, stateId, restart)
 
@@ -521,27 +527,58 @@ func FetchNodeCh(ctx context.Context, ty string, stateId uuid.UID, restart bool)
 
 }
 
+type unprocBuf struct {
+	active int
+	bufAB  [][]UnprocRec
+}
+
+func (b *unprocBuf) Init(b1, b2 []UnprocRec) []UnprocRec {
+
+	b.bufAB = [][]UnprocRec{b1, b2}
+
+	return b.bufAB[0]
+
+}
+
+func (b *unprocBuf) Switch() []UnprocRec {
+
+	switch b.active {
+	case 0:
+		b.active = 1
+	case 1:
+		b.active = 0
+	}
+	return b.bufAB[b.active]
+}
+
 // ScanForDPitems fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
-func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- Scanned, id uuid.UID, restart bool) {
+func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id uuid.UID, restart bool) {
 
 	var (
-		err error
+		err        error
+		buf        unprocBuf
+		buf1, buf2 []UnprocRec
 	)
 
 	defer close(dpCh)
 
 	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v", id.Base64(), restart))
 
-	rec := []Scanned{}
+	abuf := buf.Init(buf1, buf2)
 
 	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
-	ptx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart)
+	ptx.Select(&abuf).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart) // .ReadConsistency(true)
 
 	// paginate() has access to EOD(). EOD should therefore validate Paginate is in use.
+
+	bs := 0 // buffer start index - take account of startkey processing - ignore startkey item as it was processed as lastkey in previous batch
+
 	for !ptx.EOD() {
 
+		fmt.Println("here..1")
 		err = ptx.Execute()
 
+		fmt.Println("here..2")
 		if err != nil {
 			if !ptx.RetryOp(err) {
 				panic(err)
@@ -549,8 +586,160 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- Scanned, id uuid
 			continue
 		}
 
-		for _, v := range rec {
-			dpCh <- v
-		}
+		fmt.Println("here..3")
+		dpCh <- abuf[bs:]
+
+		// setup for next database call
+		abuf = buf.Switch()
+
+		ptx.Select(&abuf)
+
+		fmt.Println("here..4")
+		bs = 1
 	}
 }
+
+// func LoadFromStage(ctx context.Context, id uuid.UID, restart bool) {
+
+// 	var (
+// 		err   error
+// 		logid = "LoadMain"
+
+// 		loadwg, wgc sync.WaitGroup
+// 	)
+
+// 	limiterLoad := grmgr.New("loader", 10)
+
+// 	load := func(bat block.NodeBlock, lim *grmgr.Limiter, wg *sync.WaitGroup) {
+// 		// Nd, XF, LS, XBl, LI, LF
+// 		defer wg.Done()
+// 		defer lim.EndR()
+
+// 		ltx := tx.NewBatchContext(ctx, "loadMain")
+
+// 		for _, r := range bat {
+
+// 			m := ltx.NewInsert(tbl.Name(*table)).AddMember("PKey", r.Pkey).AddMember("SortK", r.Sortk)
+// 			fmt.Printf("PKey: %s   Sortk: %s  ", uuid.UID(r.Pkey).Base64(), r.Sortk)
+// 			if len(r.Nd) > 0 {
+// 				m.AddMember("Nd", r.Nd).AddMember("XF", r.XF)
+// 				fmt.Printf("Nd: %d   XF: %d", len(r.Nd), len(r.XF))
+// 			} else {
+// 				if len(r.LS) > 0 {
+// 					m.AddMember("LS", r.LS).AddMember("XBl", r.XBl)
+// 					fmt.Printf("LS: %d   XBl: %d", len(r.LS), len(r.XBl))
+// 				} else {
+// 					if len(r.LB) > 0 {
+// 						m.AddMember("LB", r.LB).AddMember("XBl", r.XBl)
+// 						fmt.Printf("LB: %d   XBl: %d", len(r.LB), len(r.XBl))
+// 					} else {
+// 						if len(r.LBl) > 0 {
+// 							m.AddMember("LBl", r.LBl).AddMember("XBl", r.XBl)
+// 						} else {
+// 							if len(r.LI) > 0 {
+// 								m.AddMember("LI", r.LI).AddMember("XBl", r.XBl)
+// 								fmt.Printf("LI: %d   XBl: %d", len(r.LI), len(r.XBl))
+// 							} else if len(r.LF) > 0 {
+// 								m.AddMember("LF", r.LF).AddMember("XBl", r.XBl)
+// 								fmt.Printf("LF: %d   XBl: %d", len(r.LF), len(r.XBl))
+// 							}
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 		fmt.Println()
+
+// 		// err := ltx.Execute()
+// 		// if err != nil {
+// 		// 	elog.Add("stageLoader", fmt.Errorf("Execute error: %w", err))
+// 		// }
+// 		bat = nil
+
+// 	}
+
+// 	syslog("Start load from stage table")
+// 	tstart := time.Now()
+
+// 	stageCh := make(chan block.NodeBlock)
+
+// 	loadwg.Add(1)
+
+// 	go func() {
+// 		r := 0
+// 		for bat := range stageCh {
+
+// 			bat := bat
+// 			wgc.Add(1)
+// 			limiterLoad.Ask()
+// 			<-limiterLoad.RespCh()
+// 			r += len(bat)
+
+// 			load(bat, limiterLoad, &wgc)
+
+// 		}
+// 		wgc.Wait()
+
+// 		syslog(fmt.Sprintf("Finished load from stage. Duration: %s  Items: %d", time.Now().Sub(tstart), r))
+// 		loadwg.Done()
+// 	}()
+
+// 	var (
+// 		buf1 block.NodeBlock
+// 		buf2 block.NodeBlock
+// 	)
+
+// 	slog.Log(logid, fmt.Sprintf("started"))
+
+// 	// non-parallel paginated query of stage table
+// 	// Buffered - internally allocates buffered number of Select interface.
+// 	//           Execute loads current active buffer ([]*NodeItems ie. NodeBlock). Points rec to active buffer.
+// 	//           Proceeds to load into non-active bufs on next Execute.
+// 	//           Needs to get back an acknowledgement that active buffer has been fully processed by app. ptx.Complete()
+// 	//
+// 	//           Should not db fetch into NodeBlock until data is fully processed. How is this acknowledged ?? Acknowledgement channel or mutex maybe??
+// 	//           Consider * Execute service??
+// 	//                    * Duplicate result data??
+// 	//           Execute must receive an ack that buffer is ready to be reused, otherwise will wait.
+// 	//
+// 	ptx := tx.NewQueryContext(ctx, "queryStage", "GoGraph.stage")
+// 	ptx.Select(&buf1).Limit(param.DPbatch).Paginate(id, restart) //.ReadConsistency(true)
+
+// 	// paginate() has access to EOD(). EOD should therefore validate Paginate is in use.
+// 	first := true
+// 	for !ptx.EOD() {
+
+// 		err = ptx.Execute() // uses default Buffer (2) if Buffer not used.
+
+// 		if err != nil {
+// 			if !ptx.RetryOp(err) {
+// 				panic(err)
+// 			}
+// 			continue
+// 		}
+// 		switch activeBuf {
+// 		case 1:
+// 			activeBuf = 2
+// 			buf_ = buf1
+
+// 		case 2:
+// 			activeBuf = 3
+// 			buf_ = buf2
+// 		}
+// 		if !first {
+// 			buf_ = buf_[1:] // remove startKey entry
+// 		}
+// 		first = false
+
+// 		stageCh <- buf_
+
+// 		switch activeBuf {
+// 		case 1:
+// 			ptx.Select(&buf1)
+// 		case 2:
+// 			ptx.Select(&buf2)
+// 		}
+// 	}
+// 	close(stageCh)
+// 	loadwg.Wait()
+// }
