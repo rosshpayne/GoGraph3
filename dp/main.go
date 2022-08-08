@@ -52,6 +52,7 @@ var (
 
 type Unprocessed struct {
 	PKey uuid.UID
+	Ty   string
 }
 type PKey []byte
 
@@ -330,6 +331,7 @@ func main() {
 	}
 	if len(dpTy) == 0 {
 		syslog(fmt.Sprintf(" No 1:1 Types found"))
+		return
 	}
 	syslog(fmt.Sprintf("Start double propagation processing...%#v", dpTy))
 
@@ -349,30 +351,36 @@ func main() {
 	for _, ty := range dpTy {
 
 		ty := ty
-
+		var (
+			ty_ string
+			uid uuid.UID
+		)
 		for {
 
 			unproc, err := ScanForDPitems(ctx, ty)
 			if err != nil {
-				if errors.Is(db.NoDataFound, err) {
+				if errors.Is(query.NoDataFoundErr, err) {
+					err = nil
 					break
 				}
-				elog.Add("ScanForDPitems", err)
-				return
 			}
-			var u uuid.UID
 
-			for _, uid := range unproc {
+			for _, u := range unproc {
 
 				wgc.Add(1)
-				u = uid.PKey
+				uid = u.PKey
+				ty_ = u.Ty[strings.Index(u.Ty, "|")+1:]
 				limiterDP.Ask()
 				<-limiterDP.RespCh()
 
-				go Propagate(ctx, limiterDP, &wgc, u, ty, has11)
+				go Propagate(ctx, limiterDP, &wgc, uid, ty_, has11)
 			}
 			wgc.Wait()
 			time.Sleep(500 * time.Millisecond) // wait for all dynamodb  distributed writes to complete
+		}
+		if err != nil {
+			elog.Add(logid, err)
+			break
 		}
 		wgc.Wait()
 	}
@@ -522,11 +530,12 @@ func ScanForDPitems(ctx context.Context, ty string) ([]Unprocessed, error) {
 		err   error
 	)
 
-	slog.Log(logid, fmt.Sprintf("ScanForDPitems for type %q started.", ty))
+	slog.LogAlert(logid, fmt.Sprintf("ScanForDPitems for type %q started.", ty))
 
 	rec := []Unprocessed{}
 
 	stx = tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
+	//stx = tx.NewQueryContext(ctx, "dpScan", "GoGraph.dp-r3", "TyIX")
 	if err != nil {
 		return nil, err
 	}
@@ -534,6 +543,9 @@ func ScanForDPitems(ctx context.Context, ty string) ([]Unprocessed, error) {
 
 	err = stx.Execute()
 	if err != nil {
+		if errors.Is(query.NoDataFoundErr, err) {
+			slog.LogAlert(logid, fmt.Sprintf("No more data for type %q.", ty))
+		}
 		return nil, err
 	}
 	return rec, nil

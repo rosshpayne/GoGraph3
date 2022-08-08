@@ -331,6 +331,7 @@ func main() {
 	}
 	if len(dpTy) == 0 {
 		syslog(fmt.Sprintf(" No 1:1 Types found"))
+		return
 	}
 	syslog(fmt.Sprintf("Start double propagation processing...%#v", dpTy))
 
@@ -575,10 +576,8 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 
 	for !ptx.EOD() {
 
-		fmt.Println("here..1")
 		err = ptx.Execute()
 
-		fmt.Println("here..2")
 		if err != nil {
 			if !ptx.RetryOp(err) {
 				panic(err)
@@ -586,7 +585,6 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 			continue
 		}
 
-		fmt.Println("here..3")
 		dpCh <- abuf[bs:]
 
 		// setup for next database call
@@ -594,7 +592,6 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 
 		ptx.Select(&abuf)
 
-		fmt.Println("here..4")
 		bs = 1
 	}
 }

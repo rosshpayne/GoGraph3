@@ -78,6 +78,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 	gc := cache.GetCache()
 
 	var b bool
+	syslog(fmt.Sprintf("Enter Propagate : pUID %s ,   Ty %s  ", pUID.Base64(), ty))
 
 	ty, b = types.GetTyLongNm(ty)
 	if b == false {
@@ -344,6 +345,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		//Remove index entry of processed item by removing the IX attribute
 		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
 		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
+		//etx.NewUpdate("GoGraph.dp-r3").AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
 	}
 	err = etx.Execute()
 	if err != nil {
