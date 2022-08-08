@@ -359,10 +359,7 @@ func main() {
 
 			unproc, err := ScanForDPitems(ctx, ty)
 			if err != nil {
-				if errors.Is(query.NoDataFoundErr, err) {
-					err = nil
-					break
-				}
+				break
 			}
 
 			for _, u := range unproc {
@@ -379,7 +376,10 @@ func main() {
 			time.Sleep(500 * time.Millisecond) // wait for all dynamodb  distributed writes to complete
 		}
 		if err != nil {
-			elog.Add(logid, err)
+			if !errors.Is(query.NoDataFoundErr, err) {
+				elog.Add(logid, err)
+			}
+			wgc.Wait()
 			break
 		}
 		wgc.Wait()
@@ -544,7 +544,7 @@ func ScanForDPitems(ctx context.Context, ty string) ([]Unprocessed, error) {
 	err = stx.Execute()
 	if err != nil {
 		if errors.Is(query.NoDataFoundErr, err) {
-			slog.LogAlert(logid, fmt.Sprintf("No more data for type %q.", ty))
+			slog.LogAlert(logid, fmt.Sprintf("No data found for type %q.", ty))
 		}
 		return nil, err
 	}
