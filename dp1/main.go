@@ -375,6 +375,7 @@ func main() {
 
 				go Propagate(ctx, limiterDP, &wgc, pkey, ty, has11)
 			}
+			restart = false
 		}
 		// wait till last DP process is complete
 		wgc.Wait()
@@ -528,47 +529,28 @@ func UnprocessedCh(ctx context.Context, ty string, stateId uuid.UID, restart boo
 
 }
 
-type unprocBuf struct {
-	active int
-	bufAB  [][]UnprocRec
-}
-
-func (b *unprocBuf) Init(b1, b2 []UnprocRec) []UnprocRec {
-
-	b.bufAB = [][]UnprocRec{b1, b2}
-
-	return b.bufAB[0]
-
-}
-
-func (b *unprocBuf) Switch() []UnprocRec {
-
-	switch b.active {
-	case 0:
-		b.active = 1
-	case 1:
-		b.active = 0
-	}
-	return b.bufAB[b.active]
-}
-
 // ScanForDPitems fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
 func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id uuid.UID, restart bool) {
 
 	var (
-		err        error
-		buf        unprocBuf
+		err error
+		//	buf        UnprocBuf
 		buf1, buf2 []UnprocRec
+	//	bufs       []interface{}
 	)
 
 	defer close(dpCh)
 
 	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v", id.Base64(), restart))
 
-	abuf := buf.Init(buf1, buf2)
+	//	abuf := buf.Init(buf1, buf2)
+	//bufs = []interface{}{&buf1, &buf2}
+	//bufs = []interface{}{&bufs_[0], &bufs_[1]}
+
+	bufs := [2][]UnprocRec{buf1, buf2}
 
 	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
-	ptx.Select(&abuf).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart) // .ReadConsistency(true)
+	ptx.Select(&bufs[0], &bufs[1]).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart) // .ReadConsistency(true)
 
 	// paginate() has access to EOD(). EOD should therefore validate Paginate is in use.
 
@@ -585,12 +567,7 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 			continue
 		}
 
-		dpCh <- abuf[bs:]
-
-		// setup for next database call
-		abuf = buf.Switch()
-
-		ptx.Select(&abuf)
+		dpCh <- bufs[ptx.Result()][bs:]
 
 		bs = 1
 	}

@@ -54,7 +54,7 @@ const (
 )
 
 func syslog(s string) {
-	slog.Log("query: ", s)
+	slog.Log("query", s)
 }
 
 type Attr struct {
@@ -88,6 +88,9 @@ type QueryHandle struct {
 	//
 	first bool
 	//
+	abuf int           // active buffer
+	bufs []interface{} // buffers
+	//
 	scan bool // NewScan specified
 	//
 	// pk     string
@@ -97,7 +100,7 @@ type QueryHandle struct {
 	orderBy  orderby
 	accessTy AccessTy // TODO: remove
 	// select() handlers
-	fetch   interface{} // used in Dynamodb Select()
+	fetch   interface{} //  Select()
 	select_ bool        // indicates Select() has been executed. Catches cases when Select() specified more than once.
 	// is query restarted. Paginated queries only.
 	restart bool
@@ -660,13 +663,30 @@ func (q *QueryHandle) OrderByString() string {
 
 }
 
+func (q *QueryHandle) Result() int {
+	abuf := q.abuf
+
+	// switch
+	q.abuf++
+	if q.abuf > len(q.bufs)-1 {
+		q.abuf = 0
+	}
+	q.fetch = q.bufs[abuf]
+	syslog(fmt.Sprintf("Result Buffer id: %d", abuf))
+	return abuf
+}
+
 // Select specified the destination variable for the query data. Can be specified multiple times for a query.
-func (q *QueryHandle) Select(a interface{}) *QueryHandle {
+func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 
 	if q.err != nil {
 		return q
 	}
 
+	a := a_[0]
+
+	q.abuf = 0
+	q.bufs = a_
 	// if q.select_ && !q.prepare {
 	// 	panic(fmt.Errorf("Select already specified. Only one Select permitted."))
 	// }
