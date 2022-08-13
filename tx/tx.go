@@ -1041,8 +1041,8 @@ func (h *QHandle) Workers() []*query.QueryHandle {
 
 	for i := 0; i < h.GetParallel(); i++ {
 
-		d := h.QueryHandle.Duplicate()
-		d.SetWorderId(i)
+		d := h.QueryHandle.Clone()
+		d.SetWorkerId(i)
 
 		// ptx [][]rec
 		// operation we want to emulate in reflect is select(&[]rec) which will be assigned to q.fetch inteface{}
@@ -1054,6 +1054,19 @@ func (h *QHandle) Workers() []*query.QueryHandle {
 
 	return h.workers
 
+}
+
+func (h *QHandle) ExecuteByChannel() (interface{}, error) {
+
+	h.SetChannelMode()
+
+	err := h.Execute()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return h.GetChannel(), nil
 }
 
 func (h *QHandle) Execute(w ...int) error {

@@ -1320,10 +1320,11 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), len(result.Items), dur_))
+		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
 	}
 	//
 	if result.Count == 0 {
+		q.SetEOD()
 		return query.NoDataFoundErr
 	}
 
@@ -1341,51 +1342,142 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 	var err error
 
-	switch q.GetParallel() {
+	switch par := q.GetParallel(); par {
 
 	case 0:
-		err = exSingleScan(ctx, client, q, proj)
+
+		if q.ChannelMode() {
+			r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
+			// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
+			// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
+			chv := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 2)
+			//fmt.Println("chv: ", chv.Kind())
+			q.SetChannel(chv.Interface())
+
+			go exNonParChanMode(ctx, q, chv, client, proj)
+
+		} else {
+
+			return exNonParallelScan(ctx, client, q, proj)
+		}
 
 	default:
 
-		//err = exWorkerScan(ctx, client, q, proj) // used in es parallel scan load (see: github/GoGraph/es/scan-parallel.go)
+		if q.ChannelMode() {
+			//TODO
+			//go exParallelChanMode
+		}
 
-		// 	rec := []Scanned{}
-		//	ptx.Select(&rec).Filter("Ty", types.GraphSN()+"|"+k).OrFilter("Ty", types.GraphSN()+"|"+k).Limit(param.DPbatch).Paginate(id, restart).Parallel(4)
+		/////////////////////////////////////////// create Channel(s) -////////////////
+		// r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
+		// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
+		// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
+		// chv := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 2)
+		// fmt.Println("chv: ", chv.Kind())
+		// q.SetChannel(chv.Interface())
 
-		// var wg sync.WaitGroup
-		// par := q.GetParallel()
+		// //	go search_(ctx, q, chv, r, client, proj)
 
-		// r := reflect.ValueOf(h.Fetch()).Elem() // TODO: consider making slice parallel in size when client does
+		// chv.Close()
 
-		// f := reflect.MakeSlice(r.Type(), par, par)
-		// for i := 0; i < par; i++ {
+		/////////////////////////////////////////// passing in Channel - cannot make work /////////////
+		// r := reflect.ValueOf(q.Fetch()).Elem()
+		// rc := reflect.MakeChan(r.Type(), 2)
 
-		// 	wg.Add(1)
-		// 	dp := q.Duplicate()
-		// 	dp.SetWorderId(i)
-		// 	dp.SetFetch(f.Index(i).Addr().Interface())
+		// fmt.Println(r.Type().Kind())
+		// // type assertion on channel
+		// c := q.GetChannel()
+		// t := rc.Type()
 
-		// 	go exWorkerScan(ctx, &wg, client, dp, proj)
+		// fmt.Println("channel Kind: ", t.Kind())
+
+		// ch, ok := c.(t)
+		// //ch,ok := q.GetChannel().(r.Type())
+		// if !ok {
+		// 	panic(fmt.Errorf("error in type assertion..."))
 		// }
-		// wg.Wait() // issue: can only go as fast as slowest worker - albiet in reality each worker takes equal time.
 
-		// q.SetFetch(f.Interface())
+		// for !q.EOD() {
+
+		// 	err = exNonParallelScan(ctx, client, q, proj)
+
+		// 	if err != nil {
+		// 		if errors.Is(query.NoDataFoundErr, err) {
+		// 			continue
+		// 		}
+		// 		continue
+		// 	}
+
+		// 	ch <- q.Result()[q.Result()]
+		// }
+
+		// close(ch)
+
+		// default:
+
+		// 	err = exWorkerScan(ctx, client, q, proj) // used in es parallel scan load (see: github/GoGraph/es/scan-parallel.go)
+
+		// 	par := q.GetParallel()
+
+		// 	r := reflect.ValueOf(q.Fetch()).Elem() // TODO: consider making slice parallel in size when client does
+
+		// 	f := reflect.MakeSlice(r.Type(), par, par)
+		// 	for i := 0; i < par; i++ {
+
+		// 		wg.Add(1)
+		// 		cq := q.Clone()
+		// 		cq.SetWorkerId(i)
+		// 		cq.SetFetch(f.Index(i).Addr().Interface())
+
+		// 		go exWorkerScan(ctx, &wg, client, cq, proj)
+		// 	}
+		// 	wg.Wait() // issue: can only go as fast as slowest worker - albiet in reality each worker takes equal time.
+
+		// 	q.SetFetch(f.Interface())
 
 	}
 
 	return err
 }
 
-// exSingleScan - non-parallel scan. Scan of table or index.
-func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+func exNonParChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
 
-	slog.LogAlert(logid, fmt.Sprintf("exSingleScan: thread %d", q.Worker()))
+	var err error
+
+	for !q.EOD() {
+
+		err = exNonParallelScan(ctx, client, q, proj)
+
+		if err != nil {
+			if errors.Is(query.NoDataFoundErr, err) {
+				break
+			}
+			elog.Add("exNonParChanMode", err)
+		}
+		// fmt.Println("exNonParChanMode: reflect.ValueOf(q.Bufs()).Kind())", reflect.ValueOf(q.Bufs()).Kind())
+		// fmt.Println("exNonParChanMode: reflect.ValueOf(q.Bufs()).Len())", reflect.ValueOf(q.Bufs()).Len())
+		// fmt.Println("exNonParChanMode: reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind()", reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind())
+		// //chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result())) //r.Index(q.Result()))
+
+		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
+	}
+
+	chv.Close()
+
+}
+
+func exParallelChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Value, r reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
+}
+
+// exNonParallelScan - non-parallel scan. Scan of table or index.
+func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+
+	slog.Log(logid, fmt.Sprintf("exNonParallelScan"))
 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		syslog(fmt.Sprintf("exSingleScan: restart"))
+		syslog(fmt.Sprintf("exNonParallelScan: restart"))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
 		q.SetRestart(false)
 
@@ -1450,9 +1542,9 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 	expr, err := b.Build()
 	if err != nil {
-		return newDBExprErr("exSingleScan", "", "", err)
+		return newDBExprErr("exNonParallelScan", "", "", err)
 	}
-
+	slog.LogAlert("exNonParallelScan", fmt.Sprintf("Filter  %s", *expr.Filter()))
 	input := &dynamodb.ScanInput{
 		ProjectionExpression:      expr.Projection(),
 		ExpressionAttributeNames:  expr.Names(),
@@ -1477,7 +1569,7 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	if lk := q.PgStateValI(); lk != nil {
 		//	q.FetchState()
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
-		//	syslog(fmt.Sprintf("exSingleScan: SetExclusiveStartKey %s", input.String()))
+		//	syslog(fmt.Sprintf("exNonParallelScan: SetExclusiveStartKey %s", input.String()))
 	}
 	//fmt.Print("input: ", input.String(), "\n")
 	//
@@ -1485,7 +1577,7 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	result, err := client.Scan(ctx, input)
 	t1 := time.Now()
 	if err != nil {
-		return newDBSysErr("exSingleScan", "Scan", err)
+		return newDBSysErr("exNonParallelScan", "Scan", err)
 	}
 
 	// save LastEvaluatedKey
@@ -1499,7 +1591,7 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 		// save old pg state before assigning latest
 		if q.PgStateValI() != nil {
-			slog.LogAlert("exQuery", " save pg state...")
+			slog.LogAlert("exNonParallelScan", " save pg state...")
 			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
 			if err != nil {
 				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
@@ -1515,17 +1607,20 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
 		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
-		syslog(fmt.Sprintf("exSingleScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), len(result.Items), dur_))
+		slog.Log("exNonParallelScan", fmt.Sprintf("exNonParallelScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), result.Count, dur_))
 	}
 	//
-	syslog(fmt.Sprintf("exSingleScan: thread: %d  len(result.Items)  %d", q.Worker(), len(result.Items)))
 
-	if len(result.Items) > 0 {
+	//save query statistics
+	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
+
+	if result.Count > 0 {
 
 		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
 		if err != nil {
-			return newDBUnmarshalErr("exSingleScan", "", "", "UnmarshalListOfMaps", err)
+			return newDBUnmarshalErr("exNonParallelScan", "", "", "UnmarshalListOfMaps", err)
 		}
+		slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetFetch()).Elem().Len()))
 
 	} else {
 
@@ -1538,16 +1633,16 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 				n := reflect.New(t) // *slice to empty slice
 				q.SetFetchValue(n.Elem())
 
-			} else {
-				fmt.Println("=== do nothing ====")
 			}
+
 		} else {
 			panic(fmt.Errorf("Expected a slice for scan output variable."))
 		}
-	}
 
-	//save query statistics
-	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
+		slog.Log("exNonParallelScan", "return NoDataFoundErr")
+
+		return query.NoDataFoundErr
+	}
 
 	return nil
 }
@@ -1555,13 +1650,13 @@ func exSingleScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 // exWorkerScan used by parallel scan`
 func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
+	logid := "exWorkerScan"
 	worker := fmt.Sprintf("exWorkerScan: thread %d  totalSegments %d", q.Worker(), q.GetParallel())
 	slog.LogAlert(logid, worker)
 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		syslog(fmt.Sprintf("%s: restart", worker))
 		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId(), q.Worker())))
 		q.SetRestart(false)
 
@@ -1682,12 +1777,15 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), len(result.Items), dur_))
+		slog.LogAlert(logid, fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
 	}
 	//
-	syslog(fmt.Sprintf("exWorkerScan: thread: %d  len(result.Items)  %d", q.Worker(), len(result.Items)))
+	slog.LogAlert(logid, fmt.Sprintf("thread: %d  esult.Count  %d", q.Worker(), result.Count))
 
-	if len(result.Items) > 0 {
+	//save query statistics
+	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
+
+	if result.Count > 0 {
 
 		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
 		if err != nil {
@@ -1704,17 +1802,15 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 				t := reflect.ValueOf(q.GetFetch()).Type().Elem()
 				n := reflect.New(t) // *slice to empty slice
 				q.SetFetchValue(n.Elem())
-
-			} else {
-				fmt.Println("=== do nothing ====")
 			}
 		} else {
 			panic(fmt.Errorf("Expected a slice for scan output variable."))
 		}
-	}
 
-	//save query statistics
-	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
+		slog.Log(logid, "return NoDataFoundErr")
+
+		return query.NoDataFoundErr
+	}
 
 	return nil
 }

@@ -521,7 +521,7 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 
 func UnprocessedCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan []UnprocRec {
 
-	dpCh := make(chan []UnprocRec) // NB: only use 0 or 1 for buffer size
+	dpCh := make(chan []UnprocRec, 1) // NB: only use 0 or 1 for buffer size
 
 	go ScanForDPitems(ctx, ty, dpCh, stateId, restart)
 
@@ -534,35 +534,32 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 
 	var (
 		err error
-
-		buf []UnprocRec
-
+		//	buf        UnprocBuf
+		buf1, buf2 []UnprocRec
+	//	bufs       []interface{}
 	)
 
 	defer close(dpCh)
 
 	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v", id.Base64(), restart))
 
-	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
-	ptx.Select(&buf).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart) // .ReadConsistency(true)
+	bufs := [2][]UnprocRec{buf1, buf2}
 
-	// paginate() has access to EOD(). EOD should therefore validate Paginate is in use.
+	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
+	ptx.Select(&bufs[0], &bufs[1]).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart) // .ReadConsistency(true)
 
 	for !ptx.EOD() {
 
 		err = ptx.Execute()
 
 		if err != nil {
-			if errors.Is(query.NoDataFoundErr,err) {
-				continue
-			}
 			if !ptx.RetryOp(err) {
 				panic(err)
 			}
 			continue
 		}
 
-		dpCh <- buf // because of 0 channel buffer, buf is being written too while being read - must use double buffer
+		dpCh <- bufs[ptx.Result()]
 
 	}
 }

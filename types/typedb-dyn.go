@@ -139,6 +139,7 @@ func getGraphId(graphNm string) (string, error) {
 	if len(sk) > 1 {
 		return "", newDBUnmarshalErr("getGraphId", "", "", "More than one item found in database", err)
 	}
+
 	return sk[0].SortK + ".", nil
 
 }

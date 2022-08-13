@@ -56,6 +56,9 @@ const (
 func syslog(s string) {
 	slog.Log("query", s)
 }
+func syslogAlert(s string) {
+	slog.LogAlert("query", s)
+}
 
 type Attr struct {
 	name   string
@@ -82,14 +85,18 @@ type QueryHandle struct {
 	limit    int
 	parallel int
 	css      bool // read consistent mode
+	//
+	channelMode bool
+	channel     interface{}
 	// prepare mutation in db's that support separate preparation phase
 	prepare  bool
 	prepStmt interface{}
 	//
-	first bool
+	//first bool ??
 	//
-	abuf int           // active buffer
-	bufs []interface{} // buffers
+	eodlc int           // eod loop counter - used to determine first EOD execution which drives switch logic
+	abuf  int           // active buffer
+	bufs  []interface{} // buffers
 	//
 	scan bool // NewScan specified
 	//
@@ -140,7 +147,7 @@ func New2(label string, tbl tbl.Name, idx ...tbl.Name) *QueryHandle {
 // 	q.dbh = d
 // }
 
-func (q *QueryHandle) Duplicate() *QueryHandle {
+func (q *QueryHandle) Clone() *QueryHandle {
 	d := QueryHandle{}
 	d.Tag = q.Tag
 	//stateId uuid.UID - id for maintaining state
@@ -151,7 +158,7 @@ func (q *QueryHandle) Duplicate() *QueryHandle {
 	d.parallel = q.parallel
 	d.css = q.css
 	//
-	d.first = q.first
+	//d.first = q.first
 	//
 	d.scan = q.scan
 	//
@@ -189,7 +196,7 @@ func (q *QueryHandle) Error() error {
 	return q.err
 }
 
-func (q *QueryHandle) SetWorderId(i int) {
+func (q *QueryHandle) SetWorkerId(i int) {
 	q.worker = i
 }
 
@@ -199,6 +206,14 @@ func (q *QueryHandle) Worker() int {
 
 func (q *QueryHandle) SetPrepare() {
 	q.prepare = true
+}
+
+func (q *QueryHandle) SetChannelMode() {
+	q.channelMode = true
+}
+
+func (q *QueryHandle) ChannelMode() bool {
+	return q.channelMode
 }
 
 func (q *QueryHandle) Prepare() bool {
@@ -216,6 +231,18 @@ func (q *QueryHandle) SetPrepStmt(p interface{}) {
 // func (q *QueryHandle) Ctx() context.Context {
 // 	return q.ctx
 // }
+
+func (q *QueryHandle) Channel(c interface{}) {
+	q.channel = c
+}
+
+func (q *QueryHandle) SetChannel(c interface{}) {
+	q.channel = c
+}
+
+func (q *QueryHandle) GetChannel() interface{} {
+	return q.channel
+}
 
 func (q *QueryHandle) GetTag() string {
 	return q.Tag
@@ -345,14 +372,24 @@ func (q *QueryHandle) SetEOD() {
 }
 
 func (q *QueryHandle) EOD() bool {
+
 	if len(q.pgStateId) == 0 {
 		// query has not configured paginate
 		q.err = fmt.Errorf("Query [tag: %s] has not configured paginate. EOD is therefore not available", q.Tag)
 		elog.Add(q.Tag, q.err)
 		return false
 	}
+	// check if multiple select vars used and switch appropriate
+	if len(q.bufs) > 0 {
+		if q.eodlc > 0 {
+			// ignore first execution of EOD to switch buffer
+			q.switchBuf()
+		}
+		q.eodlc++
+	}
 	return q.eod
 }
+
 func (q *QueryHandle) FilterSpecified() bool {
 	for _, v := range q.attr {
 		if v.aty == IsFilter {
@@ -665,15 +702,23 @@ func (q *QueryHandle) OrderByString() string {
 
 func (q *QueryHandle) Result() int {
 	abuf := q.abuf
+	syslog(fmt.Sprintf("Result Buffer id: %d", abuf))
+	return abuf
+}
 
-	// switch
+func (q *QueryHandle) switchBuf() {
+
 	q.abuf++
 	if q.abuf > len(q.bufs)-1 {
 		q.abuf = 0
 	}
-	q.fetch = q.bufs[abuf]
-	syslog(fmt.Sprintf("Result Buffer id: %d", abuf))
-	return abuf
+	q.fetch = q.bufs[q.abuf]
+	syslogAlert(fmt.Sprintf("switch Buffer now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
+
+}
+
+func (q *QueryHandle) Bufs() interface{} {
+	return q.bufs
 }
 
 // Select specified the destination variable for the query data. Can be specified multiple times for a query.
@@ -686,14 +731,14 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	a := a_[0]
 
 	q.abuf = 0
-	q.bufs = a_
+	q.bufs = a_ // []*[]unprocBuf
 	// if q.select_ && !q.prepare {
 	// 	panic(fmt.Errorf("Select already specified. Only one Select permitted."))
 	// }
 
 	// q.select_ = true
 
-	f := reflect.TypeOf(a)
+	f := reflect.TypeOf(a) // *[]struct
 	if f.Kind() != reflect.Ptr {
 		panic(fmt.Errorf("Fetch argument: not a pointer"))
 	}

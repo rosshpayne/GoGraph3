@@ -1,0 +1,2 @@
+Directory: dp2. Description: Paginated scan of index with limit using single channel. No requiremnt for post DP update. Paginated maintains scan state.
+API: Scan()

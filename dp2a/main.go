@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -51,7 +50,7 @@ var (
 	batchSize = flag.Int("bs", 20, "Scan batch size [defaut: 20]")
 )
 
-type UnprocRec struct {
+type unprocBuf struct {
 	PKey uuid.UID
 	Ty   string
 }
@@ -293,7 +292,7 @@ func main() {
 	syslog("All services started. Proceed with attach processing")
 
 	has11 := make(map[string]struct{})
-	var dpTy sort.StringSlice
+	var dpTy []string //sort.StringSlice
 
 	// k: type long name, v: block.TyAttrD{}
 	for k, v := range types.TypeC.TyC {
@@ -321,10 +320,10 @@ func main() {
 	}
 
 	// sort types containing 1:1 attributes and dp process in sort order.
-	dpTy.Sort()
+	//dpTy.Sort()
 
-	var wgc sync.WaitGroup
-	limiterDP := grmgr.New("dp", *parallel)
+	//var wgc sync.WaitGroup
+	//limiterDP := grmgr.New("dp", *parallel)
 
 	for k, s := range dpTy {
 		syslog(fmt.Sprintf(" Type containing 1:1 type: %d, %s", k, s))
@@ -349,37 +348,19 @@ func main() {
 
 	tstart = time.Now()
 
-	for _, ty := range dpTy {
+	//ch := UnprocessedCh(ctx, dpTy, stateId, restart)
 
-		if restart && ty < tyState {
-			continue
+	for un := range UnprocessedCh(ctx, dpTy, stateId, restart) {
+
+		for _, u := range un {
+
+			pkey := u.PKey
+			ty := u.Ty[strings.Index(u.Ty, "|")+1:]
+
+			Propagate(ctx, pkey, ty, has11)
 		}
-		if restart && ty > tyState {
-			setState(ctx, stateId, ty)
-		} else if !restart {
-			setState(ctx, stateId, ty)
-		}
-
-		// loop until channel closed, then proceed to next type
-
-		for un := range UnprocessedCh(ctx, ty, stateId, restart) {
-
-			for _, u := range un {
-
-				pkey := u.PKey
-				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
-
-				wgc.Add(1)
-				limiterDP.Ask()
-				<-limiterDP.RespCh()
-
-				go Propagate(ctx, limiterDP, &wgc, pkey, ty, has11)
-			}
-			restart = false
-		}
-		// wait till last DP process is complete
-		wgc.Wait()
 	}
+	//wgc.Wait()
 
 	//LoadFromStage(ctx, stateId, false)
 
@@ -519,50 +500,56 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 	return nil
 }
 
-func UnprocessedCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan []UnprocRec {
+// func UnprocessedCh(ctx context.Context, dpty []string, stateId uuid.UID, restart bool) <-chan []unprocBuf {
 
-	dpCh := make(chan []UnprocRec) // NB: only use 0 or 1 for buffer size
+// 	dpCh := make(chan []unprocBuf, 1) // NB: only use 0 or 1 for buffer size
 
-	go ScanForDPitems(ctx, ty, dpCh, stateId, restart)
+// 	go ScanForDPitems(ctx, dpty, dpCh, stateId, restart)
 
-	return dpCh
+// 	return dpCh
 
-}
+// }
 
-// ScanForDPitems fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
-func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id uuid.UID, restart bool) {
+// ScanForDPitems scans index for all interested ty and returns items in channel. Executed once.
+func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) <-chan []unprocBuf {
 
 	var (
-		err error
+		buf1, buf2 []unprocBuf
 
-		buf []UnprocRec
-
+		logid = "ScanForDPitems"
 	)
-
-	defer close(dpCh)
 
 	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v", id.Base64(), restart))
 
-	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
-	ptx.Select(&buf).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch).Paginate(id, restart) // .ReadConsistency(true)
+	bufs := [2][]unprocBuf{buf1, buf2}
 
-	// paginate() has access to EOD(). EOD should therefore validate Paginate is in use.
+	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX") // tbl.Block, "TyIX")
+	ptx.Select(&bufs[0], &bufs[1])                              // []*[]unprocBuf
 
-	for !ptx.EOD() {
-
-		err = ptx.Execute()
-
-		if err != nil {
-			if errors.Is(query.NoDataFoundErr,err) {
-				continue
-			}
-			if !ptx.RetryOp(err) {
-				panic(err)
-			}
-			continue
+	// Note: for scan operations do not inlude Key, use Filter only. Also perform one scan not multiple if possible
+	// which requires all filter data to be nclude in the one step hence "OrFilter"
+	for i, k := range dpTy {
+		if i == 0 {
+			ptx.Filter("Ty", types.GraphSN()+"|"+k)
+		} else {
+			ptx.OrFilter("Ty", types.GraphSN()+"|"+k)
 		}
-
-		dpCh <- buf // because of 0 channel buffer, buf is being written too while being read - must use double buffer
-
 	}
+	// use limit to batch the fetch for restarting purposes. Remember the PGstate data is stored back to dynamodb after limit is reached-i.e. last Operation of Execute()
+	// if no limit is used then granularity of restart is the whole table/index - not good.
+	ptx.Limit(param.DPbatch).Paginate(id, restart)
+
+	chs, err := ptx.ExecuteByChannel()
+
+	if err != nil {
+		panic(err)
+	}
+
+	chs_, ok := chs.(chan []unprocBuf)
+	if !ok {
+		fmt.Println("err converting to chs")
+	}
+	fmt.Printf("chs: %T\n", chs)
+	return chs_
+
 }

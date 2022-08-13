@@ -48,10 +48,7 @@ var (
 // (3) - defined below
 // (4) - ptx is protected by an associated mutex lock variable - ptxlk. Defined below.
 
-func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pUID uuid.UID, ty string, has11 map[string]struct{}) {
-
-	defer limit.EndR()
-	defer wg.Done()
+func Propagate(ctx context.Context, pUID uuid.UID, ty string, has11 map[string]struct{}) {
 
 	concat := func(s1, s2 string, sn ...string) string {
 		var s strings.Builder
@@ -95,7 +92,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		found = true
 		psortk := concat(types.GraphSN(), "|A#G#:", v.C)
 		syslog(fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
-
+		return
 		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
 			if errors.Is(err, NoDataFound) {
@@ -273,7 +270,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 										switch t_.DT {
 
 										case "S":
-
 											s, bl := m.GetULS()
 											mergeMutation(ptx, tbl.EOP, pUID, psk, mutdml).AddMember("LS", s[:1]).AddMember("XBl", bl[:1])
 
@@ -334,21 +330,14 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return
 	}
 
-	etx := tx.NewSingle("IXFlag")
 	if err != nil {
 		elog.Add(logid, err)
-		// update IX to E (errored) TODO: could create a Remove API
+		etx := tx.NewSingle("IXFlag")
 		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
-
-	} else {
-		//Remove index entry of processed item by removing the IX attribute
-		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
-		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-		//etx.NewUpdate("GoGraph.dp-r3").AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-	}
-	err = etx.Execute()
-	if err != nil {
-		elog.Add(logid, err)
+		err = etx.Execute()
+		if err != nil {
+			elog.Add(logid, err)
+		}
 	}
 
 }
