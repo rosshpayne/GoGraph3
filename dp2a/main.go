@@ -348,23 +348,23 @@ func main() {
 
 	tstart = time.Now()
 
-	//ch := UnprocessedCh(ctx, dpTy, stateId, restart)
+	ch, err := UnprocessedCh(ctx, dpTy, stateId, restart)
+	if err != nil {
+		elog.Add("UnprocessedCh", err)
+	} else {
 
-	for un := range UnprocessedCh(ctx, dpTy, stateId, restart) {
+		for un := range ch {
 
-		for _, u := range un {
+			for _, u := range un {
 
-			pkey := u.PKey
-			ty := u.Ty[strings.Index(u.Ty, "|")+1:]
+				pkey := u.PKey
+				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
 
-			Propagate(ctx, pkey, ty, has11)
+				Propagate(ctx, pkey, ty, has11)
+			}
 		}
 	}
-	//wgc.Wait()
 
-	//LoadFromStage(ctx, stateId, false)
-
-	//limiterDP.Unregister()
 	monitor.Report()
 	elog.PrintErrors()
 	if elog.RunErrored() {
@@ -511,7 +511,7 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 // }
 
 // ScanForDPitems scans index for all interested ty and returns items in channel. Executed once.
-func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) <-chan []unprocBuf {
+func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) (<-chan []unprocBuf, error) {
 
 	var (
 		buf1, buf2 []unprocBuf
@@ -542,14 +542,14 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 	chs, err := ptx.ExecuteByChannel()
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	chs_, ok := chs.(chan []unprocBuf)
 	if !ok {
-		fmt.Println("err converting to chs")
+		return nil, fmt.Errorf("Error in type assertion of channel returned by ExecuteByChannel. ", err)
 	}
-	fmt.Printf("chs: %T\n", chs)
-	return chs_
+
+	return chs_, nil
 
 }
