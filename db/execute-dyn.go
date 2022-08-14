@@ -1350,11 +1350,11 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
 			// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
 			// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
-			chv := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 2)
+			chv := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
 			//fmt.Println("chv: ", chv.Kind())
 			q.SetChannel(chv.Interface())
 
-			go exNonParChanMode(ctx, q, chv, client, proj)
+			go exNonParScanChanMode(ctx, q, chv, client, proj)
 
 		} else {
 
@@ -1440,7 +1440,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 	return err
 }
 
-func exNonParChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
+func exNonParScanChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
 
 	var err error
 
@@ -1450,13 +1450,13 @@ func exNonParChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Val
 
 		if err != nil {
 			if errors.Is(query.NoDataFoundErr, err) {
-				break
+				continue
 			}
-			elog.Add("exNonParChanMode", err)
+			elog.Add("exNonParScanChanMode", err)
 		}
-		// fmt.Println("exNonParChanMode: reflect.ValueOf(q.Bufs()).Kind())", reflect.ValueOf(q.Bufs()).Kind())
-		// fmt.Println("exNonParChanMode: reflect.ValueOf(q.Bufs()).Len())", reflect.ValueOf(q.Bufs()).Len())
-		// fmt.Println("exNonParChanMode: reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind()", reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind())
+		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Kind())", reflect.ValueOf(q.Bufs()).Kind())
+		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Len())", reflect.ValueOf(q.Bufs()).Len())
+		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind()", reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind())
 		// //chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result())) //r.Index(q.Result()))
 
 		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
@@ -1519,7 +1519,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 			case NE:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
-				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", ComparOpr(n.GetOprStr()))))
+				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
 			//flt = flt.And(f)
 			switch n.BoolCd() {
@@ -1544,7 +1544,11 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	if err != nil {
 		return newDBExprErr("exNonParallelScan", "", "", err)
 	}
-	slog.LogAlert("exNonParallelScan", fmt.Sprintf("Filter  %s", *expr.Filter()))
+	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("ProjectionExpression  %s", *expr.Projection()))
+	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("ExpressionAttributeNames  %s", expr.Names()))
+	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("ExpressionAttributeValues  %s", expr.Values()))
+	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("Filter  %s", *expr.Filter()))
+	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("TableName:  %s", q.GetTable()))
 	input := &dynamodb.ScanInput{
 		ProjectionExpression:      expr.Projection(),
 		ExpressionAttributeNames:  expr.Names(),
@@ -1567,7 +1571,6 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	}
 
 	if lk := q.PgStateValI(); lk != nil {
-		//	q.FetchState()
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
 		//	syslog(fmt.Sprintf("exNonParallelScan: SetExclusiveStartKey %s", input.String()))
 	}
@@ -1583,6 +1586,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	// save LastEvaluatedKey
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
+		slog.LogAlert("exNonParallelScan", " LastEvaluatedKey is nil, setEOD()")
 		q.SetPgStateValS("")
 		q.SetPgStateValI(nil)
 		q.SetEOD()
@@ -1620,15 +1624,17 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 		if err != nil {
 			return newDBUnmarshalErr("exNonParallelScan", "", "", "UnmarshalListOfMaps", err)
 		}
-		slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetFetch()).Elem().Len()))
+		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetFetch()).Elem().Len()))
 
 	} else {
+
+		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetFetch()).Elem().Len()))
 
 		// zero out q.fetch (client select variable) if populated
 		if reflect.ValueOf(q.GetFetch()).Elem().Kind() == reflect.Slice {
 
 			if reflect.ValueOf(q.GetFetch()).Elem().Len() > 0 {
-
+				slog.LogAlert("exNonParallelScan", fmt.Sprintf(" Zero out bind variable "))
 				t := reflect.ValueOf(q.GetFetch()).Type().Elem()
 				n := reflect.New(t) // *slice to empty slice
 				q.SetFetchValue(n.Elem())
@@ -1762,7 +1768,7 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 		// save old pg state before assigning latest
 		if q.PgStateValI() != nil {
-			slog.LogAlert("exQuery", " save pg state...")
+			slog.Log("exQuery", " save pg state...")
 			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS(), q.Worker())
 			if err != nil {
 				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))

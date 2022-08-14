@@ -550,12 +550,9 @@ func ScanForDPitems(ctx context.Context, dpTy []string, dpCh chan<- []unprocBuf,
 
 		if err != nil {
 			if errors.Is(query.NoDataFoundErr, err) {
-				break
+				continue
 			}
-			if !ptx.RetryOp(err) {
-				panic(err)
-			}
-			break //TODO - ??
+			elog.Add("ScanForDPitems", err)
 		}
 
 		dpCh <- bufs[ptx.Result()]
