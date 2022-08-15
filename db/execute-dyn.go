@@ -1364,8 +1364,43 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 	default:
 
 		if q.ChannelMode() {
-			//TODO
-			//go exParallelChanMode
+
+			// create par number of bind vars (double buf) ie.  [par][lenBufs]*[]rec
+
+			// q.Fetch() *[]rec
+			// q.bufs:  []interface{} -> []*[]rec. []*[]unprocBuf
+			{
+				r := reflect.ValueOf(q.Fetch()).Elem()                           //.Elem()
+				fmt.Println("r : ", reflect.ValueOf(q.Fetch()).Kind(), r.Kind()) // slice
+
+				// fmt.Println("len(q.bufs) ", reflect.TypeOf(q.Bufs()).Kind())                                                     // slice
+				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Len())                                                     // 2
+				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Index(0).Kind())                                           // interface
+				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Index(0).Elem())                                           // &[]
+				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem())                                    // []
+				// fmt.Println("len(q.bufs) ", reflect.TypeOf(reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Interface()).Elem()) // main.unprocBuf
+
+				lenBufs := reflect.ValueOf(q.Bufs()).Len()
+				ayI := reflect.ArrayOf(lenBufs, reflect.TypeOf(q.Fetch()))
+				ayO := reflect.ArrayOf(par, ayI)
+				ay := reflect.New(ayO)
+
+				for i := 0; i < par; i++ {
+
+					ayv1 := reflect.New(ayI)
+
+					for n := 0; n < lenBufs; n++ {
+						reflect.Indirect(ayv1).Index(n).Set(reflect.New(r.Type()))
+					}
+					reflect.Indirect(ay).Index(i).Set(reflect.Indirect(ayv1))
+				}
+
+				// fmt.Println("test: ", reflect.Indirect(ay).Index(3).Index(0).Elem().Kind())
+				// fmt.Println("test: ", reflect.Indirect(ay).Index(3).Index(1).Elem())
+				// fmt.Println("test: ", reflect.Indirect(ay).Index(3).Index(1).Elem().Type().Elem())
+				panic(fmt.Errorf("abc.."))
+			}
+			//go exParScanChanMode
 		}
 
 		/////////////////////////////////////////// create Channel(s) -////////////////
@@ -1453,6 +1488,12 @@ func exNonParScanChanMode(ctx context.Context, q *query.QueryHandle, chv reflect
 				continue
 			}
 			elog.Add("exNonParScanChanMode", err)
+		}
+		// check for ctrl-C
+		select {
+		case <-ctx.Done():
+			break
+		default:
 		}
 		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Kind())", reflect.ValueOf(q.Bufs()).Kind())
 		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Len())", reflect.ValueOf(q.Bufs()).Len())

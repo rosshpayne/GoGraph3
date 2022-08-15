@@ -348,21 +348,16 @@ func main() {
 
 	tstart = time.Now()
 
-	ch, err := UnprocessedCh(ctx, dpTy, stateId, restart)
+	ch, err := UnprocessedCh(ctx, dpTy, stateId, restart) // []chan []unprocBuf
 	if err != nil {
 		elog.Add("UnprocessedCh", err)
 	} else {
 
-		for un := range ch {
+		for _, un := range ch {
 
-			for _, u := range un {
-
-				pkey := u.PKey
-				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
-
-				Propagate(ctx, pkey, ty, has11)
-			}
+			go propagateGR(ctx, has11, un)
 		}
+
 	}
 
 	monitor.Report()
@@ -393,6 +388,20 @@ func main() {
 	// stop db admin services and save to db.
 	dbadmin.Persist()
 
+}
+
+func propagateGR(ctx context.Context, has11 map[string]struct{}, ch <-chan []unprocBuf) {
+
+	for un := range ch {
+
+		for _, u := range un {
+
+			pkey := u.PKey
+			ty := u.Ty[strings.Index(u.Ty, "|")+1:]
+
+			Propagate(ctx, pkey, ty, has11)
+		}
+	}
 }
 
 //type PKey []byte
@@ -511,7 +520,7 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 // }
 
 // ScanForDPitems scans index for all interested ty and returns items in channel. Executed once.
-func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) (<-chan []unprocBuf, error) {
+func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) ([]chan []unprocBuf, error) {
 
 	var (
 		buf1, buf2 []unprocBuf
@@ -523,10 +532,10 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 
 	bufs := [2][]unprocBuf{buf1, buf2}
 
-	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
+	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX") // tbl.Block, "TyIX")
 	ptx.Select(&bufs[0], &bufs[1])
 
-	// Note: for scan operations do not inlude Key, use Filter only. erform one scan not multiple if possible
+	// Note: for scan operations do not inlude Key, use Filter only. Also perform one scan not multiple if possible
 	// which requires all filter data to be nclude in the one step hence "OrFilter"
 	for i, k := range dpTy {
 		if i == 0 {
@@ -537,7 +546,7 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 	}
 	// use limit to batch the fetch for restarting purposes. Remember the PGstate data is stored back to dynamodb after limit is reached-i.e. last Operation of Execute()
 	// if no limit is used then granularity of restart is the whole table/index - not good.
-	ptx.Limit(param.DPbatch).Paginate(id, restart)
+	ptx.Limit(param.DPbatch).Paginate(id, restart).Parallel(4)
 
 	chs, err := ptx.ExecuteByChannel()
 
@@ -545,7 +554,7 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 		return nil, err
 	}
 
-	chs_, ok := chs.(chan []unprocBuf)
+	chs_, ok := chs.([]chan []unprocBuf)
 	if !ok {
 		return nil, fmt.Errorf("Error in type assertion of channel returned by ExecuteByChannel. ", err)
 	}
