@@ -345,20 +345,27 @@ func main() {
 
 	// allocate cache for node data
 	cache.NewCache()
+	var wg sync.WaitGroup
 
 	tstart = time.Now()
 
-	ch, err := UnprocessedCh(ctx, dpTy, stateId, restart) // []chan []unprocBuf
+	chs, err := UnprocessedCh(ctx, dpTy, stateId, restart) // []chan []unprocBuf
+
 	if err != nil {
+
 		elog.Add("UnprocessedCh", err)
+
 	} else {
 
-		for _, un := range ch {
+		// start read channel services
+		for _, ch := range chs {
 
-			go propagateGR(ctx, has11, un)
+			wg.Add(1)
+			go propagateGR(ctx, &wg, has11, ch)
 		}
 
 	}
+	wg.Wait()
 
 	monitor.Report()
 	elog.PrintErrors()
@@ -390,7 +397,9 @@ func main() {
 
 }
 
-func propagateGR(ctx context.Context, has11 map[string]struct{}, ch <-chan []unprocBuf) {
+func propagateGR(ctx context.Context, wg *sync.WaitGroup, has11 map[string]struct{}, ch <-chan []unprocBuf) {
+
+	defer wg.Done()
 
 	for un := range ch {
 
@@ -546,7 +555,7 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 	}
 	// use limit to batch the fetch for restarting purposes. Remember the PGstate data is stored back to dynamodb after limit is reached-i.e. last Operation of Execute()
 	// if no limit is used then granularity of restart is the whole table/index - not good.
-	ptx.Limit(param.DPbatch).Paginate(id, restart).Parallel(4)
+	ptx.Limit(param.DPbatch).Paginate(id, restart).Parallel(2)
 
 	chs, err := ptx.ExecuteByChannel()
 
@@ -556,7 +565,7 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 
 	chs_, ok := chs.([]chan []unprocBuf)
 	if !ok {
-		return nil, fmt.Errorf("Error in type assertion of channel returned by ExecuteByChannel. ", err)
+		return nil, fmt.Errorf(`Error in type assertion of channel returned by ExecuteByChannel. Expected "[]chan []unprocBuf, got %T`, chs)
 	}
 
 	return chs_, nil

@@ -168,10 +168,7 @@ func (q *QueryHandle) Clone() *QueryHandle {
 	d.so = q.so
 	d.accessTy = q.accessTy
 	d.orderBy = q.orderBy
-	d.err = q.err
 	// select() handlers
-	d.fetch = q.fetch
-	d.select_ = q.select_ // indicates Select() has been executed. Catches cases when Select() specified more than once.
 	// is query restarted. Paginated queries only.
 	d.restart = q.restart
 	// pagination state
@@ -232,8 +229,8 @@ func (q *QueryHandle) SetPrepStmt(p interface{}) {
 // 	return q.ctx
 // }
 
-func (q *QueryHandle) Channel(c interface{}) {
-	q.channel = c
+func (q *QueryHandle) Channel() interface{} {
+	return q.channel
 }
 
 func (q *QueryHandle) SetChannel(c interface{}) {
@@ -262,6 +259,14 @@ func (q *QueryHandle) IndexSpecified() bool {
 
 func (q *QueryHandle) SetScan() {
 	q.scan = true
+}
+
+func (q *QueryHandle) SetWorker(i int) {
+	q.worker = i
+}
+
+func (q *QueryHandle) SetTag(s string) {
+	q.Tag = s
 }
 
 func (q *QueryHandle) Parallel(n int) {
@@ -717,7 +722,7 @@ func (q *QueryHandle) switchBuf() {
 
 }
 
-func (q *QueryHandle) Bufs() interface{} {
+func (q *QueryHandle) Bufs() []interface{} {
 	return q.bufs
 }
 
@@ -731,7 +736,7 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	a := a_[0]
 
 	q.abuf = 0
-	q.bufs = a_ // []*[]unprocBuf
+	q.bufs = a_ // []interface{} []*[]unprocBuf
 	// if q.select_ && !q.prepare {
 	// 	panic(fmt.Errorf("Select already specified. Only one Select permitted."))
 	// }
@@ -740,7 +745,7 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 
 	f := reflect.TypeOf(a) // *[]struct
 	if f.Kind() != reflect.Ptr {
-		panic(fmt.Errorf("Fetch argument: not a pointer"))
+		panic(fmt.Errorf("Fetch argument: expected a pointer, got a %s", f.Kind()))
 	}
 	//save addressable component of interface argument
 

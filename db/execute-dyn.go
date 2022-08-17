@@ -1009,6 +1009,12 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 //
 //
 //
+type scanMode byte
+
+const (
+	parallel scanMode = iota
+	nonParallel
+)
 
 func genKeyAV(q *query.QueryHandle) (map[string]types.AttributeValue, error) {
 
@@ -1205,8 +1211,8 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case NE: //TODO : fix NE
-				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
+			case NE:
+				flt = expression.NotEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
 				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
@@ -1222,8 +1228,8 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
 			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
-			case NE: //TODO : fix NE
-				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
+			case NE:
+				f = expression.NotEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
 				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
@@ -1350,11 +1356,12 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
 			// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
 			// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
-			chv := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
+			ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
 			//fmt.Println("chv: ", chv.Kind())
-			q.SetChannel(chv.Interface())
+			q.SetChannel(ch.Interface())
 
-			go exNonParScanChanMode(ctx, q, chv, client, proj)
+			// start scan service
+			go scanChannelSrv(ctx, nonParallel, q, ch, client, proj)
 
 		} else {
 
@@ -1365,129 +1372,86 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		if q.ChannelMode() {
 
-			// create par number of bind vars (double buf) ie.  [par][lenBufs]*[]rec
+			// create par number of bind vars (double buf)
+			// q.Fetch == *[]rec
+			r := reflect.ValueOf(q.Fetch()).Elem() // &[]unprocBuf, &[]unprocBuf
 
-			// q.Fetch() *[]rec
-			// q.bufs:  []interface{} -> []*[]rec. []*[]unprocBuf
-			{
-				r := reflect.ValueOf(q.Fetch()).Elem()                           //.Elem()
-				fmt.Println("r : ", reflect.ValueOf(q.Fetch()).Kind(), r.Kind()) // slice
+			lenBufs := reflect.ValueOf(q.Bufs()).Len()
 
-				// fmt.Println("len(q.bufs) ", reflect.TypeOf(q.Bufs()).Kind())                                                     // slice
-				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Len())                                                     // 2
-				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Index(0).Kind())                                           // interface
-				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Index(0).Elem())                                           // &[]
-				// fmt.Println("len(q.bufs) ", reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem())                                    // []
-				// fmt.Println("len(q.bufs) ", reflect.TypeOf(reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Interface()).Elem()) // main.unprocBuf
+			// create slice of channels
+			chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
+			sT := reflect.SliceOf(chT)                       // Type
+			chs := reflect.New(sT)
+			ichs := reflect.Indirect(chs)
 
-				lenBufs := reflect.ValueOf(q.Bufs()).Len()
-				ayI := reflect.ArrayOf(lenBufs, reflect.TypeOf(q.Fetch()))
-				ayO := reflect.ArrayOf(par, ayI)
-				ay := reflect.New(ayO)
+			// create #par clones of QueryHandle and assign bind variables and channel
+			// each cloned QueryHandle will be assoicated with one parallel scan worker
+			for i := 0; i < par; i++ {
 
-				for i := 0; i < par; i++ {
+				cq := q.Clone()
 
-					ayv1 := reflect.New(ayI)
+				//ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
+				ch := reflect.MakeChan(chT, 1)
+				cq.SetChannel(ch.Interface())
+				ichs = reflect.Append(ichs, ch)
+				// set bind vars
+				var sel []interface{}
 
+				if i == 0 {
+					// use bind vars from query method Select()
+					cq.Select(q.Bufs()...)
+
+				} else {
+
+					// create bind vars using New()
 					for n := 0; n < lenBufs; n++ {
-						reflect.Indirect(ayv1).Index(n).Set(reflect.New(r.Type()))
+						bv := reflect.New(r.Type())
+						sel = append(sel, bv.Interface())
 					}
-					reflect.Indirect(ay).Index(i).Set(reflect.Indirect(ayv1))
+					// assign bind vars to cloned queryHandler
+					cq.Select(sel...)
 				}
 
-				// fmt.Println("test: ", reflect.Indirect(ay).Index(3).Index(0).Elem().Kind())
-				// fmt.Println("test: ", reflect.Indirect(ay).Index(3).Index(1).Elem())
-				// fmt.Println("test: ", reflect.Indirect(ay).Index(3).Index(1).Elem().Type().Elem())
-				panic(fmt.Errorf("abc.."))
+				//
+				cq.SetTag(q.Tag + "-w" + strconv.Itoa(i))
+				cq.SetWorker(i)
+
+				// start scan service
+				go scanChannelSrv(ctx, parallel, cq, ch, client, proj)
 			}
-			//go exParScanChanMode
+			// assign slice of channels to original queryHandler
+			q.SetChannel(ichs.Interface())
+
+		} else {
+			elog.Add("Execute", fmt.Errorf("Not supported. Use ExecuteWithChannel() instead"))
 		}
-
-		/////////////////////////////////////////// create Channel(s) -////////////////
-		// r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
-		// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
-		// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
-		// chv := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 2)
-		// fmt.Println("chv: ", chv.Kind())
-		// q.SetChannel(chv.Interface())
-
-		// //	go search_(ctx, q, chv, r, client, proj)
-
-		// chv.Close()
-
-		/////////////////////////////////////////// passing in Channel - cannot make work /////////////
-		// r := reflect.ValueOf(q.Fetch()).Elem()
-		// rc := reflect.MakeChan(r.Type(), 2)
-
-		// fmt.Println(r.Type().Kind())
-		// // type assertion on channel
-		// c := q.GetChannel()
-		// t := rc.Type()
-
-		// fmt.Println("channel Kind: ", t.Kind())
-
-		// ch, ok := c.(t)
-		// //ch,ok := q.GetChannel().(r.Type())
-		// if !ok {
-		// 	panic(fmt.Errorf("error in type assertion..."))
-		// }
-
-		// for !q.EOD() {
-
-		// 	err = exNonParallelScan(ctx, client, q, proj)
-
-		// 	if err != nil {
-		// 		if errors.Is(query.NoDataFoundErr, err) {
-		// 			continue
-		// 		}
-		// 		continue
-		// 	}
-
-		// 	ch <- q.Result()[q.Result()]
-		// }
-
-		// close(ch)
-
-		// default:
-
-		// 	err = exWorkerScan(ctx, client, q, proj) // used in es parallel scan load (see: github/GoGraph/es/scan-parallel.go)
-
-		// 	par := q.GetParallel()
-
-		// 	r := reflect.ValueOf(q.Fetch()).Elem() // TODO: consider making slice parallel in size when client does
-
-		// 	f := reflect.MakeSlice(r.Type(), par, par)
-		// 	for i := 0; i < par; i++ {
-
-		// 		wg.Add(1)
-		// 		cq := q.Clone()
-		// 		cq.SetWorkerId(i)
-		// 		cq.SetFetch(f.Index(i).Addr().Interface())
-
-		// 		go exWorkerScan(ctx, &wg, client, cq, proj)
-		// 	}
-		// 	wg.Wait() // issue: can only go as fast as slowest worker - albiet in reality each worker takes equal time.
-
-		// 	q.SetFetch(f.Interface())
 
 	}
 
 	return err
 }
 
-func exNonParScanChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
+// scanChannelSrv is a service that provides a Scan operation and outputs via dynamically allocated channels.
+func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
 
 	var err error
 
+	slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+
 	for !q.EOD() {
 
-		err = exNonParallelScan(ctx, client, q, proj)
+		switch scan {
+		case nonParallel:
+			err = exNonParallelScan(ctx, client, q, proj)
+		case parallel:
+			err = exScanWorker(ctx, client, q, proj)
+		}
 
 		if err != nil {
 			if errors.Is(query.NoDataFoundErr, err) {
 				continue
 			}
-			elog.Add("exNonParScanChanMode", err)
+			elog.Add("scanChannelSrv", err)
 		}
 		// check for ctrl-C
 		select {
@@ -1495,19 +1459,12 @@ func exNonParScanChanMode(ctx context.Context, q *query.QueryHandle, chv reflect
 			break
 		default:
 		}
-		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Kind())", reflect.ValueOf(q.Bufs()).Kind())
-		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Len())", reflect.ValueOf(q.Bufs()).Len())
-		// fmt.Println("exNonParScanChanMode: reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind()", reflect.ValueOf(q.Bufs()).Index(0).Elem().Elem().Kind())
-		// //chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result())) //r.Index(q.Result()))
 
 		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
 	}
 
 	chv.Close()
 
-}
-
-func exParallelChanMode(ctx context.Context, q *query.QueryHandle, chv reflect.Value, r reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
 }
 
 // exNonParallelScan - non-parallel scan. Scan of table or index.
@@ -1541,7 +1498,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case NE:
-				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
+				flt = expression.NotEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
 				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
@@ -1558,7 +1515,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case NE:
-				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
+				f = expression.NotEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
 				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
@@ -1694,11 +1651,11 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	return nil
 }
 
-// exWorkerScan used by parallel scan`
-func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
+// exScanWorker used by parallel scan`
+func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
-	logid := "exWorkerScan"
-	worker := fmt.Sprintf("exWorkerScan: thread %d  totalSegments %d", q.Worker(), q.GetParallel())
+	logid := "exScanWorker"
+	worker := fmt.Sprintf("exScanWorker: thread %d  totalSegments %d", q.Worker(), q.GetParallel())
 	slog.LogAlert(logid, worker)
 
 	if q.IsRestart() {
@@ -1725,7 +1682,7 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case NE:
-				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
+				flt = expression.NotEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
 				panic(fmt.Errorf(fmt.Sprintf("Comparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
@@ -1742,7 +1699,7 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case NE:
-				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
+				f = expression.NotEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			default:
 				panic(fmt.Errorf(fmt.Sprintf("xComparitor %q not supported", ComparOpr(n.GetOprStr()))))
 			}
@@ -1766,7 +1723,7 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 	expr, err := b.Build()
 	if err != nil {
-		return newDBExprErr("exWorkerScan", "", "", err)
+		return newDBExprErr("exScanWorker", "", "", err)
 	}
 
 	input := &dynamodb.ScanInput{
@@ -1785,18 +1742,18 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	if lk := q.PgStateValI(); lk != nil {
 		//	q.FetchState()
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
-		//syslog(fmt.Sprintf("exWorkerScan: SetExclusiveStartKey %s", input.String()))
+		//syslog(fmt.Sprintf("exScanWorker: SetExclusiveStartKey %s", input.String()))
 	}
 
 	input.Segment = aws.Int32(int32(q.Worker()))            //int64(q.Worker())
 	input.TotalSegments = aws.Int32(int32(q.GetParallel())) //int64(q.GetParallel())
-	//syslog(fmt.Sprintf("exWorkerScan: thread %d  input: %s", q.Worker(), input.String()))
+	//syslog(fmt.Sprintf("exScanWorker: thread %d  input: %s", q.Worker(), input.String()))
 	//
 	t0 := time.Now()
 	result, err := client.Scan(ctx, input)
 	t1 := time.Now()
 	if err != nil {
-		return newDBSysErr("exWorkerScan", "Scan", err)
+		return newDBSysErr("exScanWorker", "Scan", err)
 	}
 	// save LastEvaluatedKey
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
@@ -1824,7 +1781,7 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		slog.LogAlert(logid, fmt.Sprintf("exWorkerScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
+		slog.LogAlert(logid, fmt.Sprintf("exScanWorker:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
 	}
 	//
 	slog.LogAlert(logid, fmt.Sprintf("thread: %d  esult.Count  %d", q.Worker(), result.Count))
@@ -1836,7 +1793,7 @@ func exWorkerScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
 		if err != nil {
-			return newDBUnmarshalErr("exWorkerScan", "", "", "UnmarshalListOfMaps", err)
+			return newDBUnmarshalErr("exScanWorker", "", "", "UnmarshalListOfMaps", err)
 		}
 
 	} else {
