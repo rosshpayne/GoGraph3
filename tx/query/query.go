@@ -61,12 +61,49 @@ func syslogAlert(s string) {
 }
 
 type Attr struct {
-	name   string
-	param  string
-	value  interface{}
-	aty    Attrty // attribute type, e.g. Key, Filter, Fetch
-	eqy    string
-	boolCd BoolCd // And, Or - appropriate for Filter only.
+	name    string
+	param   string
+	value   interface{}
+	literal string // alternative to value - replace attribute name with literal in query stmt.
+	aty     Attrty // attribute type, e.g. Key, Filter, Fetch
+	eqy     string
+	boolCd  BoolCd // And, Or - appropriate for Filter only.
+}
+
+func (a *Attr) GetOprStr() string {
+	return strings.ToUpper(a.eqy)
+}
+
+func (a *Attr) AttrType() Attrty {
+	return a.aty
+}
+
+func (a *Attr) Name() string {
+	return a.name
+}
+
+func (a *Attr) Literal() string {
+	return a.literal
+}
+
+func (a *Attr) BoolCd() BoolCd {
+	return a.boolCd
+}
+
+func (a *Attr) Value() interface{} {
+	return a.value
+}
+
+func (a *Attr) IsKey() bool {
+	return a.aty == IsKey
+}
+
+func (a *Attr) IsFetch() bool {
+	return a.aty == IsFetch
+}
+
+func (a *Attr) Filter() bool {
+	return a.aty == IsFilter
 }
 
 type orderby struct {
@@ -502,38 +539,6 @@ func (q *QueryHandle) GetWhereAttrs() []*Attr {
 	return flt
 }
 
-func (a *Attr) GetOprStr() string {
-	return strings.ToUpper(a.eqy)
-}
-
-func (a *Attr) AttrType() Attrty {
-	return a.aty
-}
-
-func (a *Attr) Name() string {
-	return a.name
-}
-
-func (a *Attr) BoolCd() BoolCd {
-	return a.boolCd
-}
-
-func (a *Attr) Value() interface{} {
-	return a.value
-}
-
-func (a *Attr) IsKey() bool {
-	return a.aty == IsKey
-}
-
-func (a *Attr) IsFetch() bool {
-	return a.aty == IsFetch
-}
-
-func (a *Attr) Filter() bool {
-	return a.aty == IsFilter
-}
-
 // func (a Attr) Fetch() bool {
 // 	return a.aty == IsFilter
 // }
@@ -760,10 +765,15 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	switch s.Kind() {
 	case reflect.Struct:
 		// used in GetItem (single row select)
-
+		var name, lit string
 		for i := 0; i < s.NumField(); i++ {
 			v := s.Field(i)
-			at := &Attr{name: v.Name, aty: IsFetch}
+			if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
+				name = v.Name
+				lit = v.Tag.Get("literal")
+				fmt.Println("name, lit: ", name, lit)
+			}
+			at := &Attr{name: name, aty: IsFetch, literal: lit}
 			q.attr = append(q.attr, at)
 		}
 	case reflect.Slice:
@@ -777,13 +787,16 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 			st = st.Elem()
 		}
 		if st.Kind() == reflect.Struct {
-			var name string
+			var name, lit string
 			for i := 0; i < st.NumField(); i++ {
 				v := st.Field(i)
 				if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
 					name = v.Name
+					lit = v.Tag.Get("literal")
+					fmt.Println("name, lit: ", name, lit)
 				}
-				at := &Attr{name: name, aty: IsFetch}
+				at := &Attr{name: name, aty: IsFetch, literal: lit}
+
 				q.attr = append(q.attr, at)
 			}
 		} else {

@@ -90,10 +90,9 @@ func main() {
 		tstart         time.Time
 		runid          uuid.UID
 
-		stateId uuid.UID
-		restart bool
-		ls      string
-		status  string
+		stateId  uuid.UID
+		restart  bool
+		opStatus string
 
 		tyState string
 	)
@@ -123,9 +122,9 @@ func main() {
 			// broadcast kill switch to all context aware goroutines including mysql
 			cancel()
 			syslog(`Terminated....set run status to "S"`)
-			err = setRunStatus(nil, "S", nil)
+			err = setOpStatus(nil, "S", nil)
 			if err != nil {
-				fmt.Printf("Error setting load status: %s\n", err)
+				fmt.Printf("Error setting DP status: %s\n", err)
 			}
 			wpEnd.Wait()
 
@@ -142,7 +141,7 @@ func main() {
 	//	tbl.Register("pgState", "Id", "Name")
 	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
 	// TODO: use introspection in dynmaodb so tables do not need to be registered
-	// tbl.Register("Run$Operation", "Graph")
+	// tbl.Register("run$Op", "Graph")
 	// tbl.Register("Run$Run", "RunId")
 	// tbl.Register("Run$State", "RunId")
 
@@ -203,46 +202,50 @@ func main() {
 	}
 
 	// check state of processing, restart?
-	ls, stateId, err = getRunStatus(ctx)
+	opStatus, stateId, err = getOpStatus(ctx)
 	if err != nil {
 
 		if errors.Is(err, query.NoDataFoundErr) {
 
 			// first run...
-			err = setRunStatus(ctx, "R", nil, runid)
+			err = setOpStatus(ctx, "R", nil, runid)
 			if err != nil {
-				alertlog(fmt.Sprintf("Error setting load status: %s\n", err))
-				fmt.Printf("Error setting load status: %s\n", err)
+				alertlog(fmt.Sprintf("Error setting DP status: %s\n", err))
+				fmt.Printf("Error setting DP status: %s\n", err)
 				return
 			}
 			stateId = runid
 
 		} else {
-			alertlog(fmt.Sprintf("Error in determining load status: %s\n", err))
-			fmt.Printf("Error in determining load status: %s\n", err)
+			alertlog(fmt.Sprintf("Error in determining DP status: %s\n", err))
 			return
 		}
 
 	} else {
 
-		switch ls {
+		switch opStatus {
+		// case "C":
+		// 	alertlog("Load is already completed. Abort this run.")
+		// 	fmt.Println("Load is already completed. Abort this run.")
+		// 	return
 		case "C":
-			alertlog("Load is already completed. Abort this run.")
-			fmt.Println("Load is already completed. Abort this run.")
-			return
+			alertlog("DP can be run as minimum interval has elapsedd. ")
+			fmt.Println("DP can be run as minimum interval has elapsedd. ")
+			err = setOpStatus(ctx, "R", nil, runid)
+			stateId = runid
 		case "R":
 			alertlog("Currently loading..aborting this run")
 			fmt.Println("Currently loading..aborting this run")
 			return
 		case "S", "E":
-			alertlog("Previous load errored or was terminated, will now rerun")
-			fmt.Println("Previous load errored or was terminated, will now rerun")
+			alertlog("Previous DP errored or was terminated, will now rerun")
+			fmt.Println("Previous DP errored or was terminated, will now rerun")
 			restart = true
-			err = setRunStatus(ctx, "R", nil)
-			if err != nil {
-				fmt.Printf("Error setting load status: %s\n", err)
-				return
-			}
+			err = setOpStatus(ctx, "R", nil)
+		}
+		if err != nil {
+			fmt.Printf("Error setting DP status: %s\n", err)
+			return
 		}
 		err = addRun(ctx, stateId, runid)
 		if err != nil {
@@ -370,14 +373,14 @@ func main() {
 	monitor.Report()
 	elog.PrintErrors()
 	if elog.RunErrored() {
-		status = "E"
+		opStatus = "E"
 	} else {
-		status = "C"
+		opStatus = "C"
 	}
-	err = setRunStatus(ctx, status, err)
-	syslog(fmt.Sprintf("setLoadstatus...."))
+	err = setOpStatus(ctx, opStatus, err)
+
 	if err != nil {
-		elog.Add("SetLoadStatus", fmt.Errorf("Error setting load status to %s: %w", status, err))
+		elog.Add("SetLoadStatus", fmt.Errorf("Error setting operation status to %s: %w", opStatus, err))
 	}
 	syslog("Cancel initiated. Waiting for DP services to shutdown...")
 	cancel()
@@ -415,51 +418,154 @@ func propagateGR(ctx context.Context, wg *sync.WaitGroup, has11 map[string]struc
 
 //type PKey []byte
 
-func getRunStatus(ctx context.Context) (string, uuid.UID, error) {
+func getOpStatus(ctx context.Context) (string, uuid.UID, error) {
 
 	var err error
 
-	type Status struct {
-		Status string
-		RunId  []byte
+	type Oper struct {
+		Id      string
+		Name    string
+		Enabled string
 	}
-	var status Status
+
 	opt := db.Option{Name: "singlerow", Val: true}
-	// check if ES load completed
-	ftx := tx.NewQueryContext(ctx, "GetRunStatus", "Run$Operation").DB("mysql-goGraph", []db.Option{opt}...)
-	ftx.Select(&status).Key("Graph", types.GraphSN()).Key("TableName", *table).Key("Operation", "DP") // other values: "E","R"
+
+	var oper Oper
+	// check if operation exists and is enabled.
+	ftx := tx.NewQueryContext(ctx, "OpEnabled", "mtn$Op").DB("mysql-goGraph", []db.Option{opt}...)
+	ftx.Select(&oper).Key("Id", "DP")
 
 	err = ftx.Execute()
+
 	if err != nil {
+		if errors.Is(err, query.NoDataFoundErr) {
+			return "", nil, fmt.Errorf("Operation identifer %q not found", oper.Id)
+		}
+		fmt.Println("err: ", err)
 		return "", nil, err
 	}
-	alertlog(fmt.Sprintf("getRunStatus: run$state - Operation: DP  status: %s   runid: %s", status.Status, uuid.UID(status.RunId).Base64()))
+
+	if strings.ToUpper(oper.Enabled) != "Y" {
+		return "", nil, fmt.Errorf("Operation %q is disabled", oper.Name)
+	}
+	alertlog(fmt.Sprintf("getOpStatus: Oper query Enabled: %s", oper.Enabled))
+
+	type Status struct {
+		Created string
+		Status  string
+		RunId   []byte
+	}
+	var status Status
+
+	//  view run$Op_Last_v also does the following = just to show you can specify in MethodsDB
+	etx := tx.NewQueryContext(ctx, "GetRunStatus", "run$Op_Status_v").DB("mysql-goGraph", []db.Option{opt}...)
+	etx.Select(&status).Key("GraphId", types.GraphSN()).Key("OpId", oper.Id).OrderBy("Created", query.Desc).Limit(1)
+
+	err = etx.Execute()
+
+	fmt.Println("Last run: ", status.Created, uuid.UID(status.RunId).Base64()) // 2022-08-20 01:08:45
+
+	if err != nil {
+		if errors.Is(err, query.NoDataFoundErr) {
+			return "", nil, fmt.Errorf("A %q run has yet to have executed. %w", oper.Id, err)
+		}
+		return "", nil, err
+	}
+
+	if status.Status == "R" {
+		return "", nil, fmt.Errorf("Operation is currently running")
+	}
+
+	statusCreated = status.Created
+	fmt.Println("status.Created ", status.Created)
+
+	runStart, err = time.Parse("2006-01-02 15:04:05", status.Created) //2022-08-20 01:08:45
+
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("runStart: ", runStart.Format("2006-01-02 15:04:05"))
+
+	// type Pass struct {
+	// 	OpId        string
+	// 	LastUpdated string
+	// }
+	// var pass Pass
+
+	// stx := tx.NewQueryContext(ctx, "GetRunStatus", "run$Op_PastInterval_v").DB("mysql-goGraph", []db.Option{opt}...)
+	// stx.Select(&pass).Key("GraphId", types.GraphSN()).Key("OpId", oper.Id).Key("Created", status.Created) // runStart.Format("2006-01-02 15:04:05")) // status.Created)
+
+	// err = stx.Execute()
+
+	// if err != nil {
+	// 	if errors.Is(err, query.NoDataFoundErr) {
+	// 		return "", nil, fmt.Errorf("Cannot run operation as required interval after last run has not passed.")
+	// 	}
+	// 	return "", nil, err
+	// }
+
+	// if strings.ToUpper(oper.Enabled) != "Y" {
+	// 	return "", nil, fmt.Errorf("Operation %q is disabled", pass.OpId)
+	// }
+	// alertlog(fmt.Sprintf("getOpStatus: run$state - Operation: DP  status: %s   runid: %s", status.Status, uuid.UID(status.RunId).Base64()))
+
+	//
+	// equivalent to last query but now using MethodDB rather than PastInterval view to do the required logic check.
+	//
+	type Pass2 struct {
+		OpId        string
+		C           string `literal:"DATE_SUB(NOW(), Interval MinIntervalDaySecond DAY_SECOND)"`
+		LastUpdated string
+	}
+	var pass2 Pass2
+	atx := tx.NewQueryContext(ctx, "GetRunStatus", "run$Op_Status_v").DB("mysql-goGraph", []db.Option{opt}...)
+	atx.Select(&pass2).Key("GraphId", types.GraphSN()).Key("OpId", oper.Id).Key("Created", status.Created).Filter("C", "LastUpdated", "GT")
+
+	err = atx.Execute()
+
+	if err != nil {
+		if errors.Is(err, query.NoDataFoundErr) {
+			return "", nil, fmt.Errorf("Cannot run operation as required interval after last run has not passed. ")
+		}
+		return "", nil, err
+	}
+
+	alertlog(fmt.Sprintf("getOpStatus:  2 run$state - Operation: DP  status: %s   runid: %s", status.Status, uuid.UID(status.RunId).Base64()))
+
 	return status.Status, status.RunId, nil
 }
 
-func setRunStatus(ctx context.Context, status string, err_ error, runid ...uuid.UID) error {
+var runStart time.Time
+var statusCreated string
+
+func setOpStatus(ctx context.Context, status string, err_ error, runid ...uuid.UID) error {
 
 	var err error
 
 	if strings.IndexAny(status, "ERSC") == -1 {
-		panic(fmt.Errorf("setRunStatus : value is empty"))
+		panic(fmt.Errorf("setOpStatus : value is empty"))
 	}
+
 	// runid supplied if it is the first time - ie. perform an insert
 	switch len(runid) > 0 {
 
 	case true: // first run
-		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
-		m := ftx.NewInsert("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("RunId", runid[0])
-		m.AddMember("Created", "$CURRENT_TIMESTAMP$")
+
+		runStart = time.Now()
+		fmt.Println("runStart: ", runStart.Format("2006-01-02 15:04:05")) //  runStart.Format("2006-01-02 15:04:05"))
+		ftx := tx.New("setOpStatus").DB("mysql-goGraph")
+		m := ftx.NewInsert("run$Op").AddMember("GraphId", types.GraphSN(), mut.IsKey).AddMember("OpId", "DP", mut.IsKey).AddMember("Status", status).AddMember("RunId", runid[0])
+		m.AddMember("Created", runStart.Format("2006-01-02 15:04:05"))
 		err = ftx.Execute()
 		if err != nil {
 			return err
 		}
 
-	case false: // restart
+	case false:
 		// merge, preserving original runid which also happens to be the stateId used by the tx package for paginated queries.
-		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
-		ftx.NewMerge("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
+		fmt.Println("Set Op Status................................................")
+		ftx := tx.New("setOpStatus").DB("mysql-goGraph")
+		ftx.NewMerge("run$Op").AddMember("GraphId", types.GraphSN(), mut.IsKey).AddMember("OpId", "DP", mut.IsKey).AddMember("Created", runStart.Format("2006-01-02 15:04:05")).AddMember("Status", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
 		err = ftx.Execute()
 		if err != nil {
 			return err
@@ -479,7 +585,7 @@ func getState(ctx context.Context, runid uuid.UID) (string, error) {
 	}
 	var status Status
 	opt := db.Option{Name: "singlerow", Val: true}
-	// check if ES load completed
+	// check if ES DP completed
 	ftx := tx.NewQueryContext(ctx, "getState", "Run$State").DB("mysql-goGraph", []db.Option{opt}...)
 	ftx.Select(&status).Key("RunId", runid).Key("Name", "Type")
 
@@ -554,8 +660,8 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 		}
 	}
 	// use limit to batch the fetch for restarting purposes. Remember the PGstate data is stored back to dynamodb after limit is reached-i.e. last Operation of Execute()
-	// if no limit is used then granularity of restart is the whole table/index - not good.
-	ptx.Limit(param.DPbatch).Paginate(id, restart).Parallel(2)
+	// if no paginate is used then granularity of restart is the whole table/index - not good.
+	ptx.Limit(param.DPbatch).Paginate(id, restart).Parallel(*parallel)
 
 	chs, err := ptx.ExecuteByChannel()
 

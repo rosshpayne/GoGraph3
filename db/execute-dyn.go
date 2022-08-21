@@ -1384,8 +1384,8 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			chs := reflect.New(sT)
 			ichs := reflect.Indirect(chs)
 
-			// create #par clones of QueryHandle and assign bind variables and channel
-			// each cloned QueryHandle will be assoicated with one parallel scan worker
+			// create #par clones of QueryHandle and assign bind variables and channel to it.
+			// Each cloned QueryHandle will be assoicated with one parallel scan worker
 			for i := 0; i < par; i++ {
 
 				cq := q.Clone()
@@ -1397,6 +1397,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				// set bind vars
 				var sel []interface{}
 
+				// assign existing or create new bind vars and assign to cloned QueryHandle
 				if i == 0 {
 					// use bind vars from query method Select()
 					cq.Select(q.Bufs()...)

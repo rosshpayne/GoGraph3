@@ -34,11 +34,19 @@ func crProjection(q *query.QueryHandle) *strings.Builder {
 	for _, v := range q.GetAttr() {
 		if v.IsFetch() {
 			if first {
-				s.WriteString(v.Name())
+				if len(v.Literal()) > 0 {
+					s.WriteString(v.Literal() + " " + v.Name()) // for SQL : ,col alias,
+				} else {
+					s.WriteString(v.Name())
+				}
 				first = false
 			} else {
 				s.WriteByte(',')
-				s.WriteString(v.Name())
+				if len(v.Literal()) > 0 {
+					s.WriteString(v.Literal() + " " + v.Name()) // for SQL : ,col alias,
+				} else {
+					s.WriteString(v.Name())
+				}
 			}
 		}
 	}
@@ -127,10 +135,42 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	var whereVals []interface{}
 	wa := len(q.GetWhereAttrs())
 	for i, v := range q.GetWhereAttrs() {
-		s.WriteString(v.Name())
+		fmt.Println("whereattr: ", v.Name(), v.Literal())
+		var found bool
+		// search
+		for _, vv := range q.GetAttr() {
+			if vv.IsFetch() {
+				if vv.Name() == v.Name() {
+					if len(vv.Literal()) > 0 {
+						s.WriteString(vv.Literal())
+						found = true
+					}
+					break
+				}
+			}
+		}
+		if !found {
+			s.WriteString(v.Name())
+		} else {
+			found = false
+		}
+
 		s.WriteString(sqlOpr(v.GetOprStr()))
-		s.WriteByte('?')
-		whereVals = append(whereVals, v.Value())
+		// check value is not an attribute name, in which case don't use "?"
+		if col, ok := v.Value().(string); ok {
+			// check against attributes in projection
+			for _, v := range q.GetAttr() {
+				if col == v.Name() {
+					s.WriteString(col)
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			s.WriteByte('?')
+			whereVals = append(whereVals, v.Value())
+		}
 		if wa > 0 && i < wa-1 {
 			s.WriteString(" and ")
 		}
@@ -139,6 +179,7 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	if q.HasOrderBy() {
 		s.WriteString(q.OrderByString())
 	}
+	alertlog(fmt.Sprintf("generated sql: [%s]", s.String()))
 	if q.Prepare() {
 
 		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))

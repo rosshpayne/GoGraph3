@@ -40,6 +40,10 @@ func syslog(s string) {
 	slog.Log(logid, s)
 }
 
+func alertlog(s string) {
+	slog.LogAlert(logid, s)
+}
+
 func Init(ctx context.Context) {
 
 	client, err := newMySQL("admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")

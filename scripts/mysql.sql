@@ -25,36 +25,79 @@ drop table EdgeChild_Movies;
  
  alter table  EdgeChild_Movies add primary key (Puid, SortK_Cuid);
  
- drop table Run$Operation;
- create table Run$Operation (
- Graph varchar(8) not null,
- TableName varchar(60) not null,
- Operation varchar(80) not null,
+ drop table Graph;
+ create table Graph (
+ Id varchar2(3) primary key,
+ Graph varchar(30),
+ Enabled char(1) not null default "Y")
+ 
+alter table Graph add unique key (Graph);
+ 
+ drop table mtn$Op;
+ create table mtn$Op (
+ Id varchar(3) primary key,
+ Name varchar(80) not null,
+ MinIntervalDaySecond varchar(12) , # "D HR:MM:SS"
+ Enabled char(1) not null default "Y");
+ 
+ alter table mtn$Op add unique key (Name);
+ 
+insert into mtn$Op (Id,Name,MinIntervalDaySecond) Values ("DP","Double Propagation","0 0:0:30");
+ // current operations - test & prod the same. Prod has prod tableName.
+ drop table run$Op;
+ create table run$Op (
+ GraphId varchar(3) not null,
+ OpId  varchar(3) not null,
+ Created DateTime not null,
  Status varchar(256) not null,
- Created DateTime,
  LastUpdated DateTime,
- RunId Binary(16));
+ RunId Binary(16) not null,
+ Error varchar(200));
  
  
- alter table Run$Operation add primary key (Graph, TableName, Operation);
- alter table Run$Operation add unique key (RunId);
+ alter table run$Op add primary key (GraphId, OpId, Created );
+ alter table run$Op add unique key (RunId);
+
+ create or replace view run$Op_Status_v as
+ select r.OpId , r.GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, m.MinIntervalDaySecond
+ From run$Op r
+ join mtn$Op m on (m.Id=r.OpId)
+ order by Created desc
+ limit 1;
+ #where m.Enabled = "Y";
  
- drop table Run$State;
- create table Run$State (
+ create or replace view run$Op_Last_v as
+ select r.OpId , r.GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, m.MinIntervalDaySecond
+ From run$Op r
+ join mtn$Op m on (m.Id=r.OpId)
+ where m.Enabled = "Y"
+ order by Created desc
+ limit 1;
+ 
+ 
+ 
+ create or replace view run$Op_PastInterval_v as
+ select r.OpId, r.GraphId GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, r.Error, o.Enabled
+ From run$Op r
+ join mtn$Op o on (r.OpId = o.Id)
+ where DATE_SUB(NOW(), Interval o.MinIntervalDaySecond DAY_SECOND) > r.LastUpdated;
+
+ drop table run$State;
+ create table run$State (
  RunId Binary(16),
  Name varchar(30) not null, 
  Value varchar(60) not null, 
  LastUpdated DateTime not null);
  
- alter table Run$State add primary key (RunId, Name);
+ alter table run$State add primary key (RunId, Name);
   
- drop table Run$Run;
- create table Run$Run (
+ drop table run$Run;
+ create table run$Run (
  RunId Binary(16),
  Associated_RunId Binary(16),
- Created DateTime not null);
+ Error varchar(400) not null);
  
- alter table Run$Run add primary key (RunId,Associated_RunId);
+ alter table run$Run add primary key (RunId,Associated_RunId);
   
   
   
