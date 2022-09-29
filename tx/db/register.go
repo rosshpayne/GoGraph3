@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx/mut"
@@ -24,6 +25,7 @@ type DBHandle interface {
 	CloseTx([]*mut.Mutations)
 	Ctx() context.Context
 	String() string
+	RetryOp(err error) bool
 	//
 	GetTableKeys(context.Context, string) ([]key.TableKey, error)
 }
@@ -34,18 +36,29 @@ type RegistryT struct {
 	Handle  DBHandle
 }
 
-const (
-	DefaultDB int = 0
+// const (
+// 	DefaultDB int = 0
+// )
+
+var (
+	mu sync.Mutex
+	// zero entry in dbRegistry is for default db.
+	// non-default db's use Register()
+	dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
 )
 
 // Register is used by non-default database services e.g. mysql
-func Register(n string, handle DBHandle) {
+func Register(n string, handle DBHandle, deflt ...bool) {
 
 	mu.Lock()
 
 	d := RegistryT{Name: strings.ToLower(n), Handle: handle}
 
-	dbRegistry = append(dbRegistry, d)
+	if len(deflt) > 0 && deflt[0] {
+		dbRegistry[0] = d
+	} else {
+		dbRegistry = append(dbRegistry, d)
+	}
 
 	mu.Unlock()
 }
@@ -63,5 +76,5 @@ func GetDBHdl(n string) (DBHandle, error) {
 }
 
 func GetDefaultDBHdl() DBHandle {
-	return dbRegistry[DefaultDB].Handle
+	return dbRegistry[0].Handle
 }

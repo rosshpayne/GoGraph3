@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GoGraph/db"
+	//"github.com/GoGraph/db"
 	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/query"
 	//_ "github.com/go-sql-driver/mysql"
 )
@@ -179,7 +180,8 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	if q.HasOrderBy() {
 		s.WriteString(q.OrderByString())
 	}
-	alertlog(fmt.Sprintf("generated sql: [%s]", s.String()))
+
+	slog.Log("executeQuery", fmt.Sprintf("generated sql: [%s]", s.String()))
 	if q.Prepare() {
 
 		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))

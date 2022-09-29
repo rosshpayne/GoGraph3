@@ -15,7 +15,7 @@ import (
 	"github.com/GoGraph/attach-merge/ds"
 	"github.com/GoGraph/attach-merge/execute"
 	"github.com/GoGraph/cache"
-	"github.com/GoGraph/db"
+	dyn "github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	elog "github.com/GoGraph/errlog"
@@ -27,6 +27,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
@@ -123,9 +124,10 @@ func main() {
 
 	// register default database client
 	//db.Init(ctx)
-	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-
-	mysql.Init(ctx)
+	// db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	// mysql.Init(ctx)
+	dyn.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	mysql.Init(ctx, "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	tstart = time.Now()
 

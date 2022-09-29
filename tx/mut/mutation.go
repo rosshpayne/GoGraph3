@@ -25,13 +25,16 @@ const (
 	Update // update performing "set =" operation etc
 	TruncateTbl
 	//
-	Set      MutOpr = iota + 1
-	Inc             // set col = col + 1
-	Subtract        // set col = col - 1
-	Add             // set col = col - <num>
-	IsKey           // used in query & update mode. Alternative to registering table/index and its keys. TODO:implement reg throughout.
-	Append          // update by appending to array/list attribute
-	Remove          // remove attribute
+	Set MutOpr = iota + 1
+	// Inc             // set col = col + 1 //TODO: deprecated - performed by Add, Substract
+	// Decr            // set col = col - 1 //TODO: deprecated -
+	Subtract // set col = col - <value>
+	Add      // set col = col - <num>
+	//
+	IsKey // used in query & update mode. Alternative to registering table/index and its keys. TODO: deprecated - GoGraph determines from DD
+	//
+	Append // update by appending to array/list attribute
+	Remove // remove attribute
 	//
 	AttrExists Cond = iota
 	AttrNotExists
@@ -55,8 +58,8 @@ func (s MutOpr) String() string {
 	switch s {
 	case Set:
 		return "Set"
-	case Inc:
-		return "Inc"
+	// case Inc:
+	// 	return "Inc"
 	case Subtract:
 		return "Subtract"
 	case Add:
@@ -106,9 +109,9 @@ func (m *Member) Set() bool {
 	return m.Opr == Set
 }
 
-func (m *Member) Inc() bool {
-	return m.Opr == Inc
-}
+// func (m *Member) Inc() bool {
+// 	return m.Opr == Inc
+// }
 
 func (m *Member) Subtract() bool {
 	return m.Opr == Subtract
@@ -151,7 +154,7 @@ type Mutation struct {
 	// sk   string
 	pKey interface{}
 	tbl  tbl.Name
-	opr  StdMut
+	opr  StdMut // update,insert(put)
 	//
 	text     string      // alternate representation of a mutation e.g. sql
 	prepStmt interface{} // some db's may optional "prepare" mutations before execution Three phase 1) single prepare stmt 2) multiple stmt executions 3) close stmt
@@ -364,53 +367,53 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 	return im
 }
 
-func (im *Mutation) AddMember2(attr string, value interface{}, opr ...MutOpr) *Mutation {
+// func (im *Mutation) AddMember2(attr string, value interface{}, opr ...MutOpr) *Mutation {
 
-	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
-	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
-	p := strings.Replace(attr, "#", "_", -1)
-	p = strings.Replace(p, ":", "x", -1)
-	if p[0] == '0' {
-		p = "1" + p
-	}
-	m := Member{Name: attr, Param: "@" + p, Value: value}
+// 	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
+// 	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
+// 	p := strings.Replace(attr, "#", "_", -1)
+// 	p = strings.Replace(p, ":", "x", -1)
+// 	if p[0] == '0' {
+// 		p = "1" + p
+// 	}
+// 	m := Member{Name: attr, Param: "@" + p, Value: value}
 
-	// assign Set to mut.Opr even for Insert DML where Opr will be ignored.
-	m.Opr = Set
+// 	// assign Set to mut.Opr even for Insert DML where Opr will be ignored.
+// 	m.Opr = Set
 
-	// determine if member is an array type based on its value type. For Dynamobd  arrays are List or Set types.
-	// However, there is no way to distinguish between List or Set using the value type,
-	// but this is not necessary as GoGraph uses Lists only - as the order of the array data is important and needs to be preserved.
-	// For Spanner there is only one array type.
-	// Using reflect pkg replaces the use of hardwire attribute names that identify the array types e.g. case "Nd", " ", "Id", "XBl", "L*":
-	// (the advantage of hardwiring attribute names is it makes for a generic solution that suits both Dynamodb & Spanner).
-	// default behaviour is to append value to end of array
-	// TODO: come up with generic solution for both Dynamodb & Spanner - probably not possible so make use of conditional compilation.
-	m.Array = IsArray(value)
+// 	// determine if member is an array type based on its value type. For Dynamobd  arrays are List or Set types.
+// 	// However, there is no way to distinguish between List or Set using the value type,
+// 	// but this is not necessary as GoGraph uses Lists only - as the order of the array data is important and needs to be preserved.
+// 	// For Spanner there is only one array type.
+// 	// Using reflect pkg replaces the use of hardwire attribute names that identify the array types e.g. case "Nd", " ", "Id", "XBl", "L*":
+// 	// (the advantage of hardwiring attribute names is it makes for a generic solution that suits both Dynamodb & Spanner).
+// 	// default behaviour is to append value to end of array
+// 	// TODO: come up with generic solution for both Dynamodb & Spanner - probably not possible so make use of conditional compilation.
+// 	m.Array = IsArray(value)
 
-	// override Opr value with argument value if specified
-	if len(opr) > 0 {
-		m.Opr = opr[0]
-	} else if m.Array {
-		// default operation for arrays is append.
-		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
-		// in such cases you must Put
-		// Conclusion: for the initial load the default is Put - this will overwrite what is in Nd which for the initial load will by a single NULL entry.
-		// this is good as it means the the index entries in Nd match those in the scalar propagation atributes.
-		// After the initial load the default should be set to Append as all items exist and the associated array attributes exist in those items, so appending will succeed.
-		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
-		m.Opr = Append
-	}
-	im.ms = append(im.ms, m)
+// 	// override Opr value with argument value if specified
+// 	if len(opr) > 0 {
+// 		m.Opr = opr[0]
+// 	} else if m.Array {
+// 		// default operation for arrays is append.
+// 		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
+// 		// in such cases you must Put
+// 		// Conclusion: for the initial load the default is Put - this will overwrite what is in Nd which for the initial load will by a single NULL entry.
+// 		// this is good as it means the the index entries in Nd match those in the scalar propagation atributes.
+// 		// After the initial load the default should be set to Append as all items exist and the associated array attributes exist in those items, so appending will succeed.
+// 		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
+// 		m.Opr = Append
+// 	}
+// 	im.ms = append(im.ms, m)
 
-	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
-	// if attr == "Nd" {
-	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Opr: Inc}
-	// 	im.ms = append(im.ms, m)
-	// }
-	//	}
-	return im
-}
+// 	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
+// 	// if attr == "Nd" {
+// 	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Opr: Inc}
+// 	// 	im.ms = append(im.ms, m)
+// 	// }
+// 	//	}
+// 	return im
+// }
 
 func (im *Mutation) AddCondition(cond Cond, attr string, value ...interface{}) *Mutation { //, opr ...StdMut)
 
@@ -520,7 +523,7 @@ func (bm *Mutations) FindMutation(table tbl.Name, pk uuid.UID, sk string) *Mutat
 	return nil
 }
 
-// FindMutation searches the associated batch of mutations based on argument values.
+// FindMutation searches the associated batch of mutations based on key values.
 func (bm *Mutations) FindMutation2(table tbl.Name, keys []key.MergeKey) (*Mutation, error) {
 	var (
 		ok    bool

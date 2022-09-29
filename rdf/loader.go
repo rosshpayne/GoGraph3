@@ -13,7 +13,7 @@ import (
 	"time"
 
 	blk "github.com/GoGraph/block"
-	"github.com/GoGraph/db"
+	dyn "github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	"github.com/GoGraph/stats/admin"
 	//"github.com/GoGraph/client"
@@ -34,6 +34,7 @@ import (
 	//"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
 	//"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
@@ -172,8 +173,10 @@ func main() { //(f io.Reader) error { // S P O
 	}()
 	// register default database client
 	// TODO: Init should support of aws.Options e.g. WithRegion, etc
-	db.Init(ctx, &ctxEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Init(ctx)
+	// db.Init(ctx, &ctxEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	// mysql.Init(ctx)
+	dyn.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	mysql.Init(ctx, "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	//
 	// if *showsql {
@@ -261,7 +264,6 @@ func main() { //(f io.Reader) error { // S P O
 	wpEnd.Add(2)
 	//
 	// start pipeline goroutines
-	//
 	go verify(ctx, &wpStart, &wpEnd)
 	go saveNode(&wpStart, &wpEnd)
 	//
@@ -336,7 +338,9 @@ func main() { //(f io.Reader) error { // S P O
 	close(verifyCh)
 	tclose := time.Now()
 	// and wait for them to exit
+	syslog("Waiting on wpEnd")
 	wpEnd.Wait()
+	syslog("Pass wpEnd Wait")
 
 	elog.PrintErrors()
 	// Save edge data to db.
@@ -421,7 +425,9 @@ func verify(ctx context.Context, wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup)
 
 		}
 	}
+	syslog("verify waiting on unmarshalRDFs to finish...")
 	wg.Wait()
+	syslog("verify pass Wait ...")
 	limitUnmarshaler.Unregister()
 }
 

@@ -559,7 +559,7 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 			continue
 		}
 
-		dpCh <- bufs[ptx.Result()]
+		dpCh <- bufs[ptx.OutBuf()]
 
 	}
 }

@@ -23,19 +23,19 @@ type Ceiling = int
 
 type throttle_ byte
 
-var Control throttle_
-
 func (t throttle_) Up() {
-	ThrottleUpCh <- struct{}{}
+	throttleUpCh <- struct{}{}
 }
 
 func (t throttle_) Down() {
-	ThrottleDownCh <- struct{}{}
+	throttleDownCh <- struct{}{}
 }
 
 func (t throttle_) Stop() {}
 
 func (t throttle_) String() {}
+
+var Control throttle_
 
 /////////////////////////////////////
 //
@@ -57,8 +57,8 @@ var rWait rWaitMap
 //
 var (
 	EndCh          = make(chan Routine, 1)
-	ThrottleDownCh = make(chan struct{})
-	ThrottleUpCh   = make(chan struct{})
+	throttleDownCh = make(chan struct{})
+	throttleUpCh   = make(chan struct{})
 	//
 	rAskCh     = make(chan Routine)
 	rExpirehCh = make(chan Routine)
@@ -260,8 +260,8 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	csnap := make(map[string][]int)  //cumlative snapshots
 	csnap_ := make(map[string][]int) //shadow copy of csnap used by reporting system
 
-	ThrottleDownCh = make(chan struct{})
-	ThrottleUpCh = make(chan struct{})
+	// throttleDownCh = make(chan struct{})
+	// throttleUpCh = make(chan struct{})
 
 	// setup snapshot interrupt goroutine
 	snapCh := make(chan time.Time)
@@ -353,7 +353,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				rWait[r] += 1 // log routine as waiting to proceed
 			}
 
-		case <-ThrottleDownCh:
+		case <-throttleDownCh:
 
 			t0 := time.Now()
 
@@ -383,7 +383,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 			}
 			throttleDownActioned = t0
 
-		case <-ThrottleUpCh:
+		case <-throttleUpCh:
 
 			t0 := time.Now()
 			for _, v := range rLimit {

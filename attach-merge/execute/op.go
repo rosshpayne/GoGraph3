@@ -78,7 +78,8 @@ func (a *AttachOp) End(err error) []dbs.Mutation {
 		//m[0] = mut.NewInsert(tblEdge).AddMember("Bid", a.Bid, mut.IsKey).AddMember("Puid", a.Puid, mut.IsKey).AddMember("Cnt", 0)
 
 		// use merge to set Cnt to 0. This represents the commit unit i.e. either all child nodes get attached  or none.
-		m[0] = mut.NewMerge(tblEdge).AddMember("Bid", a.Bid, mut.IsKey).AddMember("Puid", a.Puid, mut.IsKey).AddMember("Cnt", 0)
+		//m[0] = mut.NewMerge(tblEdge).AddMember("Bid", a.Bid, mut.IsKey).AddMember("Puid", a.Puid, mut.IsKey).AddMember("Cnt", 0)
+		m[0] = mut.NewMerge(tblEdge).AddMember("Bid", a.Bid).AddMember("Puid", a.Puid).AddMember("Cnt", 0) // Test - not using IsKey
 		return m
 	}
 

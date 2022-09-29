@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/GoGraph/db"
+	//"github.com/GoGraph/db"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tbl/key"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 
@@ -44,9 +45,9 @@ func alertlog(s string) {
 	slog.LogAlert(logid, s)
 }
 
-func Init(ctx context.Context) {
+func Init(ctx context.Context, path string) {
 
-	client, err := newMySQL("admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	client, err := newMySQL(path)
 	if err != nil {
 		logerr(err)
 	} else {
@@ -73,6 +74,10 @@ func newMySQL(dsn string) (*sql.DB, error) {
 	}
 
 	return mdb, err
+}
+
+func (h MySQL) RetryOp(e error) bool {
+	return false
 }
 
 // Execute manipulates data. See ExecuteQuery()

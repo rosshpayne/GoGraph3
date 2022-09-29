@@ -16,6 +16,7 @@ type ScanOrder int8
 type Orderby int8
 type AccessTy byte
 type BoolCd byte
+type Mode byte
 
 const (
 	NA string = "NA"
@@ -38,6 +39,9 @@ const (
 	NIL BoolCd = iota
 	AND
 	OR
+	//
+	CHANNEL Mode = iota
+	FUNC
 	//
 )
 
@@ -123,8 +127,10 @@ type QueryHandle struct {
 	parallel int
 	css      bool // read consistent mode
 	//
-	channelMode bool
-	channel     interface{}
+	queryMode Mode
+	//
+	channel interface{}
+	f       func() error
 	// prepare mutation in db's that support separate preparation phase
 	prepare  bool
 	prepStmt interface{}
@@ -226,6 +232,23 @@ func (q *QueryHandle) Reset() {
 	//	q.pk, q.sk = "", ""
 }
 
+func (q *QueryHandle) Channel() Mode {
+	return CHANNEL
+}
+
+func (q *QueryHandle) Func() Mode {
+	return FUNC
+}
+
+func (q *QueryHandle) SetFunc(f func() error) {
+	q.queryMode = FUNC
+	q.f = f
+}
+
+func (q *QueryHandle) GetFunc() func() error {
+	return q.f
+}
+
 func (q *QueryHandle) Error() error {
 	return q.err
 }
@@ -242,12 +265,12 @@ func (q *QueryHandle) SetPrepare() {
 	q.prepare = true
 }
 
-func (q *QueryHandle) SetChannelMode() {
-	q.channelMode = true
+func (q *QueryHandle) SetQueryMode(m Mode) {
+	q.queryMode = m
 }
 
-func (q *QueryHandle) ChannelMode() bool {
-	return q.channelMode
+func (q *QueryHandle) QueryMode() Mode {
+	return q.queryMode
 }
 
 func (q *QueryHandle) Prepare() bool {
@@ -266,9 +289,9 @@ func (q *QueryHandle) SetPrepStmt(p interface{}) {
 // 	return q.ctx
 // }
 
-func (q *QueryHandle) Channel() interface{} {
-	return q.channel
-}
+// func (q *QueryHandle) Channel() interface{} {
+// 	return q.channel
+// }
 
 func (q *QueryHandle) SetChannel(c interface{}) {
 	q.channel = c
@@ -708,6 +731,10 @@ func (q *QueryHandle) OrderByString() string {
 	}
 	return s + " desc"
 
+}
+
+func (q *QueryHandle) OutBuf() int {
+	return q.Result()
 }
 
 func (q *QueryHandle) Result() int {

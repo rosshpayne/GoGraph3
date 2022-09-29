@@ -349,10 +349,14 @@ func main() {
 	tstart = time.Now()
 
 	ch, err := UnprocessedCh(ctx, dpTy, stateId, restart)
+
 	if err != nil {
+
 		elog.Add("UnprocessedCh", err)
+
 	} else {
 
+		// loop on channel until closed by db.
 		for un := range ch {
 
 			for _, u := range un {
@@ -360,7 +364,7 @@ func main() {
 				pkey := u.PKey
 				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
 
-				Propagate(ctx, pkey, ty, has11)
+				go Propagate(ctx, pkey, ty, has11)
 			}
 		}
 	}

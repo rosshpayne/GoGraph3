@@ -10,9 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoGraph/db/internal/throttleSrv"
+	//	"github.com/GoGraph/db/internal/throttleSrv"
 	"github.com/GoGraph/tbl/key"
-	thtle "github.com/GoGraph/throttle"
+	//thtle "github.com/GoGraph/throttle"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 
@@ -26,7 +27,7 @@ import (
 )
 
 type DynamodbHandle struct {
-	opt []Option
+	opt []db.Option
 	ctx context.Context
 	cfg aws.Config
 	*dynamodb.Client
@@ -35,19 +36,17 @@ type DynamodbHandle struct {
 var (
 	awsConfig aws.Config
 	dbSrv     *dynamodb.Client
-	mu        sync.Mutex
-	// zero entry in dbRegistry is for default db.
-	// non-default db's use Register()
-	dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
+	// mu        sync.Mutex
+	// // zero entry in dbRegistry is for default db.
+	// // non-default db's use Register()
+	// dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
 	//
 	wpStart sync.WaitGroup
 )
 
-func newService(ctx_ context.Context, opt ...Option) (*dynamodb.Client, aws.Config) {
+func newService(ctx_ context.Context, opt ...db.Option) (*dynamodb.Client, aws.Config) {
 
-	var (
-		optFuncs []func(*config.LoadOptions) error
-	)
+	var optFuncs []func(*config.LoadOptions) error
 
 	for _, v := range opt {
 		if f, ok := v.Val.(func(*config.LoadOptions) error); ok {
@@ -68,14 +67,14 @@ func newService(ctx_ context.Context, opt ...Option) (*dynamodb.Client, aws.Conf
 	return dynamodb.NewFromConfig(cfg), cfg
 }
 
-func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...Option) {
+func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...db.Option) {
 
-	var appThrottle thtle.Throttler
+	//var appThrottle thtle.Throttler
 
 	for _, v := range opt {
 		switch strings.ToLower(v.Name) {
-		case "throttler":
-			appThrottle = v.Val.(thtle.Throttler)
+		// case "throttler":
+		// 	appThrottle = v.Val.(thtle.Throttler)
 		case "region":
 			fmt.Println("Region = ", v.Val.(string))
 			v.Val = config.WithRegion(v.Val.(string))
@@ -87,28 +86,29 @@ func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...Option) {
 		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}
 
-	dbRegistry[DefaultDB].Handle = &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
+	db.Register("dynamodb", &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}, true)
+	//dbRegistry[DefaultDB].Handle = &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
 
-	// define dbSrv used by db package (dynamodb specific) internals - not ideal solution, would rather
-	// source from dbRegistry but this could be expensive at runtime. This works only because
-	// we are dealing with the default database, otherwise we would be forced to go through dbRegistry.
+	//
 
 	// start throttler goroutine
-	wpStart.Add(1)
+	//wpStart.Add(1)
 	// check verify and saveNode have finished. Each goroutine is responsible for closing and waiting for all routines they spawn.
-	ctxEnd.Add(1)
+	// ctxEnd.Add(1)
 	//
-	// start pipeline goroutines
+	// *** NOT SURE WHY I PUT THROTTLER HERE......COMMENT OUT TILL I KNOW WHY.
+	// *** BUT HOWEVER in PowerON WAITS ON Cancel() which prevents ctxEnd.Done() from executing
 	//
-	go throttleSrv.PowerOn(ctx_, &wpStart, ctxEnd, appThrottle)
+	// // start throttler.
+	// go throttleSrv.PowerOn(ctx_, &wpStart, ctxEnd, appThrottle)
 
-	alertlog(fmt.Sprintf("waiting for db internal service [throttle] to start...."))
-	wpStart.Wait()
-	alertlog(fmt.Sprintf("db internal service [throttle] started."))
+	// alertlog(fmt.Sprintf("waiting for db internal service [throttle] to start...."))
+	// wpStart.Wait()
+	// alertlog(fmt.Sprintf("db internal service [throttle] started."))
 }
 
 // Execute dml (see ExecuteQuery). TODO: make prepare a db.Option
-func (h *DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api API, prepare bool, opt ...Option) error {
+func (h *DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api db.API, prepare bool, opt ...db.Option) error {
 
 	if ctx == nil {
 		ctx = h.ctx // initiated context
@@ -116,7 +116,7 @@ func (h *DynamodbHandle) Execute(ctx context.Context, bs []*mut.Mutations, tag s
 	return execute(ctx, h.Client, bs, tag, api, h.cfg, opt...)
 }
 
-func (h *DynamodbHandle) ExecuteQuery(ctx context.Context, qh *query.QueryHandle, o ...Option) error {
+func (h *DynamodbHandle) ExecuteQuery(ctx context.Context, qh *query.QueryHandle, o ...db.Option) error {
 	if ctx == nil {
 		ctx = h.ctx // initiated context
 	}
@@ -135,12 +135,11 @@ func (h *DynamodbHandle) Ctx() context.Context {
 func (h *DynamodbHandle) CloseTx(m []*mut.Mutations) {}
 
 func (h *DynamodbHandle) String() string {
-	if dbRegistry[0].Default {
-		return dbRegistry[0].Name + " [default]"
-	} else {
-		return dbRegistry[0].Name + " [not default]"
-	}
+	return "dynamdob [default]"
+}
 
+func (h *DynamodbHandle) RetryOp(e error) bool {
+	return retryOp(e)
 }
 
 func (h *DynamodbHandle) GetTableKeys(ctx context.Context, table string) ([]key.TableKey, error) {

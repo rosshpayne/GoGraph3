@@ -138,7 +138,7 @@ func main() {
 
 	// register default database client
 	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Init(ctx)
+	mysql.Init(ctx, "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	//	tbl.Register("pgState", "Id", "Name")
 	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
@@ -414,6 +414,17 @@ func main() {
 
 }
 
+func Init(ctx context.Context) {
+
+	client, err := newMySQL("admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	if err != nil {
+		logerr(err)
+	} else {
+		m := MySQL{DB: client, ctx: ctx}
+		db.Register("mysql-GoGraph", m)
+	}
+}
+
 //type PKey []byte
 
 func getRunStatus(ctx context.Context) (string, uuid.UID, error) {
@@ -536,7 +547,6 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 		err error
 
 		buf []UnprocRec
-
 	)
 
 	defer close(dpCh)
@@ -553,7 +563,7 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 		err = ptx.Execute()
 
 		if err != nil {
-			if errors.Is(query.NoDataFoundErr,err) {
+			if errors.Is(query.NoDataFoundErr, err) {
 				continue
 			}
 			if !ptx.RetryOp(err) {

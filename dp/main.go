@@ -15,7 +15,7 @@ import (
 
 	//"github.com/GoGraph/attach/anmgr"
 	"github.com/GoGraph/cache"
-	"github.com/GoGraph/db"
+	dyn "github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
@@ -26,6 +26,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	tx "github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/types"
@@ -134,9 +135,9 @@ func main() {
 		}
 	}()
 
-	// register default database client
-	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Init(ctx)
+	// TODO: how to register default database from app rather than inside Init
+	dyn.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	mysql.Init(ctx, "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	//	tbl.Register("pgState", "Id", "Name")
 	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
@@ -281,8 +282,7 @@ func main() {
 	wpStart.Add(3)
 	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, runid) // concurrent goroutine manager service
 	go errlog.PowerOn(ctx, &wpStart, &wpEnd)       // error logging service
-	//go anmgr.PowerOn(ctx, &wpStart, &wpEnd)        // attach node service
-	go monitor.PowerOn(ctx, &wpStart, &wpEnd) // repository of system statistics service
+	go monitor.PowerOn(ctx, &wpStart, &wpEnd)      // repository of system statistics service
 	wpStart.Wait()
 
 	// setup db related services (e.g. stats snapshot save)
@@ -357,7 +357,7 @@ func main() {
 		)
 		for {
 
-			unproc, err := ScanForDPitems(ctx, ty)
+			unproc, err := scanForDP(ctx, ty)
 			if err != nil {
 				break
 			}
@@ -373,7 +373,7 @@ func main() {
 				go Propagate(ctx, limiterDP, &wgc, uid, ty_, has11)
 			}
 			wgc.Wait()
-			time.Sleep(500 * time.Millisecond) // wait for all dynamodb  distributed writes to complete
+			time.Sleep(500 * time.Millisecond) // wait for all dynamodb distributed writes to complete. Required for index scan (no fullconsistency)
 		}
 		if err != nil {
 			if !errors.Is(query.NoDataFoundErr, err) {
@@ -521,25 +521,24 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 	return nil
 }
 
-// ScanForDPitems fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
-func ScanForDPitems(ctx context.Context, ty string) ([]Unprocessed, error) {
+// scanForDP fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
+func scanForDP(ctx context.Context, ty string) ([]Unprocessed, error) {
 
 	var (
-		logid = "ScanForDPitems"
+		logid = "scanForDP"
 		stx   *tx.QHandle
 		err   error
 	)
 
-	slog.LogAlert(logid, fmt.Sprintf("ScanForDPitems for type %q started.", ty))
+	slog.LogAlert(logid, fmt.Sprintf("scanForDP for type %q started.", ty))
 
 	rec := []Unprocessed{}
 
 	stx = tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
-	//stx = tx.NewQueryContext(ctx, "dpScan", "GoGraph.dp-r3", "TyIX")
 	if err != nil {
 		return nil, err
 	}
-	stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch) //.ReadConsistency(false)
+	stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch)
 
 	err = stx.Execute()
 	if err != nil {
@@ -548,6 +547,7 @@ func ScanForDPitems(ctx context.Context, ty string) ([]Unprocessed, error) {
 		}
 		return nil, err
 	}
+
 	return rec, nil
 
 }

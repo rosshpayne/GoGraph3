@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GoGraph/db"
+	//"github.com/GoGraph/db"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/uuid"
 
@@ -258,11 +259,6 @@ func genSQLMerge(m *mut.Mutation, params []interface{}) (string, []interface{}) 
 			sql.WriteString(col.Name)
 			sql.WriteString(",0)")
 			sql.WriteByte('+')
-		case mut.Inc:
-			sql.WriteString("ifnull(")
-			sql.WriteString(col.Name)
-			sql.WriteString(",0)")
-			sql.WriteByte('+')
 		case mut.Subtract:
 			sql.WriteString("ifnull(")
 			sql.WriteString(col.Name)
@@ -314,7 +310,7 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 		sql.WriteByte('=')
 
 		switch col.Opr {
-		case mut.Inc:
+		case mut.Add:
 			sql.WriteString("ifnull(")
 			sql.WriteString(col.Name)
 			sql.WriteString(",0)")
@@ -489,10 +485,10 @@ func genSQLStatement(m *mut.Mutation) sqlStmt {
 
 }
 
-func genSQLparams(m *mut.Mutation) []interface{} {
+// func genSQLparams(m *mut.Mutation) []interface{} {
 
-	// use genSQLStatement to create params (slice of mutation values that match placeholders in SQL stmt)
-	sqlstmt := genSQLStatement(m)
-	return sqlstmt.params
+// 	// use genSQLStatement to create params (slice of mutation values that match placeholders in SQL stmt)
+// 	sqlstmt := genSQLStatement(m)
+// 	return sqlstmt.params
 
-}
+// }

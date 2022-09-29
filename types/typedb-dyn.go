@@ -7,10 +7,11 @@ import (
 	"fmt"
 
 	blk "github.com/GoGraph/block"
+	dyn "github.com/GoGraph/db"
 	//	"github.com/GoGraph/dbConn"
-	"github.com/GoGraph/db"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
 )
 
 const (
@@ -73,12 +74,12 @@ func GetTypeShortNames() ([]tyNames, error) {
 // getSrv - get default db service. Cannot use an init() as order of execution with db init() cannot be specified. Require a db goroutine service to provide
 // getSrv data, which can then be included in a init() in this package.
 // dbSrv := SrvCh <- struct{DB: "dynamodb"}
-func getSrv() *db.DynamodbHandle {
+func getSrv() *dyn.DynamodbHandle {
 	hdl, err := db.GetDBHdl("dynamodb")
 	if err != nil {
 		panic(err)
 	}
-	return hdl.(*db.DynamodbHandle)
+	return hdl.(*dyn.DynamodbHandle)
 }
 
 func LoadDataDictionary() (blk.TyIBlock, error) {

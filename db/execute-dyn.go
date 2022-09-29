@@ -23,6 +23,7 @@ import (
 	"github.com/GoGraph/uuid"
 	//"github.com/GoGraph/tbl"
 	param "github.com/GoGraph/dygparam"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 
@@ -88,7 +89,7 @@ func alertlog(s string) {
 	slog.LogAlert(logid, s)
 }
 
-func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API, cfg aws.Config, opt ...Option) error {
+func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api db.API, cfg aws.Config, opt ...db.Option) error {
 
 	var (
 		err error
@@ -98,12 +99,12 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 
 	switch api {
 
-	case StdAPI, TransactionAPI:
+	case db.StdAPI, db.TransactionAPI:
 
 		// distinction between Std and Transaction make in execTranaction()
 		err = execTransaction(ctx, client, bs, tag, api)
 
-	case BatchAPI:
+	case db.BatchAPI:
 
 		err = execBatch(ctx, client, bs, tag)
 
@@ -111,7 +112,7 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 
 	// 	err = execScan(client, bs, tag)
 
-	case OptimAPI:
+	case db.OptimAPI:
 
 		err = execOptim(ctx, client, bs, tag)
 
@@ -172,7 +173,7 @@ func errorAction(err error) []action { // (bool, action string) {
 	return []action{fail}
 }
 
-func RetryOp(err error) bool {
+func retryOp(err error) bool {
 
 	//  github.com/aws/aws-sdk-go-v2/aws/Retryer
 	retryer := awsConfig.Retryer
@@ -286,12 +287,6 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 				upd = expression.Set(expression.Name(col.Name), expression.Name(col.Name).Plus(expression.Value(col.Value)))
 			} else {
 				upd = upd.Set(expression.Name(col.Name), expression.Name(col.Name).Plus(expression.Value(col.Value)))
-			}
-		case mut.Inc:
-			if i == 0 {
-				upd = expression.Set(expression.Name(col.Name), expression.Name(col.Name).Plus(expression.Value(1)))
-			} else {
-				upd = upd.Set(expression.Name(col.Name), expression.Name(col.Name).Plus(expression.Value(1)))
 			}
 		case mut.Subtract:
 			if i == 0 {
@@ -559,7 +554,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 			if err != nil {
 
-				if !RetryOp(err) {
+				if !retryOp(err) {
 					return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation or max retries exceeded", NonRetryOperErr, err)
 				}
 				// wait 1 seconds before processing again...
@@ -601,7 +596,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 				if err != nil {
 					retryErr = err
-					if !RetryOp(err) {
+					if !retryOp(err) {
 						return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation.", NonRetryOperErr, err)
 					}
 					// wait n seconds before reprocessing...
@@ -691,7 +686,7 @@ func execOptim(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations
 	}
 
 	// process updates/deletes
-	return execTransaction(ctx, client, bs, tag, OptimAPI)
+	return execTransaction(ctx, client, bs, tag, db.OptimAPI)
 
 }
 
@@ -702,7 +697,7 @@ type txWrite struct {
 	merge bool
 }
 
-func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api API) error {
+func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api db.API) error {
 
 	// handle as a Transaction
 
@@ -748,7 +743,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 			y, ok := m.(*mut.Mutation)
 			if ok {
 
-				if api == OptimAPI && y.GetOpr() == mut.Insert {
+				if api == db.OptimAPI && y.GetOpr() == mut.Insert {
 					continue
 				}
 				txwis, err := crTx(y, y.GetOpr())
@@ -790,7 +785,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 	switch api {
 
-	case TransactionAPI:
+	case db.TransactionAPI:
 
 		for _, tx := range btx {
 
@@ -865,7 +860,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 			}
 		}
 
-	case StdAPI, OptimAPI:
+	case db.StdAPI, db.OptimAPI:
 
 		for _, tx := range btx {
 
@@ -1063,7 +1058,7 @@ func crProjectionExpr(q *query.QueryHandle) *expression.ProjectionBuilder {
 
 }
 
-func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle, opt ...Option) error {
+func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle, opt ...db.Option) error {
 
 	if q.Error() != nil {
 		return q.Error()
@@ -1352,7 +1347,11 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 	case 0:
 
-		if q.ChannelMode() {
+		switch q.QueryMode() {
+
+		case q.Channel():
+
+			// ExecuteByChannel()
 			r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
 			// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
 			// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
@@ -1363,14 +1362,22 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			// start scan service
 			go scanChannelSrv(ctx, nonParallel, q, ch, client, proj)
 
-		} else {
+		case q.Func():
 
+			// ExecuteByFunc()
+			go scanFuncSrv(ctx, nonParallel, q, client, proj)
+
+		default:
+
+			// normal Execute()
 			return exNonParallelScan(ctx, client, q, proj)
 		}
 
 	default:
 
-		if q.ChannelMode() {
+		switch q.QueryMode() {
+
+		case q.Channel():
 
 			// create par number of bind vars (double buf)
 			// q.Fetch == *[]rec
@@ -1423,7 +1430,11 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			// assign slice of channels to original queryHandler
 			q.SetChannel(ichs.Interface())
 
-		} else {
+		case q.Func():
+
+			go scanFuncSrv(ctx, nonParallel, q, client, proj)
+
+		default:
 			elog.Add("Execute", fmt.Errorf("Not supported. Use ExecuteWithChannel() instead"))
 		}
 
@@ -1465,6 +1476,41 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 	}
 
 	chv.Close()
+
+}
+
+func scanFuncSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
+
+	var err error
+
+	slog.LogAlert("scanFuncSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+
+	for !q.EOD() {
+
+		switch scan {
+		case nonParallel:
+			err = exNonParallelScan(ctx, client, q, proj)
+		case parallel:
+			err = exScanWorker(ctx, client, q, proj)
+		}
+
+		if err != nil {
+			if errors.Is(query.NoDataFoundErr, err) {
+				continue
+			}
+			elog.Add("scanFuncSrv", err)
+		}
+		// check for ctrl-C
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+
+		// blocking func call
+		err = q.GetFunc()()
+
+	}
 
 }
 
@@ -1863,7 +1909,7 @@ func txPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val str
 	mt := mut.Mutations([]dbs.Mutation{m})
 	bs := []*mut.Mutations{&mt}
 
-	return execTransaction(ctx, client.Client, bs, "internal-state", StdAPI)
+	return execTransaction(ctx, client.Client, bs, "internal-state", db.StdAPI)
 
 }
 
@@ -1883,7 +1929,7 @@ func savePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val s
 	mt := mut.Mutations([]dbs.Mutation{m})
 	bs := []*mut.Mutations{&mt}
 
-	return execTransaction(ctx, client.Client, bs, "internal-state", StdAPI)
+	return execTransaction(ctx, client.Client, bs, "internal-state", db.StdAPI)
 
 }
 
@@ -1903,7 +1949,7 @@ func deletePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, wor
 	mt := mut.Mutations([]dbs.Mutation{m})
 	bs := []*mut.Mutations{&mt}
 
-	return execTransaction(ctx, client.Client, bs, "internal-state", StdAPI)
+	return execTransaction(ctx, client.Client, bs, "internal-state", db.StdAPI)
 
 }
 
