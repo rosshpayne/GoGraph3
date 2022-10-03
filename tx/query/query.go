@@ -798,7 +798,6 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 			if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
 				name = v.Name
 				lit = v.Tag.Get("literal")
-				fmt.Println("name, lit: ", name, lit)
 			}
 			at := &Attr{name: name, aty: IsFetch, literal: lit}
 			q.attr = append(q.attr, at)
@@ -820,7 +819,6 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 				if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
 					name = v.Name
 					lit = v.Tag.Get("literal")
-					fmt.Println("name, lit: ", name, lit)
 				}
 				at := &Attr{name: name, aty: IsFetch, literal: lit}
 
@@ -900,7 +898,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 // func (q *QueryHandle) ClearState() error {
 // 	txs := New("label", tbl.State)
 
-// 	txs.NewDelete().AddMember(q.ID, mut.IsKey)
+// 	txs.NewDelete().AddMember(q.ID, mut.IsKey)\
 
 // 	err := txs.Execute()
 

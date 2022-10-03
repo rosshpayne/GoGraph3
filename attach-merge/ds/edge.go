@@ -11,7 +11,7 @@ type EdgeChild struct {
 
 type Edge struct {
 	Puid, Cuid uuid.UID
-	Sortk      string
+	Sortk      string // attach point ?
 	Bid        int
 	RespCh     chan bool
 }

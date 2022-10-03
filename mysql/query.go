@@ -136,7 +136,6 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	var whereVals []interface{}
 	wa := len(q.GetWhereAttrs())
 	for i, v := range q.GetWhereAttrs() {
-		fmt.Println("whereattr: ", v.Name(), v.Literal())
 		var found bool
 		// search
 		for _, vv := range q.GetAttr() {

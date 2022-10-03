@@ -189,17 +189,18 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		return
 	}
 
+	// assign parent node attach points to sk map
 	sk := make(map[string]struct{})
 	for _, e := range edges {
 		if _, ok := sk[e.Sortk]; !ok {
 			sk[e.Sortk] = struct{}{}
 		}
 	}
+	// dp contains a dataitem per attach point (puid,sortk pair)
 	dip := make(map[string]*blk.DataItem)
 	// create virtual propagation target cache entries (uidpred's). No longer stored in cache, now in a function variable.
 	// The data in dip drives the creation of overflow blocks/batches.
 	for k, _ := range sk {
-		//	pnd.CrEmptyNodeItem(edges[0].Puid, k, true)
 		dip[k] = &blk.DataItem{Pkey: []byte(edges[0].Puid), Sortk: k}
 	}
 
@@ -232,7 +233,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		op = &AttachOp{Puid: e.Puid, Cuid: e.Cuid, Sortk: e.Sortk, Bid: e.Bid}
 
 		// all mutations will comprise put/inserts
-		err = AttachEdge(ctx, cTx, mt, pnd, uuid.UID(e.Cuid), uuid.UID(e.Puid), e.Sortk, pty, pTySN, checkMode, dip)
+		err = AttachEdge(ctx, cTx, mt, uuid.UID(e.Cuid), uuid.UID(e.Puid), e.Sortk, pty, pTySN, checkMode, dip)
 		if err != nil {
 			if errors.Is(err, edgeExistsErr) {
 				// database must be Spanner in checkMode. Abort attach process for this parent node.
@@ -271,7 +272,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 
 // sortK is parent's uid-pred to attach child node too. E.g. G#:S (sibling) or G#:F (friend) or A#G#:F It is the parent's attribute to attach the child node.
 // pTy is child type i.e. "Person". This could be derived from child's node cache data.
-func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, pnd *cache.NodeCache, cUID, pUID uuid.UID, sortK string, pty blk.TyAttrBlock, pTySN string, checkMode bool, dip map[string]*blk.DataItem) error {
+func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, cUID, pUID uuid.UID, sortK string, pty blk.TyAttrBlock, pTySN string, checkMode bool, dip map[string]*blk.DataItem) error {
 	//
 
 	var (
@@ -297,7 +298,7 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, pnd *cach
 	// Select child scalar data (sortk: A#A#, non-scalars start with A#G).  ALL SCALARS SHOUD BEGIN WITH sortk "A#A#"
 	// A node may not have any scalar values (its a connecting node in that case), but there should always be a A#A#T item defined which defines the type of the node
 	// Scalar sortk: "A#A#" will include type of node as well
-	// No need to lock (nc.Lock()) as cnd will never be made null eplicitly. Purging the node from the cache will only remove it from the global cache map. It will not set NodeCache=nil or e.nil.
+	// No need to lock (nc.Lock()) as cnd will never be made null explicitly. Purging the node from the cache will only remove it from the global cache map. It will not set NodeCache=nil or e.nil.
 	// So any routines that have a cnd defined can continue to use it even after the node is purged. When all old cnd's have left their scope, the GC will be able to free it, along with the map entries, as the cnd
 	// will have no other object's referencing it - the ncd and all its contents can be freed.
 	// However, any read access to the cnd.m will require a read lock as a concurrent fetch may add to the cnd.m entries - it will never update an existing entry.The only way
@@ -358,9 +359,9 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, pnd *cach
 	// determine target for propagation either parent node UID or Overflow block UID.
 	// py is legacy from older attach process which was used to exchange data between two goroutines.
 	py := &blk.ChPayload{PTy: pty}
-	err = propagationTarget(cTx, pnd, py, sortK, pUID, cUID, dip)
+	err = propagationTarget(cTx, py, sortK, pUID, cUID, dip)
 	if err != nil {
-		return err // panic(err)
+		return err
 	}
 
 	// add child UID to parent node's uid-pred or one of its overflow batches

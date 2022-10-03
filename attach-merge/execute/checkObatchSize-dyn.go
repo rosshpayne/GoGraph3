@@ -8,7 +8,9 @@ import (
 
 	blk "github.com/GoGraph/block"
 	param "github.com/GoGraph/dygparam"
+	//slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/uuid"
@@ -30,17 +32,21 @@ func (a ASZErr) Unwrap() error {
 
 func checkOBatchSizeLimitReached(txh *tx.Handle, cUID uuid.UID, py *blk.ChPayload) error {
 
-	// find source mutation
-	m := txh.FindSourceMutation(tbl.EOP, py.TUID, py.Osortk)
-	asz := m.GetMemberValue("ASZ").(int)
+	// find source mutation - this is suitable only on initial load as its querying the in memory version of the mutation not the database version.
+	//m := txh.FindSourceMutation(tbl.EOP, py.TUID, py.Osortk)
+	keys := []key.Key{key.Key{"PKey", py.TUID}, key.Key{"SortK", py.Osortk}}
 
+	m, err := txh.GetMergedMutation(tbl.EOP, keys)
+	if err != nil {
+		return err
+	}
+
+	asz := m.GetMemberValue("ASZ").(int)
 	if param.OvfwBatchSize == asz-2 {
-		// update XF in UID-Pred (in parent node block)
+		// update XF in UID-Pred (in parent node block) to overflow batch limit reached.
 		xf := py.DI.XF
 		xf[py.NdIndex] = blk.OBatchSizeLimit
-		//mut.NewUpdate(tbl.EOP).AddMember("PKey", py.DI.Pkey, mut.IsKey).AddMember("SortK", py.DI.GetSortK(), mut.IsKey).AddMember("XF", xf, mut.Set)
-		txh.MergeMutation(tbl.EOP, py.DI.Pkey, py.DI.GetSortK(), mut.Update).AddMember("XF", xf, mut.Set)
-
+		txh.MergeMutation2(tbl.Block, mut.Update, keys).AddMember("XF", xf, mut.Set)
 	}
 
 	return nil

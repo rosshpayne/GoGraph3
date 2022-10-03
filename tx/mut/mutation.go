@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/GoGraph/dbs"
+	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/uuid"
@@ -39,6 +40,14 @@ const (
 	AttrExists Cond = iota
 	AttrNotExists
 )
+
+func syslog(s string) {
+	slog.Log("Mutation", s)
+}
+
+func logAlert(s string) {
+	slog.LogAlert("Mutation", s)
+}
 
 func (s StdMut) String() string {
 	switch s {
@@ -154,6 +163,7 @@ type Mutation struct {
 	// sk   string
 	pKey interface{}
 	tbl  tbl.Name
+	keys []key.TableKey
 	opr  StdMut // update,insert(put)
 	//
 	text     string      // alternate representation of a mutation e.g. sql
@@ -236,6 +246,10 @@ func (m *Mutation) GetKeys() []Member {
 	return k
 }
 
+func (m *Mutation) AddTableKeys(k []key.TableKey) {
+	m.keys = k
+}
+
 func (m *Mutation) SetPrepStmt(p interface{}) {
 	m.prepStmt = p
 }
@@ -304,7 +318,6 @@ func (m *Mutation) GetMemberValue(attr string) interface{} {
 			return v.Value
 		}
 	}
-	panic(fmt.Errorf("GetMemberValue: member %q not found in mutation members", attr))
 	return nil
 }
 
@@ -316,6 +329,10 @@ func (m *Mutation) SetMemberValue(attr string, v interface{}) {
 		panic(fmt.Errorf("SetMemberValue for %s expected a type of %q got %a", attr, e, g))
 	}
 	m.ms[i].Value = g
+}
+
+func addErr(e error) {
+
 }
 
 func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mutation {
@@ -342,6 +359,33 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 	// TODO: come up with generic solution for both Dynamodb & Spanner - probably not possible so make use of conditional compilation.
 	m.Array = IsArray(value)
 
+	// check attr is key
+	var (
+		found, found2 bool
+		mean          string
+	)
+
+	//tableKeys are correctly ordered based on table def
+	for _, kk := range im.keys {
+		if kk.Name == attr {
+			found = true
+		}
+		if strings.ToUpper(kk.Name) == strings.ToUpper(attr) {
+			found2 = true
+			mean = kk.Name
+		}
+		if strings.ToUpper(kk.Name[:len(kk.Name)-1]) == strings.ToUpper(attr) {
+			found2 = true
+			mean = kk.Name
+		}
+	}
+	if !found {
+		if found2 {
+			addErr(fmt.Errorf("Error in Mut Specified merge key %q Do you mean %q", attr, mean))
+		} else {
+			addErr(fmt.Errorf("Error in Mut. Specified merge key %q", attr))
+		}
+	}
 	// override Opr value with argument value if specified
 	if len(opr) > 0 {
 		m.Opr = opr[0]

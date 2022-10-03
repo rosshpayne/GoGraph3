@@ -8,7 +8,7 @@ import (
 	//"time"
 
 	blk "github.com/GoGraph/block"
-	"github.com/GoGraph/cache"
+	//"github.com/GoGraph/cache"
 	param "github.com/GoGraph/dygparam"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
@@ -24,7 +24,7 @@ import (
 //  This process batches the reqired DML in memory rather than populate/update the database for each attach operation.
 //  Attach-merge introduces a special mutation method for this purpose, MergeMutation, which is used to batch and handle
 //  appending of values.  The results are executed against the database in a single execute that may involve hundreds of child node being attached.
-func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload, sortK string, pUID, cUID uuid.UID, dip map[string]*blk.DataItem) error {
+func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, cUID uuid.UID, dip map[string]*blk.DataItem) error {
 	var (
 		err      error
 		embedded int // embedded cUIDs in <parent-UID-Pred>.Nd
@@ -67,7 +67,7 @@ func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload,
 		// add new overflow batch to overflow block
 		txh.NewMutation(tbl.EOP, oUID, s, mut.Insert)
 
-		// update batch Id in parent UID
+		// update batch Id in parent UID (parent Node block)
 		//txh.NewMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember2("Id", di.Id, mut.Set)
 		keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
 		//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Id", di.Id, mut.Set)
@@ -129,23 +129,12 @@ func propagationTarget(txh *tx.Handle, pnd *cache.NodeCache, cpy *blk.ChPayload,
 		}
 
 	}
-	//syslog(fmt.Sprintf("PropagationTarget:  pUID,cUID,sortK : %s   %s   %s", pUID.String(), cUID.String(), sortK))
-	//
-	// Start: fetch uid-pred (e.g. r|A#G#:S) entry from cache
-	//
-	// pnd.Lock()
-	// defer pnd.Unlock()
-	// if di, ok = pnd.GetNodeCache()[sortK]; !ok {
-	// 	// no uid-pred exists - create an empty one
-	// 	syslog(fmt.Sprintf("PropagationTarget: sortK not cached so create empty blk.DataItem for pUID %q SortK: %q", pUID, sortK))
-	// 	panic(fmt.Errorf("PropagationTarget: sortK not cached so create empty blk.DataItem for pUID %q SortK: %q", pUID, sortK))
-	// }
-	// fmt.Println("**propagationTarget: about to RNlock()")
 
 	// dip replaces data that was kept in the node cache. No locking required to populate the cache now.
 	di = dip[sortK]
 	cpy.DI = di
 
+	// initially di.XF is nil, see dip[k] = &blk.DataItem{Pkey: []byte(edges[0].Puid), Sortk: k} in execute()
 	for _, v := range di.XF {
 		switch {
 		case v <= blk.UIDdetached:

@@ -24,6 +24,10 @@ func syslog(s string) {
 	slog.Log("Tx:", s)
 }
 
+func logAlert(s string) {
+	slog.LogAlert("Tx:", s)
+}
+
 // Handle represents a transaction composed of 1 to many mutations.
 type Handle = TxHandle
 
@@ -223,7 +227,7 @@ func NewBatchContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHan
 
 }
 
-// NewBatch -  bundle put/deletes as a batch. Provides no transaction consistency but is cheaper to run. No conditions allowed??
+// NewOptim ???
 func NewOptim(tag string, m ...*mut.Mutation) *TxHandle {
 
 	tx := &TxHandle{Tag: tag, api: db.OptimAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
@@ -336,13 +340,12 @@ func (h *TxHandle) MakeBatch() error {
 // 	return m
 // }
 
-// NewMutation is not generic. It presumes Paratition key is named "PKey" and Sort Key is named "SortK". Use NewMutation2 and deprecate NewMutation.
+//
 func (h *TxHandle) NewMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
 	keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
-	m := mut.NewMutation2(table, opr, keys)
-	h.add(m)
-	return m
+	return mut.NewMutation2(table, opr, keys)
 }
+
 func (h *TxHandle) NewMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key) *mut.Mutation {
 	m := mut.NewMutation2(table, opr, keys)
 	h.add(m)
@@ -359,16 +362,16 @@ func (h *TxHandle) NewUpdate(table tbl.Name) *mut.Mutation {
 	if h.api == db.BatchAPI {
 		panic(fmt.Errorf("Cannot have an Update operation included in a batch"))
 	}
-	m := mut.NewUpdate(table)
-	h.add(m)
-	return m
-}
 
-func (h *TxHandle) NewUpdate2(table tbl.Name) *mut.Mutation {
-	if h.api == db.BatchAPI {
-		panic(fmt.Errorf("Cannot have an Update operation included in a batch"))
+	// validate merge keys with actual table keys
+	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+	if err != nil {
+		h.addErr(fmt.Errorf("Error in finding table keys for table %q: %w", table, err))
+		return nil
 	}
+
 	m := mut.NewUpdate(table)
+	m.AddTableKeys(tableKeys)
 	h.add(m)
 	return m
 }
@@ -377,7 +380,15 @@ func (h *TxHandle) NewMerge(table tbl.Name) *mut.Mutation {
 	if h.api == db.BatchAPI {
 		panic(fmt.Errorf("Cannot have a Merge operation included in a batch"))
 	}
+	// validate merge keys with actual table keys
+	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+	if err != nil {
+		h.addErr(fmt.Errorf("Error in finding table keys for table %q: %w", table, err))
+		return nil
+	}
+
 	m := mut.NewMerge(table)
+	m.AddTableKeys(tableKeys)
 	h.add(m)
 	return m
 }
@@ -563,7 +574,7 @@ func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut
 	}
 	h.am = mut.NewMutation(table, pk, sk, opr)
 
-	h.sm = h.FindSourceMutation(table, pk, sk)
+	h.sm = h.findSourceMutation(table, pk, sk)
 	if h.sm == nil {
 		h.add(h.am)
 	}
@@ -606,7 +617,7 @@ func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key
 		var found, found2 bool
 		var mean string
 
-		// tableKeys are correctly ordered based on table def ie. pk, sk
+		// tableKeys are correctly ordered based on table def
 		for ii, kk := range tableKeys {
 			if kk.Name == k.Name {
 				found = true
@@ -635,7 +646,7 @@ func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key
 
 	h.am = mut.NewMutation2(table, opr, keys)
 
-	h.sm = h.FindSourceMutation2(table, mergeKeys)
+	h.sm = h.findSourceMutation2(table, mergeKeys)
 	if h.sm == nil {
 		h.add(h.am)
 	}
@@ -643,7 +654,7 @@ func (h *TxHandle) MergeMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key
 	return h
 }
 
-func (h *TxHandle) FindSourceMutation(table tbl.Name, pk uuid.UID, sk string) *mut.Mutation {
+func (h *TxHandle) findSourceMutation(table tbl.Name, pk uuid.UID, sk string) *mut.Mutation {
 
 	// cycle through batch of mutation batches .
 	for _, bm := range h.batch {
@@ -657,7 +668,7 @@ func (h *TxHandle) FindSourceMutation(table tbl.Name, pk uuid.UID, sk string) *m
 	return h.m.FindMutation(table, pk, sk)
 }
 
-func (h *TxHandle) FindSourceMutation2(table tbl.Name, keys []key.MergeKey) *mut.Mutation {
+func (h *TxHandle) findSourceMutation2(table tbl.Name, keys []key.MergeKey) *mut.Mutation {
 
 	// cycle through batch of mutation batches .
 	for _, bm := range h.batch {
@@ -676,6 +687,77 @@ func (h *TxHandle) FindSourceMutation2(table tbl.Name, keys []key.MergeKey) *mut
 		h.addErr(err)
 	}
 	return s
+}
+
+// GetMergedMutation finds source mutation based on key data values which will be validated against and merged with actual table key metadata
+// based on logic i MergeMutation2()
+func (h *TxHandle) GetMergedMutation(table tbl.Name, keys []key.Key) (*mut.Mutation, error) {
+
+	// validate merge keys with actual table keys
+	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+	if err != nil {
+		return nil, fmt.Errorf("Error in finding table keys for table %q: %w", table, err)
+	}
+	syslog(fmt.Sprintf("tableKeys: %v", tableKeys))
+	// check tableKeys match merge keys - we need to match all keys to find source mutation
+	if len(keys) != len(tableKeys) {
+		return nil, fmt.Errorf("Error in Tx tag %q. Number of keys supplied (%d) do not match number of keys on table (%d)", h.Tag, len(keys), len(tableKeys))
+	}
+	// generate ordered list of keys based on table key order and argument keys.
+	mergeKeys := make([]key.MergeKey, len(keys), len(keys))
+
+	// keys are not necessarily correctly ordered as per table definition
+	for _, k := range keys {
+		var found, found2 bool
+		var mean string
+
+		// tableKeys are correctly ordered based on table def
+		for ii, kk := range tableKeys {
+			if kk.Name == k.Name {
+				found = true
+				mergeKeys[ii].Name = k.Name
+				mergeKeys[ii].Value = k.Value
+				mergeKeys[ii].DBtype = kk.DBtype
+			}
+			if strings.ToUpper(kk.Name) == strings.ToUpper(k.Name) {
+				found2 = true
+				mean = kk.Name
+			}
+			if strings.ToUpper(kk.Name[:len(kk.Name)-1]) == strings.ToUpper(k.Name) {
+				found2 = true
+				mean = kk.Name
+			}
+		}
+		if !found {
+			if found2 {
+				err := fmt.Errorf("Error in Tx tag %q. Specified merge key %q, is not a key for table %q. Do you mean %q", h.Tag, k.Name, table, mean)
+				h.addErr(err)
+				return nil, err
+			} else {
+				err := fmt.Errorf("Error in Tx tag %q. Specified merge key %q, is not a key for table %q", h.Tag, k.Name, table)
+				h.addErr(err)
+				return nil, err
+			}
+		}
+	}
+	// cycle through mutation batches.
+	for _, bm := range h.batch {
+		sm, err := bm.FindMutation2(table, mergeKeys)
+		if err != nil {
+			h.addErr(err)
+			return nil, err
+		}
+		if sm != nil {
+			return sm, nil
+		}
+	}
+	// search active batch if source mutation not found.
+	s, err := h.m.FindMutation2(table, mergeKeys)
+	if err != nil {
+		h.addErr(err)
+		return nil, err
+	}
+	return s, nil
 }
 
 func (h *TxHandle) AddCondition(cond mut.Cond, attr string, value ...interface{}) *TxHandle {
