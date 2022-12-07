@@ -7,6 +7,8 @@ import (
 	"reflect"
 )
 
+// IsArray determines if the value passed in is a slice and therefore will be used in a DYnamodb array type.
+// TODO: Would be better to drive off the name of the attribute and from the table type definition determine its type.
 func IsArray(value interface{}) bool {
 	if value == nil {
 		return false

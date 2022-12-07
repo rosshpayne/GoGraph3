@@ -31,7 +31,7 @@ func crProjection(q *query.QueryHandle) *strings.Builder {
 		first = true
 	)
 	var s strings.Builder
-	s.WriteString("select ")
+	s.WriteString(fmt.Sprintf("select /* tag: %s */ ", q.GetTag()))
 	for _, v := range q.GetAttr() {
 		if v.IsFetch() {
 			if first {
@@ -124,55 +124,136 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	if err != nil {
 		return err
 	}
-	// generate SQL statement
+	// ********************** generate SQL statement ********************************
+
+	// ************** Projection *************
 
 	// define projection based on struct passed via Select()
 	s := crProjection(q)
 
 	s.WriteString(" from ")
 	s.WriteString(string(q.GetTable()))
-	s.WriteString(" where ")
-	//
+
 	var whereVals []interface{}
-	wa := len(q.GetWhereAttrs())
-	for i, v := range q.GetWhereAttrs() {
-		var found bool
-		// search
-		for _, vv := range q.GetAttr() {
-			if vv.IsFetch() {
-				if vv.Name() == v.Name() {
-					if len(vv.Literal()) > 0 {
-						s.WriteString(vv.Literal())
-						found = true
-					}
-					break
-				}
-			}
+
+	if len(q.GetKeyAttrs()) > 0 || len(q.GetWhere()) > 0 || len(q.GetFilterAttrs()) > 0 {
+		s.WriteString(" where ")
+	}
+
+	// ************** Key() *************
+
+	wa := len(q.GetKeyAttrs())
+
+	// TODO: check keys only
+
+	for i, v := range q.GetKeyAttrs() {
+		// where (key1 and key2 and key3)
+		if i == 0 {
+			s.WriteByte('(')
 		}
-		if !found {
-			s.WriteString(v.Name())
-		} else {
-			found = false
+		s.WriteString(v.Name())
+		s.WriteString(sqlOpr(v.GetOprStr()))
+		s.WriteByte('?')
+		whereVals = append(whereVals, v.Value())
+
+		if wa > 0 && i < wa-1 {
+			// TODO: what about OrFilter
+			s.WriteString(" and ")
+		} else if i == wa-1 {
+			s.WriteString(") ")
+		}
+	}
+
+	// ************** Where() *************
+
+	if len(q.GetWhere()) > 0 {
+
+		// TODO: check non-keys only
+
+		if q.GetOr() > 0 || q.GetAnd() > 0 {
+			panic(fmt.Errorf("Cannot mix Filter() with  Where()"))
 		}
 
-		s.WriteString(sqlOpr(v.GetOprStr()))
-		// check value is not an attribute name, in which case don't use "?"
-		if col, ok := v.Value().(string); ok {
-			// check against attributes in projection
-			for _, v := range q.GetAttr() {
-				if col == v.Name() {
-					s.WriteString(col)
-					found = true
-					break
-				}
+		s.WriteString(" and (")
+
+		where := q.GetWhere()
+		// replace any literal (struct tag) references
+		literals := q.GetLiterals()
+		if len(literals) > 0 {
+			for _, l := range literals {
+				where = strings.ReplaceAll(where, l.Name(), l.Literal())
 			}
 		}
-		if !found {
-			s.WriteByte('?')
-			whereVals = append(whereVals, v.Value())
-		}
-		if wa > 0 && i < wa-1 {
-			s.WriteString(" and ")
+		s.WriteString(where)
+
+		s.WriteByte(')')
+
+		whereVals = append(whereVals, q.GetValues()...)
+
+	} else {
+
+		// ************** Filter *************
+
+		// TODO: check non-keys only
+
+		wa = len(q.GetFilterAttrs())
+		for i, v := range q.GetFilterAttrs() {
+
+			if q.GetOr() > 0 && q.GetAnd() > 0 {
+				panic(fmt.Errorf("Cannot mix OrFilter, AndFilter conditions. Use Where() & Values() instead"))
+			}
+
+			var found bool
+
+			if i == 0 {
+				s.WriteString(" and (")
+			}
+			// search - swap for literal tag value if Filter() attr name matches attr name in Select()
+			for _, vv := range q.GetAttr() {
+				if vv.IsFetch() {
+					if vv.Name() == v.Name() {
+						if len(vv.Literal()) > 0 {
+							s.WriteString(vv.Literal())
+							found = true
+						}
+						break
+					}
+				}
+			}
+			if !found {
+				s.WriteString(v.Name())
+			} else {
+				found = false
+			}
+
+			s.WriteString(sqlOpr(v.GetOprStr()))
+			// check value is not an attribute name, in which case don't use "?"
+			if col, ok := v.Value().(string); ok {
+				// check against attributes in projection
+				for _, v := range q.GetAttr() {
+					if col == v.Name() {
+						s.WriteString(col)
+						found = true
+						break
+					}
+				}
+			}
+			if !found {
+				s.WriteByte('?')
+				whereVals = append(whereVals, v.Value())
+			}
+			// (Key and key) and (filter or filter)
+			if wa > 0 && i < wa-1 {
+				switch v.BoolCd() {
+				case query.AND:
+					s.WriteString(" and ")
+				case query.OR:
+					s.WriteString(" or ")
+				}
+			}
+			if i == wa-1 {
+				s.WriteByte(')')
+			}
 		}
 	}
 	//

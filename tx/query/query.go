@@ -5,18 +5,21 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tx/tbl"
 	"github.com/GoGraph/uuid"
 )
 
 type ScanOrder int8
 type Orderby int8
+type NullOrder int8
 type AccessTy byte
 type BoolCd byte
 type Mode byte
+type Cfunc func(*sync.WaitGroup, interface{}) // channel consumer func arg to ExecuteByFunc()
 
 const (
 	NA string = "NA"
@@ -26,8 +29,10 @@ const (
 	DESC    ScanOrder = 1
 	Reverse ScanOrder = 1
 	//
-	Asc  Orderby = 0 // default
-	Desc Orderby = 1
+	Asc        Orderby   = 0 // default
+	Desc       Orderby   = 1
+	NullsFirst NullOrder = 0
+	NullsLast  NullOrder = 1
 	//
 	GetItem AccessTy = iota
 	Query
@@ -68,9 +73,9 @@ type Attr struct {
 	name    string
 	param   string
 	value   interface{}
-	literal string // alternative to value - replace attribute name with literal in query stmt.
+	literal string // literal struct tag value - . alternative to value - replace attribute name with literal in query stmt.
 	aty     Attrty // attribute type, e.g. Key, Filter, Fetch
-	eqy     string
+	eqy     string // Scalar Opr: EQ, LE,...  Slice Opr: IN, ANY
 	boolCd  BoolCd // And, Or - appropriate for Filter only.
 }
 
@@ -114,23 +119,30 @@ type orderby struct {
 	attr string
 	sort Orderby
 }
+type Option struct {
+	Name string
+	Val  interface{}
+}
+
 type QueryHandle struct {
-	Tag string
+	Tag    string
+	config []Option
 	//
-	err error
+	err error // TODO: []error
 	//ctx context.Context
 	//stateId util.UID - id for maintaining state
 	attr     []*Attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
 	tbl      tbl.Name
 	idx      tbl.Name
 	limit    int
-	parallel int
+	workers  int  //  (old parallel) number of channels to create for parallel scan operation
+	parallel int  // parallel query - SQL only
 	css      bool // read consistent mode
 	//
 	queryMode Mode
 	//
-	channel interface{}
-	f       func() error
+	channel interface{} // returned from ExecByChannel() - slice of channels from 1 to #workers
+	f       Cfunc       // channel consumer func : channel type []<fetch type>
 	// prepare mutation in db's that support separate preparation phase
 	prepare  bool
 	prepStmt interface{}
@@ -138,20 +150,22 @@ type QueryHandle struct {
 	//first bool ??
 	//
 	eodlc int           // eod loop counter - used to determine first EOD execution which drives switch logic
-	abuf  int           // active buffer
-	bufs  []interface{} // buffers
+	abuf  int           // active buffer - index into bufs. See EOD()
+	bufs  []interface{} // buffers : variadic arg of bind variables passed in Select()  : type []*[]unprocBuf
 	//
 	scan bool // NewScan specified
 	//
 	// pk     string
 	// sk     string
 	//	orderby  string
-	so       ScanOrder
-	orderBy  orderby
+	so      ScanOrder
+	orderBy orderby
+	//
 	accessTy AccessTy // TODO: remove
 	// select() handlers
-	fetch   interface{} //  Select()
-	select_ bool        // indicates Select() has been executed. Catches cases when Select() specified more than once.
+	fetch   interface{}   //  Select()
+	select_ bool          // indicates Select() has been executed. Catches cases when Select() specified more than once.
+	binds   []interface{} // populated by Split() with address of all struct fields in fetch type, which can included embedded struct. Used in SQL.Scan()
 	// is query restarted. Paginated queries only.
 	restart bool
 	// pagination state
@@ -163,20 +177,25 @@ type QueryHandle struct {
 	// varM map[string]interface{}
 	// varS []interface{}
 	worker int
+	// AndFilter, OrFilter counts
+	af, of int
+	// Where, Values method
+	where  string
+	values []interface{}
 }
 
 func New(tbl tbl.Name, label string, idx ...tbl.Name) *QueryHandle {
 	if len(idx) > 0 {
-		return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, idx: idx[0], css: true}
+		return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, idx: idx[0], css: true, so: ASC}
 	}
-	return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, css: true}
+	return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, css: true, so: ASC}
 }
 
 func New2(label string, tbl tbl.Name, idx ...tbl.Name) *QueryHandle {
 	if len(idx) > 0 {
-		return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, idx: idx[0], css: true}
+		return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, idx: idx[0], css: true, so: ASC}
 	}
-	return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, css: true}
+	return &QueryHandle{Tag: label, tbl: tbl, accessTy: Null, css: true, so: ASC}
 }
 
 // func NewContext(ctx context.Context, tbl tbl.Name, label string, idx ...tbl.Name) *QueryHandle {
@@ -192,12 +211,15 @@ func New2(label string, tbl tbl.Name, idx ...tbl.Name) *QueryHandle {
 
 func (q *QueryHandle) Clone() *QueryHandle {
 	d := QueryHandle{}
+	d.config = q.config
+
 	d.Tag = q.Tag
 	//stateId uuid.UID - id for maintaining state
 	d.attr = q.attr // all attributes sourced from  Key , Select, filter , addrVal clauses as determined by attr atyifier (aty)
 	d.tbl = q.tbl
 	d.idx = q.idx
 	d.limit = q.limit
+	d.workers = q.workers
 	d.parallel = q.parallel
 	d.css = q.css
 	//
@@ -220,8 +242,32 @@ func (q *QueryHandle) Clone() *QueryHandle {
 	d.pgStateValS = q.pgStateValS
 	d.eod = q.eod
 
+	// AndFilter, OrFilter counts
+	d.af, d.of = q.af, q.of
+	// Where, Values method
+	d.where = q.where
+	d.values = q.values
+
 	return &d
 
+}
+
+func (q *QueryHandle) GetTag() string {
+	return q.Tag
+}
+
+func (q *QueryHandle) Config(opt ...Option) *QueryHandle {
+	q.config = append(q.config, opt...)
+	return q
+}
+
+func (q *QueryHandle) GetConfig(s string) interface{} {
+	for _, k := range q.config {
+		if k.Name == s {
+			return k.Val
+		}
+	}
+	return nil
 }
 
 func (q *QueryHandle) qh() {}
@@ -240,17 +286,31 @@ func (q *QueryHandle) Func() Mode {
 	return FUNC
 }
 
-func (q *QueryHandle) SetFunc(f func() error) {
+func (q *QueryHandle) SetFunc(f Cfunc) {
 	q.queryMode = FUNC
 	q.f = f
 }
 
-func (q *QueryHandle) GetFunc() func() error {
+func (q *QueryHandle) GetFunc() Cfunc {
 	return q.f
+}
+
+func (q *QueryHandle) GetLiterals() []*Attr {
+	var literals []*Attr
+	for _, a := range q.attr {
+		if len(a.literal) > 0 {
+			literals = append(literals, a)
+		}
+	}
+	return literals
 }
 
 func (q *QueryHandle) Error() error {
 	return q.err
+}
+
+func (q *QueryHandle) SetError(e error) {
+	q.err = e
 }
 
 func (q *QueryHandle) SetWorkerId(i int) {
@@ -265,11 +325,11 @@ func (q *QueryHandle) SetPrepare() {
 	q.prepare = true
 }
 
-func (q *QueryHandle) SetQueryMode(m Mode) {
+func (q *QueryHandle) SetExecMode(m Mode) {
 	q.queryMode = m
 }
 
-func (q *QueryHandle) QueryMode() Mode {
+func (q *QueryHandle) ExecMode() Mode {
 	return q.queryMode
 }
 
@@ -283,6 +343,22 @@ func (q *QueryHandle) PrepStmt() interface{} {
 
 func (q *QueryHandle) SetPrepStmt(p interface{}) {
 	q.prepStmt = p
+}
+
+func (q *QueryHandle) Where(s string) {
+	q.where = s
+}
+
+func (q *QueryHandle) GetWhere() string {
+	return q.where
+}
+
+func (q *QueryHandle) Values(v []interface{}) {
+	q.values = v
+}
+
+func (q *QueryHandle) GetValues() []interface{} {
+	return q.values
 }
 
 // func (q *QueryHandle) Ctx() context.Context {
@@ -299,10 +375,6 @@ func (q *QueryHandle) SetChannel(c interface{}) {
 
 func (q *QueryHandle) GetChannel() interface{} {
 	return q.channel
-}
-
-func (q *QueryHandle) GetTag() string {
-	return q.Tag
 }
 
 func (q *QueryHandle) GetTable() string {
@@ -329,17 +401,29 @@ func (q *QueryHandle) SetTag(s string) {
 	q.Tag = s
 }
 
-func (q *QueryHandle) Parallel(n int) {
-	q.parallel = n
+func (q *QueryHandle) Workers(n int) {
+	q.SetWorkers(n)
 }
 
-func (q *QueryHandle) GetParallel() int {
-	return q.parallel
+func (q *QueryHandle) SetWorkers(n int) {
+	q.workers = n
 }
 
-// func (q *QueryHandle) SKset() bool {
-// 	return len(q.sk) > 0
+func (q *QueryHandle) NumWorkers() int {
+	return q.workers
+}
+
+// func (q *QueryHandle) Parallel(n int) {
+// 	q.parallel = n
 // }
+
+// func (q *QueryHandle) GetParallel() int {
+// 	return q.parallel
+// }
+
+//	func (q *QueryHandle) SKset() bool {
+//		return len(q.sk) > 0
+//	}
 func (q *QueryHandle) GetIndex() string {
 	return string(q.idx)
 }
@@ -436,6 +520,8 @@ func (q *QueryHandle) SetEOD() {
 	q.eod = true
 }
 
+// EOD - end of data for query/scan on table segment (workers)
+// should accept int arg for worker id (segmet id)???
 func (q *QueryHandle) EOD() bool {
 
 	if len(q.pgStateId) == 0 {
@@ -444,7 +530,8 @@ func (q *QueryHandle) EOD() bool {
 		elog.Add(q.Tag, q.err)
 		return false
 	}
-	// check if multiple select vars used and switch appropriate
+	// check if multiple select bind vars (bv) used and switch appropriate
+	// to support non-blocking db reads need two bv per table segment (workers). Five workers requires 10 bv (2 per worker)
 	if len(q.bufs) > 0 {
 		if q.eodlc > 0 {
 			// ignore first execution of EOD to switch buffer
@@ -538,7 +625,7 @@ func (q *QueryHandle) GetFilter() []string {
 	return flt
 }
 
-func (q *QueryHandle) GetFilterAttr() []*Attr {
+func (q *QueryHandle) GetFilterAttrs() []*Attr {
 	var flt []*Attr
 	for _, v := range q.attr {
 		if v.aty == IsFilter {
@@ -546,6 +633,18 @@ func (q *QueryHandle) GetFilterAttr() []*Attr {
 		}
 	}
 	return flt
+}
+
+// GetWhereAttrs - for SQL only
+func (q *QueryHandle) GetKeyAttrs() []*Attr {
+	var key []*Attr
+	for _, v := range q.attr {
+		switch v.aty {
+		case IsKey:
+			key = append(key, v)
+		}
+	}
+	return key
 }
 
 // GetWhereAttrs - for SQL only
@@ -654,9 +753,10 @@ func (q *QueryHandle) Filter(a string, v interface{}, e ...string) *QueryHandle 
 		}
 	}
 	if found {
-		err := errors.New("Filter condition already specified. Use either AndFilter or OrFilter")
-		elog.Add("parseQuery", err)
-		q.err = err
+		q.AndFilter(a, v, e...)
+		// err := errors.New("A filter condition has already been specified. Use either AndFilter or OrFilter")
+		// elog.Add("parseQuery", err)
+		// q.err = err
 		return q
 		//
 	}
@@ -695,14 +795,24 @@ func (q *QueryHandle) appendBoolFilter(a string, v interface{}, bcd BoolCd, e ..
 }
 
 func (q *QueryHandle) AndFilter(a string, v interface{}, e ...string) *QueryHandle {
+	q.af++
 	return q.appendBoolFilter(a, v, AND, e...)
 
 }
 
 func (q *QueryHandle) OrFilter(a string, v interface{}, e ...string) *QueryHandle {
+	q.of++
 	return q.appendBoolFilter(a, v, OR, e...)
 }
 
+func (q *QueryHandle) GetOr() int {
+	return q.of
+}
+func (q *QueryHandle) GetAnd() int {
+	return q.af
+}
+
+// ScanOrder alias for Sort().  Used by NoSQL - sets order of sort, ascending, descending
 func (q *QueryHandle) ScanOrder(so ScanOrder) *QueryHandle {
 	// if !q.SKset() {
 	// 	panic(fmt.Errorf("When using Sort() a sort key must be specified using Key()"))
@@ -711,10 +821,12 @@ func (q *QueryHandle) ScanOrder(so ScanOrder) *QueryHandle {
 	return q
 }
 
+// Sort alias for ScanOrder used by NoSQL - sets order of sort, ascending, descending
 func (q *QueryHandle) Sort(so ScanOrder) *QueryHandle {
 	return q.ScanOrder(so)
 }
 
+// OrderBy used for SQL
 func (q *QueryHandle) OrderBy(ob string, s Orderby) *QueryHandle {
 	q.orderBy = orderby{ob, s}
 	return q
@@ -758,26 +870,69 @@ func (q *QueryHandle) Bufs() []interface{} {
 	return q.bufs
 }
 
-// Select specified the destination variable for the query data. Can be specified multiple times for a query.
+// Select allocates attributes in []Attr{}. Used to write attributes in Select clause of SQL statement.
+// It also specifies the destination variables (aka bind variables) for the query data which will require dynamic allocation for slice type
+// in SQL non-prepared tx means Select may be in a loop which means it can be specified more than once. This is accepted and will
+// be processed using stand sql API rather than prepared API. Is this OK?
+// Valid inputs:
+//
+//       *struct
+//        stuct
+//        []struct
+//        []*struct
+//
+// Struct can include nested types or anonymous embedded type
+//
+//        var x struct {
+//	         Status byte
+//           Person
+//           Loc    Address
+//        }
+//
+//       type Person struct {
+//           FirstName string
+//           LastName string
+//           DOB string
+//      }
+//      type Address struct {
+//           Line1 , Line2, Line3 string
+//           City string
+//           Zip string
+//           State string
+//           Cntry     Country
+//      }
+//
+//      type Country struct {
+//           Name string
+//           Population int
+//      }
+//
+
 func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 
 	if q.err != nil {
 		return q
 	}
 
+	if len(a_) == 0 {
+		q.err = fmt.Errorf("requires atleast one bind variable")
+		return q
+	}
 	a := a_[0]
 
 	q.abuf = 0
 	q.bufs = a_ // []interface{} []*[]unprocBuf
+
+	// commented out to allow Select in for loop - usually would be Prepared() but may incorrectly not be.
 	// if q.select_ && !q.prepare {
 	// 	panic(fmt.Errorf("Select already specified. Only one Select permitted."))
 	// }
 
 	// q.select_ = true
 
-	f := reflect.TypeOf(a) // *[]struct
-	if f.Kind() != reflect.Ptr {
-		panic(fmt.Errorf("Fetch argument: expected a pointer, got a %s", f.Kind()))
+	t := reflect.TypeOf(a)
+	if t.Kind() != reflect.Ptr {
+		panic(fmt.Errorf("Fetch argument: expected a pointer, got a %s", t.Kind()))
 	}
 	//save addressable component of interface argument
 
@@ -787,51 +942,120 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	}
 	q.fetch = a
 
-	s := f.Elem()
+	st := t.Elem() // what a points to
 
-	switch s.Kind() {
-	case reflect.Struct:
-		// used in GetItem (single row select)
-		var name, lit string
-		for i := 0; i < s.NumField(); i++ {
-			v := s.Field(i)
-			if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
-				name = v.Name
-				lit = v.Tag.Get("literal")
-			}
-			at := &Attr{name: name, aty: IsFetch, literal: lit}
-			q.attr = append(q.attr, at)
-		}
-	case reflect.Slice:
+	if st.Kind() == reflect.Slice {
 
-		st := s.Elem() // used in Query (multi row select)
+		// []*struct
+		// []struct
 
-		if st.Kind() == reflect.Slice {
-			st = st.Elem() // [][]rec - used for parallel scan
-		}
-		if st.Kind() == reflect.Pointer {
+		st = st.Elem()
+		switch st.Kind() {
+
+		case reflect.Struct:
+
+		case reflect.Pointer:
 			st = st.Elem()
-		}
-		if st.Kind() == reflect.Struct {
-			var name, lit string
-			for i := 0; i < st.NumField(); i++ {
-				v := st.Field(i)
-				if name = v.Tag.Get("dynamodbav"); len(name) == 0 {
-					name = v.Name
-					lit = v.Tag.Get("literal")
-				}
-				at := &Attr{name: name, aty: IsFetch, literal: lit}
 
-				q.attr = append(q.attr, at)
+			if st.Kind() != reflect.Struct {
+				panic(fmt.Errorf("QueryHandle Select(): expected a struct got %s", st.Kind()))
 			}
-		} else {
+		default:
 			panic(fmt.Errorf("QueryHandle Select(): expected a struct got %s", st.Kind()))
 		}
 	}
 
+	if st.Kind() == reflect.Struct {
+
+		// used in GetItem (single row select)
+		var name, lit string
+
+		for i := 0; i < st.NumField(); i++ {
+
+			f := st.Field(i) // field as reflect.Type
+			ft := f.Type     // field as reflect.Type
+
+			if ft.Kind() == reflect.Struct {
+
+				name = f.Name + "."
+				if f.Anonymous {
+					name = ""
+				}
+
+				q.rSelect(name, ft) // recurusive call
+
+			} else {
+
+				if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
+					if name = f.Tag.Get("mdb"); len(name) == 0 {
+						name = f.Name
+						lit = f.Tag.Get("literal")
+					}
+				}
+				// mdb noselect tag value
+				if name != "-" {
+					at := &Attr{name: name, aty: IsFetch, literal: lit}
+					q.attr = append(q.attr, at)
+				}
+
+			}
+
+		}
+	} else {
+		panic(fmt.Errorf("QueryHandle Select(): expected a struct got %s", st.Kind()))
+	}
+
 	return q
+
 }
 
+func (q *QueryHandle) rSelect(nm string, st reflect.Type) {
+
+	// struct value
+	// fn name of struct field
+
+	//save addressable component of interface argument
+	if st.Kind() != reflect.Struct {
+		panic(fmt.Errorf("QueryHandle Select(),rSelect(): expected a struct got %s", st.Kind()))
+	}
+	var name string
+
+	for i := 0; i < st.NumField(); i++ {
+
+		f := st.Field(i)
+		ft := f.Type
+
+		if ft.Kind() == reflect.Struct {
+
+			name = nm + f.Name + "."
+			if f.Anonymous {
+				name = nm
+			}
+
+			q.rSelect(name, ft) // recurusive call
+
+		} else {
+
+			name = nm + f.Name
+			if f.Anonymous {
+				name = nm
+			}
+			if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
+				if name = f.Tag.Get("mdb"); len(name) == 0 {
+					name = f.Name
+				}
+			}
+			if name != "-" {
+				at := &Attr{name: name, aty: IsFetch}
+				q.attr = append(q.attr, at)
+			}
+
+		}
+	}
+
+}
+
+// HasInstring used in tx.query.exQuery() to confirm bind variable is a slice
 func (q *QueryHandle) HasInstring() bool {
 	for _, v := range q.attr {
 		if v.aty == IsKey {
@@ -843,76 +1067,143 @@ func (q *QueryHandle) HasInstring() bool {
 	return true
 }
 
+func (q *QueryHandle) IsBindVarASlice() bool {
+
+	v := reflect.ValueOf(q.fetch).Elem() // q.fetch ([]interface{}) is dynamically built with results from query one row at a time.
+
+	if v.Kind() == reflect.Slice {
+		return true
+	}
+
+	return false
+
+}
+
 // func (q *QueryHandle) MakeResultSlice(size int) reflect.Value {
 
 // 	return reflect.MakeSlice(q.addrValRVal, size, size)
 
 // }
 
-// Split creates the bind variables used in db.Exec().
+// Split allocates memory for the bind variables if required otherwise allocates user defined variables to []any
 // TODO: Used by MySQL only (so far), consequently Split should be in mysql/query (maybe)
-// The source of the bind variables is the interface{} argument passed in the Select method,
-// which is either a struct or a slice of structs.
-// TODO: investigate non-struct types
+
 func (q *QueryHandle) Split() []interface{} { // )
 
-	//
-	var bind []interface{}
+	q.binds = nil
 
-	v := reflect.ValueOf(q.fetch).Elem()
+	v := reflect.ValueOf(q.fetch).Elem() // q.fetch ([]interface{}) is dynamically built with results from query one row at a time.
+	vt := v.Type()
 
-	switch v.Kind() {
-	case reflect.Struct:
+	if v.Kind() == reflect.Slice {
+
+		// allocate new entry to slice to receive db data.
+		// var aa []*struct
+		// var aa []struct
+		vs := v
+
+		vt = vt.Elem() // slice of ?
+
+		switch vt.Kind() {
+
+		case reflect.Pointer:
+
+			if vt.Elem().Kind() == reflect.Struct {
+
+				// var aa []*struct
+				// alloc ptr to new struct
+				v = reflect.New(vt.Elem())
+				// append v to q.fetch
+				vs.Set(reflect.Append(vs, v))
+				// assign v to newly alloc struct
+				v = v.Elem()
+
+			} else {
+				panic(fmt.Errorf("Split(). Expected pointer or struct got %s", v.Kind()))
+			}
+			vt = vt.Elem()
+
+		case reflect.Struct:
+
+			// aa []struct
+			// use New to allocate memory for a new struct that will be appended to the slice pointed to by q.fetch pointer.
+			v = reflect.New(vt).Elem()
+			// following Set is equiv to x:=append(x,a) to allow for allocation of a new underlying x array when current array size will be exceeded.
+			vs.Set(reflect.Append(vs, v))
+			// the bind variables are taken from each field of the struct just appended to the slice
+			// mysql will populate them with data from the db, in the Exec() function.
+			v = vs.Index(vs.Len() - 1)
+
+		default:
+			panic(fmt.Errorf("Split(). Expected pointer or struct got %s", v.Kind()))
+
+		}
+	}
+	var name string
+
+	// for new slice entry, struct or scalar, add pointer value to q.binds which will be passed to db.Scan()
+	if v.Kind() == reflect.Struct {
 
 		for i := 0; i < v.NumField(); i++ {
 
-			p := v.Field(i).Addr().Interface()
+			e := v.Field(i)
 
-			bind = append(bind, p)
+			if e.Kind() == reflect.Struct {
+
+				// nested types; struct
+				q.rBinds(e)
+
+			} else {
+
+				f := vt.Field(i)
+				if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
+					if name = f.Tag.Get("mdb"); len(name) == 0 {
+						name = f.Name
+					}
+				}
+				if name != "-" {
+					// scalar types
+					q.binds = append(q.binds, e.Addr().Interface())
+				}
+			}
 		}
-
-	case reflect.Slice:
-
-		// use New to allocate memory for a new struct that will be appended to the slice pointed to by q.fetch pointer.
-		n := reflect.New(v.Type().Elem()).Elem()
-		// append new struct to slice and assign result of append back to q.addrVal.
-		// following Set is equiv to x:=append(x,a) to allow for allocation of a new underlying x array when current array size will be exceeded.
-		v.Set(reflect.Append(v, n))
-		// the bind variables are taken from each field of the struct just appended to the slice
-		// mysql will populate them with data from the db, in the Exec() function.
-		ival := v.Index(v.Len() - 1)
-
-		for i := 0; i < ival.NumField(); i++ {
-
-			p := ival.Field(i).Addr().Interface()
-
-			bind = append(bind, p)
-		}
+	} else {
+		panic(fmt.Errorf("Split(). Expected struct got %s", v.Kind()))
 	}
-	for i, v := range bind {
-		slog.Log("Split: ", fmt.Sprintf("bind: %d   %#v\n", i, v))
-	}
-	return bind
+
+	return q.binds
 }
 
-// func (q *QueryHandle) ClearState() error {
-// 	txs := New("label", tbl.State)
+func (q *QueryHandle) rBinds(v reflect.Value) { // v is a reflect.struct
 
-// 	txs.NewDelete().AddMember(q.ID, mut.IsKey)\
+	var name string
+	vt := v.Type()
 
-// 	err := txs.Execute()
+	for i := 0; i < v.NumField(); i++ {
 
-// 	return err
+		e := v.Field(i)
 
-// }
+		if e.Kind() == reflect.Struct {
 
-// func (q *QueryHandle) UpdateState(st) error {
-// 	txs := New("label", tbl.State)
+			// nested types; struct
+			q.rBinds(e)
 
-// 	txs.NewMerge().AddMember(q.ID, mut.IsKey).AddMember("state")
+		} else {
 
-// 	err := txs.Execute()
+			f := vt.Field(i)
+			if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
+				if name = f.Tag.Get("mdb"); len(name) == 0 {
+					name = f.Name
+				}
+			}
+			if name != "-" {
+				// scalar types
+				q.binds = append(q.binds, e.Addr().Interface())
+			}
 
-// 	return err
+			// scalar types
+			//	q.binds = append(q.binds, e.Addr().Interface())
+		}
+	}
 
-// }
+}

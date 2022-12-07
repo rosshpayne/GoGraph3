@@ -78,3 +78,54 @@ func printFields_(f ...interface{}) {
 
 // 	return bind
 // }
+
+
+package main
+
+import (
+	"bytes"
+    "database/sql"
+	"encoding/json"
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	typ := reflect.StructOf([]reflect.StructField{
+		{
+			Name: "Height",
+			Type: reflect.TypeOf(sql.NullInt64{1000,false}),
+			Tag:  `json:"height"`,
+		},
+		{
+			Name: "Age",
+			Type: reflect.TypeOf(int(0)),
+			Tag:  `json:"age"`,
+		},
+	})
+    ni:=reflect.New(reflect.TypeOf(sql.NullInt64{1000,false})).Elem()
+	ni.Field(0).SetInt(1000)
+    ni.Field(1).SetBool(false)
+
+	v := reflect.New(typ).Elem()
+	v.Field(0).Set(ni)
+	v.Field(1).SetInt(64)
+	s := v.Addr().Interface()
+	
+	w := new(bytes.Buffer)
+	if err := json.NewEncoder(w).Encode(s); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("value: %+v\n", s)
+	fmt.Printf("json:  %s", w.Bytes())
+
+
+	ss := reflect.New(typ).Elem().Addr().Interface()
+	r := bytes.NewReader([]byte(`{"height": {"Int64": 10000, "Valid": true} ,"age":10}`))
+	if err := json.NewDecoder(r).Decode(ss); err != nil {
+		panic(err)
+	}
+	fmt.Printf("value: %+v\n", ss)
+
+}

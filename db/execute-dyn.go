@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	//	"sync"
+	"sync"
 	"text/scanner"
 	"time"
 
@@ -55,6 +55,7 @@ const (
 	LE         ComparOpr = "LE"
 	LT         ComparOpr = "LT"
 	BEGINSWITH ComparOpr = "BEGINSWITH"
+	BETWEEN    ComparOpr = "BETWEEN"
 	NOT        ComparOpr = "NOT"
 	NA         ComparOpr = "NA"
 )
@@ -74,7 +75,9 @@ func (c ComparOpr) String() string {
 	case LT:
 		return " < "
 	case BEGINSWITH:
-		return "beginsWith("
+		return "BeginsWith("
+	case BETWEEN:
+		return "Between("
 	case NOT:
 		return " !"
 	}
@@ -99,9 +102,17 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 
 	switch api {
 
-	case db.StdAPI, db.TransactionAPI:
+	case db.TransactionAPI:
 
-		// distinction between Std and Transaction make in execTranaction()
+		if len(bs) > 1 {
+			return fmt.Errorf("Error: More than 25 mutations defined when using a Transaction API")
+		}
+		// distinction between Std and Transaction made in execTranaction()
+		err = execTransaction(ctx, client, bs, tag, api)
+
+	case db.StdAPI:
+
+		// distinction between Std and Transaction made in execTranaction()
 		err = execTransaction(ctx, client, bs, tag, api)
 
 	case db.BatchAPI:
@@ -231,12 +242,11 @@ func retryOp(err error) bool {
 // Dynamodb's expression pkg creates BS rather than L for binary array data.
 // As GoGraph had no user-defined types it is possible to hardwire in the affected attributes.
 // All types in GoGraph are known at compile time.
-func convertBS2List(expr expression.Expression) map[string]types.AttributeValue {
+func convertBS2List(values map[string]types.AttributeValue, names map[string]string) map[string]types.AttributeValue {
 
 	var s strings.Builder
-	values := expr.Values() // map[string]types.AttributeValue
 
-	for k, v := range expr.Names() { // map[string]string  [":0"]"PKey", [":2"]"SortK"
+	for k, v := range names { // map[string]string  [":0"]"PKey", [":2"]"SortK"
 		switch v {
 		//safe to hardwire in attribute name as all required List binaries are known at compile time.
 		case "Nd", "LB":
@@ -267,7 +277,6 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 		//c    string
 		expr expression.Expression
 		upd  expression.UpdateBuilder
-		cond expression.ConditionBuilder
 	)
 
 	// merge := false
@@ -280,7 +289,7 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 			continue
 		}
 
-		switch col.Opr {
+		switch col.Mod {
 		// TODO: implement Add (as opposed to inc which is "Add 1")
 		case mut.Add:
 			if i == 0 {
@@ -311,7 +320,7 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 		case true:
 
 			// Default operation is APPEND unless overriden by SET.
-			if col.Opr == mut.Set {
+			if col.Mod == mut.Set {
 
 				if i == 0 {
 					// on the rare occuassion some mutations want to set the array e.g. XF parameter when creating overflow blocks
@@ -331,7 +340,7 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 
 		case false:
 
-			if col.Opr != mut.Set {
+			if col.Mod != mut.Set {
 				// already processed (see above)
 				break
 			}
@@ -354,40 +363,48 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 			}
 		}
 	}
-
-	// add condition expression if defined and create expression
-	if cd := m.GetCondition(); cd != nil {
-		switch cd.GetCond() {
-		case mut.AttrExists:
-			cond = expression.AttributeExists(expression.Name(cd.GetAttr()))
-		case mut.AttrNotExists:
-			cond = expression.AttributeNotExists(expression.Name(cd.GetAttr()))
-		}
-		// create expression builder with condition builder
-		expr, err = expression.NewBuilder().WithUpdate(upd).WithCondition(cond).Build()
-	} else {
-		// create expression builder with no condition builder
-		expr, err = expression.NewBuilder().WithUpdate(upd).Build()
-	}
-
+	expr, err = expression.NewBuilder().WithUpdate(upd).Build()
 	if err != nil {
 		return nil, newDBExprErr("txUpdate", "", "", err)
 	}
 
-	av := make(map[string]types.AttributeValue)
+	exprNames := expr.Names()
+	exprValues := expr.Values()
 
+	av := make(map[string]types.AttributeValue)
 	// generate key AV
 	for _, v := range m.GetKeys() {
 		av[v.Name] = marshalAvUsingValue(v.Value)
 	}
-	//
-	update := &types.Update{
-		Key:                       av,
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: convertBS2List(expr),
-		UpdateExpression:          expr.Update(),
-		ConditionExpression:       expr.Condition(),
-		TableName:                 aws.String(m.GetTable()),
+	var update *types.Update
+	// Where expression defined
+	if len(m.GetWhere()) > 0 {
+
+		exprCond, binds := buildConditionExpr(m.GetWhere(), exprNames)
+		if binds != len(m.GetValues()) {
+			panic(fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(m.GetValues())))
+		}
+
+		for i, v := range m.GetValues() {
+			exprValues[":"+strconv.Itoa(i)] = marshalAvUsingValue(v)
+		}
+		update = &types.Update{
+			Key:                       av,
+			ExpressionAttributeNames:  exprNames,
+			ExpressionAttributeValues: convertBS2List(exprValues, exprNames),
+			UpdateExpression:          expr.Update(),
+			ConditionExpression:       aws.String(exprCond),
+			TableName:                 aws.String(m.GetTable()),
+		}
+
+	} else {
+		update = &types.Update{
+			Key:                       av,
+			ExpressionAttributeNames:  exprNames,
+			ExpressionAttributeValues: convertBS2List(exprValues, exprNames),
+			UpdateExpression:          expr.Update(),
+			TableName:                 aws.String(m.GetTable()),
+		}
 	}
 
 	twi := &types.TransactWriteItem{Update: update}
@@ -997,13 +1014,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 	return nil
 }
 
-//
-//
-//
-//////////  QUERY  /////////  QUERY  ///////  QUERY  /////////  QUERY  ///////  QUERY  ////////////  QUERY  /////////  QUERY  ///////////
-//
-//
-//
+// ////////  QUERY  /////////  QUERY  ///////  QUERY  /////////  QUERY  ///////  QUERY  ////////////  QUERY  /////////  QUERY  ///////////
 type scanMode byte
 
 const (
@@ -1013,6 +1024,7 @@ const (
 
 func genKeyAV(q *query.QueryHandle) (map[string]types.AttributeValue, error) {
 
+	// TODO: check against Dynamodb table key definition.
 	var (
 		err error
 		av  map[string]types.AttributeValue
@@ -1089,6 +1101,15 @@ func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle,
 	case cQuery:
 		return exQuery(ctx, dh, q, e, proj)
 	case cScan:
+		// check if scan has been disabled at either the db or stmt level
+		if DbScan == db.Disabled {
+			if qscan := q.GetConfig("scan"); qscan != nil {
+				if qscan.(db.State) == db.Enabled {
+					return exScan(ctx, dh, q, proj)
+				}
+			}
+			return fmt.Errorf("Scan operation is disabled")
+		}
 		return exScan(ctx, dh, q, proj)
 	}
 
@@ -1096,7 +1117,7 @@ func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle,
 
 }
 
-//func exGetItem(q *query.QueryHandle, av []types.AttributeValue) error {
+// func exGetItem(q *query.QueryHandle, av []types.AttributeValue) error {
 func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, av map[string]types.AttributeValue, proj *expression.ProjectionBuilder) error {
 
 	if proj == nil {
@@ -1159,9 +1180,24 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	var (
 		keyc   expression.KeyConditionBuilder
 		flt, f expression.ConditionBuilder
+
+		input *dynamodb.QueryInput
+		err   error
+
+		exprProj    *string
+		exprKeyCond *string
+		exprNames   map[string]string
+		exprValues  map[string]types.AttributeValue
+		exprFilter  *string
 	)
 
 	syslog(fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+	exprNames = make(map[string]string)
+
+	// check bind variable is a slice
+	if !q.IsBindVarASlice() {
+		return fmt.Errorf("Bind variable in Select() must be slice for a query database operation")
+	}
 
 	// pagination
 	if q.IsRestart() {
@@ -1172,11 +1208,23 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		q.SetRestart(false)
 
 	}
+	//
+	keyAttrs := q.GetKeys()
 
 	switch len(q.GetKeys()) {
 	case 1:
+		if keyAttrs[0] != e.GetPK() {
+			panic(fmt.Errorf(fmt.Sprintf("Expected Partition Key %q got %q", e.GetPK(), keyAttrs[0])))
+		}
+		// always EQ
 		keyc = expression.KeyEqual(expression.Key(e.GetPK()), expression.Value(q.GetKeyValue(e.GetPK())))
 	case 2:
+		if keyAttrs[0] != e.GetPK() {
+			panic(fmt.Errorf(fmt.Sprintf("Expected Partition Key %q got %q", e.GetPK(), keyAttrs[0])))
+		}
+		if keyAttrs[1] != e.GetSK() {
+			panic(fmt.Errorf(fmt.Sprintf("Expected SortKey %q got %q", e.GetSK(), keyAttrs[1])))
+		}
 		//
 		keyc = expression.KeyEqual(expression.Key(e.GetPK()), expression.Value(q.GetKeyValue(e.GetPK())))
 		switch ComparOpr(q.GetKeyComparOpr(e.GetSK())) {
@@ -1184,26 +1232,48 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 			keyc = expression.KeyAnd(keyc, expression.KeyEqual(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
 		case GT:
 			keyc = expression.KeyAnd(keyc, expression.KeyGreaterThan(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
-		case LT:
-			keyc = expression.KeyAnd(keyc, expression.KeyLessThan(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
 		case GE:
 			keyc = expression.KeyAnd(keyc, expression.KeyGreaterThanEqual(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
+		case LT:
+			keyc = expression.KeyAnd(keyc, expression.KeyLessThan(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
 		case LE:
 			keyc = expression.KeyAnd(keyc, expression.KeyLessThanEqual(expression.Key(e.GetSK()), expression.Value(q.GetKeyValue(e.GetSK()))))
 		case BEGINSWITH:
 			keyc = expression.KeyAnd(keyc, expression.KeyBeginsWith(expression.Key(e.GetSK()), q.GetKeyValue(e.GetSK()).(string)))
+		case BETWEEN:
+			arg := q.GetKeyValue(e.GetSK()).([2]interface{})
+			keyc = expression.KeyAnd(keyc, expression.KeyBetween(expression.Key(e.GetSK()), expression.Value(arg[0]), expression.Value(arg[1])))
+		default:
+			panic(fmt.Errorf(fmt.Sprintf("Key operator %q not supported", keyAttrs[1])))
+
 		}
+	default:
+		panic(fmt.Errorf(fmt.Sprintf("No more than two Key %q", len(q.GetKeys()))))
 	}
 
-	for i, n := range q.GetFilterAttr() {
+	// filter defined
+	for i, n := range q.GetFilterAttrs() {
+
+		syslog(fmt.Sprintf("Filter : %#v\n", n.Name()))
+
+		if q.GetOr() > 0 && q.GetAnd() > 0 {
+			panic(fmt.Errorf("Cannot mix OrFilter, AndFilter conditions. Use Where() & Values() instead"))
+		}
 		if i == 0 {
 			switch ComparOpr(n.GetOprStr()) {
+			case BETWEEN:
+				arg := q.GetKeyValue(e.GetSK()).([2]interface{})
+				flt = expression.Between(expression.Name(n.Name()), expression.Value(arg[0]), expression.Value(arg[1]))
 			case BEGINSWITH:
 				flt = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case GT:
 				flt = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
+			case GE:
+				flt = expression.GreaterThanEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			case LT:
 				flt = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
+			case LE:
+				flt = expression.LessThanEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			case EQ:
 				flt = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case NE:
@@ -1215,12 +1285,19 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		} else {
 
 			switch ComparOpr(n.GetOprStr()) {
+			case BETWEEN:
+				arg := q.GetKeyValue(e.GetSK()).([2]interface{})
+				f = expression.Between(expression.Name(n.Name()), expression.Value(arg[0]), expression.Value(arg[1]))
 			case BEGINSWITH:
 				f = expression.BeginsWith(expression.Name(n.Name()), n.Value().(string))
 			case GT:
 				f = expression.GreaterThan(expression.Name(n.Name()), expression.Value(n.Value()))
+			case GE:
+				f = expression.GreaterThanEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			case LT:
 				f = expression.LessThan(expression.Name(n.Name()), expression.Value(n.Value()))
+			case LE:
+				f = expression.LessThanEqual(expression.Name(n.Name()), expression.Value(n.Value()))
 			case EQ:
 				f = expression.Equal(expression.Name(n.Name()), expression.Value(n.Value()))
 			case NE:
@@ -1236,8 +1313,8 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 				flt = flt.Or(f)
 			}
 		}
-	}
 
+	}
 	// build expression.Expression
 	b := expression.NewBuilder().WithKeyCondition(keyc)
 	if proj != nil {
@@ -1250,14 +1327,61 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	if err != nil {
 		return newDBExprErr("exQuery", "", "", err)
 	}
+	exprProj = expr.Projection()
+	exprKeyCond = expr.KeyCondition()
+	exprNames = expr.Names()
+	exprValues = expr.Values()
+	exprFilter = expr.Filter()
 
-	// define QueryInput
-	input := &dynamodb.QueryInput{
-		KeyConditionExpression:    expr.KeyCondition(),
-		FilterExpression:          expr.Filter(),
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		ProjectionExpression:      expr.Projection(),
+	// Where expression defined
+	if len(q.GetWhere()) > 0 {
+
+		if len(q.GetFilterAttrs()) > 0 {
+			panic(fmt.Errorf(fmt.Sprintf("Cannot mix Filter and Where methods.")))
+		}
+
+		exprStr, binds := buildFilterExpr(q.GetWhere(), exprNames)
+		if binds != len(q.GetValues()) {
+			panic(fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(q.GetValues())))
+		}
+
+		for i, v := range q.GetValues() {
+			exprValues[":"+strconv.Itoa(i)] = marshalAvUsingValue(v)
+		}
+
+		// build expression.Expression
+		b := expression.NewBuilder().WithKeyCondition(keyc)
+		if proj != nil {
+			b = b.WithProjection(*proj)
+		}
+
+		expr, err := b.Build()
+		if err != nil {
+			return newDBExprErr("exQuery", "", "", err)
+		}
+		// append expression Names and Values
+		for k, v := range expr.Names() {
+			exprNames[k] = v
+		}
+		for k, v := range expr.Values() {
+			exprValues[k] = v
+		}
+		var s strings.Builder
+		s.WriteString(*exprFilter)
+		s.WriteString(" AND (")
+		s.WriteString(exprStr)
+		s.WriteString(" )")
+		exprFilter = aws.String(s.String())
+		// define QueryInput
+
+	}
+
+	input = &dynamodb.QueryInput{
+		KeyConditionExpression:    exprKeyCond,
+		FilterExpression:          exprFilter,
+		ExpressionAttributeNames:  exprNames,
+		ExpressionAttributeValues: exprValues,
+		ProjectionExpression:      exprProj,
 		TableName:                 aws.String(string(q.GetTable())),
 		ReturnConsumedCapacity:    types.ReturnConsumedCapacityIndexes,
 		ConsistentRead:            aws.Bool(q.ConsistentMode()),
@@ -1275,12 +1399,9 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
 	}
 
-	if len(e.GetSK()) > 0 {
-		input.ScanIndexForward = aws.Bool(q.IsScanForwardSet())
-	}
+	input.ScanIndexForward = aws.Bool(q.IsScanForwardSet())
 	//
 	t0 := time.Now()
-
 	result, err := client.Query(ctx, input)
 	t1 := time.Now()
 	if err != nil {
@@ -1343,11 +1464,11 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 	var err error
 
-	switch par := q.GetParallel(); par {
+	switch wrks := q.NumWorkers(); wrks {
 
 	case 0:
 
-		switch q.QueryMode() {
+		switch q.ExecMode() {
 
 		case q.Channel():
 
@@ -1362,11 +1483,6 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			// start scan service
 			go scanChannelSrv(ctx, nonParallel, q, ch, client, proj)
 
-		case q.Func():
-
-			// ExecuteByFunc()
-			go scanFuncSrv(ctx, nonParallel, q, client, proj)
-
 		default:
 
 			// normal Execute()
@@ -1375,15 +1491,17 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 	default:
 
-		switch q.QueryMode() {
+		// all q.Func() will have been configured with 1 worker if no Worker specified.
 
-		case q.Channel():
+		if x := q.ExecMode(); x == q.Channel() || x == q.Func() {
 
-			// create par number of bind vars (double buf)
+			if len(q.Bufs()) < 2 {
+				panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
+			}
+
+			// create wrks number of bind vars (double buf)
 			// q.Fetch == *[]rec
-			r := reflect.ValueOf(q.Fetch()).Elem() // &[]unprocBuf, &[]unprocBuf
-
-			lenBufs := reflect.ValueOf(q.Bufs()).Len()
+			r := reflect.ValueOf(q.Fetch()).Elem()
 
 			// create slice of channels
 			chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
@@ -1391,9 +1509,9 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 			chs := reflect.New(sT)
 			ichs := reflect.Indirect(chs)
 
-			// create #par clones of QueryHandle and assign bind variables and channel to it.
+			// create #wrks clones of QueryHandle and assign bind variables and channel to it.
 			// Each cloned QueryHandle will be assoicated with one parallel scan worker
-			for i := 0; i < par; i++ {
+			for i := 0; i < wrks; i++ {
 
 				cq := q.Clone()
 
@@ -1406,35 +1524,46 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 				// assign existing or create new bind vars and assign to cloned QueryHandle
 				if i == 0 {
-					// use bind vars from query method Select()
+					// use bind vars from query method Select() for first clone
 					cq.Select(q.Bufs()...)
 
 				} else {
 
-					// create bind vars using New()
-					for n := 0; n < lenBufs; n++ {
+					// create bind vars using New() for all other clones except first - based on
+					for n := 0; n < len(q.Bufs()); n++ {
 						bv := reflect.New(r.Type())
 						sel = append(sel, bv.Interface())
 					}
-					// assign bind vars to cloned queryHandler
+					// assign bind vars to cloned queryHandler - each will be double buffered if specifed in original Select()
+					// TODO: check multiple bind vars specified in Select when paginate or workers specified.
 					cq.Select(sel...)
 				}
-
-				//
+				// configure worker details
 				cq.SetTag(q.Tag + "-w" + strconv.Itoa(i))
 				cq.SetWorker(i)
 
-				// start scan service
+				// start worker scan service
 				go scanChannelSrv(ctx, parallel, cq, ch, client, proj)
 			}
-			// assign slice of channels to original queryHandler
-			q.SetChannel(ichs.Interface())
 
-		case q.Func():
+			if x == q.Func() {
+				// place func on receive end of channel:  func(a interface{}) error, where a is channel created above
+				// blocking call
+				var wg sync.WaitGroup
+				wg.Add(wrks)
+				for i := 0; i < wrks; i++ {
+					go q.GetFunc()(&wg, chs.Index(i).Interface())
+				}
+				wg.Wait()
 
-			go scanFuncSrv(ctx, nonParallel, q, client, proj)
+			} else {
 
-		default:
+				// assign slice of channels to original queryHandler
+				q.SetChannel(ichs.Interface())
+			}
+
+		} else {
+
 			elog.Add("Execute", fmt.Errorf("Not supported. Use ExecuteWithChannel() instead"))
 		}
 
@@ -1443,7 +1572,8 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 	return err
 }
 
-// scanChannelSrv is a service that provides a Scan operation and outputs via dynamically allocated channels.
+// scanChannelSrv is a goroutine (service) created for each worker (on a table partition/segment)
+// there is one scanChannelSrv
 func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
 
 	var err error
@@ -1479,40 +1609,40 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 
 }
 
-func scanFuncSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
+// func scanFuncSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
 
-	var err error
+// 	var err error
 
-	slog.LogAlert("scanFuncSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+// 	slog.LogAlert("scanFuncSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
 
-	for !q.EOD() {
+// 	for !q.EOD() {
 
-		switch scan {
-		case nonParallel:
-			err = exNonParallelScan(ctx, client, q, proj)
-		case parallel:
-			err = exScanWorker(ctx, client, q, proj)
-		}
+// 		switch scan {
+// 		case nonParallel:
+// 			err = exNonParallelScan(ctx, client, q, proj)
+// 		case parallel:
+// 			err = exScanWorker(ctx, client, q, proj)
+// 		}
 
-		if err != nil {
-			if errors.Is(query.NoDataFoundErr, err) {
-				continue
-			}
-			elog.Add("scanFuncSrv", err)
-		}
-		// check for ctrl-C
-		select {
-		case <-ctx.Done():
-			break
-		default:
-		}
+// 		if err != nil {
+// 			if errors.Is(query.NoDataFoundErr, err) {
+// 				continue
+// 			}
+// 			elog.Add("scanFuncSrv", err)
+// 		}
+// 		// check for ctrl-C
+// 		select {
+// 		case <-ctx.Done():
+// 			break
+// 		default:
+// 		}
 
-		// blocking func call
-		err = q.GetFunc()()
+// 		// blocking func call
+// 		err = q.GetFunc()()
 
-	}
+// 	}
 
-}
+// }
 
 // exNonParallelScan - non-parallel scan. Scan of table or index.
 func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
@@ -1533,7 +1663,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	if proj == nil {
 		return fmt.Errorf("Select must be specified in a Scan")
 	}
-	for i, n := range q.GetFilterAttr() {
+	for i, n := range q.GetFilterAttrs() {
 		if i == 0 {
 			switch ComparOpr(n.GetOprStr()) {
 			case BEGINSWITH:
@@ -1702,7 +1832,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
 	logid := "exScanWorker"
-	worker := fmt.Sprintf("exScanWorker: thread %d  totalSegments %d", q.Worker(), q.GetParallel())
+	worker := fmt.Sprintf("exScanWorker: thread %d  totalSegments %d", q.Worker(), q.NumWorkers())
 	slog.LogAlert(logid, worker)
 
 	if q.IsRestart() {
@@ -1717,7 +1847,7 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	if proj == nil {
 		return fmt.Errorf("Select must be specified in a Scan")
 	}
-	for i, n := range q.GetFilterAttr() {
+	for i, n := range q.GetFilterAttrs() {
 		if i == 0 {
 			switch ComparOpr(n.GetOprStr()) {
 			case BEGINSWITH:
@@ -1792,8 +1922,8 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 		//syslog(fmt.Sprintf("exScanWorker: SetExclusiveStartKey %s", input.String()))
 	}
 
-	input.Segment = aws.Int32(int32(q.Worker()))            //int64(q.Worker())
-	input.TotalSegments = aws.Int32(int32(q.GetParallel())) //int64(q.GetParallel())
+	input.Segment = aws.Int32(int32(q.Worker()))           //int64(q.Worker())
+	input.TotalSegments = aws.Int32(int32(q.NumWorkers())) //int64(q.NumWorkers())
 	//syslog(fmt.Sprintf("exScanWorker: thread %d  input: %s", q.Worker(), input.String()))
 	//
 	t0 := time.Now()
@@ -1980,6 +2110,7 @@ func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker
 }
 
 // unmarshalPgState takes scan state data from bundles it into map[string]types.AttributeValue
+//
 //	4{S : {  S: "17 June 1986"} }{PKey : {  B: "WbjVdFJGTWGpqRpUTEPcPg==" } }{SortK : { S: "r|A#A#:D"} }{P : {  S: "r|DOB"} }
 func unmarshalPgState(in string) map[string]types.AttributeValue {
 	var (

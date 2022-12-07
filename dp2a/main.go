@@ -15,7 +15,7 @@ import (
 	//"github.com/GoGraph/attach/anmgr"
 	//"github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
-	"github.com/GoGraph/db"
+	dyn "github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
@@ -26,6 +26,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	tx "github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/types"
@@ -50,7 +51,7 @@ var (
 	batchSize = flag.Int("bs", 20, "Scan batch size [defaut: 20]")
 )
 
-type unprocBuf struct {
+type UnprocBuf struct {
 	PKey uuid.UID
 	Ty   string
 }
@@ -136,8 +137,11 @@ func main() {
 	}()
 
 	// register default database client
-	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Init(ctx)
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+
+	// db.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	// mysql.Register(ctx)
 
 	//	tbl.Register("pgState", "Id", "Name")
 	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
@@ -504,9 +508,9 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 	return nil
 }
 
-// func UnprocessedCh(ctx context.Context, dpty []string, stateId uuid.UID, restart bool) <-chan []unprocBuf {
+// func UnprocessedCh(ctx context.Context, dpty []string, stateId uuid.UID, restart bool) <-chan []UnprocBuf {
 
-// 	dpCh := make(chan []unprocBuf, 1) // NB: only use 0 or 1 for buffer size
+// 	dpCh := make(chan []UnprocBuf, 1) // NB: only use 0 or 1 for buffer size
 
 // 	go ScanForDPitems(ctx, dpty, dpCh, stateId, restart)
 
@@ -515,17 +519,17 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 // }
 
 // ScanForDPitems scans index for all interested ty and returns items in channel. Executed once.
-func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) (<-chan []unprocBuf, error) {
+func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool) (<-chan []UnprocBuf, error) {
 
 	var (
-		buf1, buf2 []unprocBuf
+		buf1, buf2 []UnprocBuf
 
 		logid = "ScanForDPitems"
 	)
 
 	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v", id.Base64(), restart))
 
-	bufs := [2][]unprocBuf{buf1, buf2}
+	bufs := [2][]UnprocBuf{buf1, buf2}
 
 	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
 	ptx.Select(&bufs[0], &bufs[1])
@@ -549,7 +553,7 @@ func UnprocessedCh(ctx context.Context, dpTy []string, id uuid.UID, restart bool
 		return nil, err
 	}
 
-	chs_, ok := chs.(chan []unprocBuf)
+	chs_, ok := chs.(chan []UnprocBuf)
 	if !ok {
 		return nil, fmt.Errorf("Error in type assertion of channel returned by ExecuteByChannel. ", err)
 	}

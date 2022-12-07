@@ -25,7 +25,7 @@ import (
 	"github.com/GoGraph/run"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	tx "github.com/GoGraph/tx"
+	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
@@ -53,7 +53,7 @@ var (
 
 type Unprocessed struct {
 	PKey uuid.UID
-	Ty   string
+	Ty   string // query.NullString
 }
 type PKey []byte
 
@@ -136,8 +136,9 @@ func main() {
 	}()
 
 	// TODO: how to register default database from app rather than inside Init
-	dyn.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Init(ctx, "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "scan", Val: db.Disabled}, db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	//	tbl.Register("pgState", "Id", "Name")
 	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
@@ -366,6 +367,10 @@ func main() {
 
 				wgc.Add(1)
 				uid = u.PKey
+				// if u.Ty.Valid {
+				// 	// ty_ = u.Ty[strings.Index(u.Ty, "|")+1:]
+				// 	ty_ = u.Ty.String[strings.Index(u.Ty.String, "|")+1:]
+				// }
 				ty_ = u.Ty[strings.Index(u.Ty, "|")+1:]
 				limiterDP.Ask()
 				<-limiterDP.RespCh()

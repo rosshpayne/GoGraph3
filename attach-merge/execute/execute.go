@@ -20,8 +20,8 @@ import (
 	"github.com/GoGraph/grmgr"
 	mon "github.com/GoGraph/monitor"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
 	//	"github.com/GoGraph/rdf/uuid"
@@ -99,6 +99,9 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 		return func() {
 			//	et := eAN.NewTask("op-StateChange") // EV$task
 			// Persist state
+			if op == nil {
+				return
+			}
 			oTx.Add(op.End(err)...) // Edge_Movies
 			err = oTx.Execute()
 			// log finish event
@@ -106,17 +109,21 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 			if err != nil {
 				errlog.Add(logid, fmt.Errorf("Error in execute oTx for attach node operation state: %w ", err))
 			}
+
 		}
 	}()()
 
 	handleErr := func(err error) {
 		//pnd.Unlock()
+		slog.LogAlert(logid, err.Error())
 		errlog.Add(logid, err)
-		//panic(err)
 	}
 
 	// cTx := tx.NewTx("AttachEdges")// should use transactions as attaching nodes involves multiple puts (inserts) any one of which could fail.
-	cTx := tx.NewBatchContext(ctx, "AttachEdges").DB("dynamodb") // as mutations are configured to use Insert (Put) - batch can be used. Issue - no transaction control. Cannot be used with merge stmt
+	cTx := tx.NewBatchContext(ctx, "AttachEdges") // as mutations are configured to use Insert (Put) - batch can be used. Issue - no transaction control. Cannot be used with merge stmt
+	if errs := cTx.GetErrors(); len(errs) > 0 {
+		panic(errs[0])
+	}
 	//cTx := tx.New("AttachEdges")
 	// state tx
 
@@ -226,7 +233,6 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 
 	//st := eAN.NewTask("AtachExecute")
 	//defer st.Finish(err)
-
 	for _, e := range edges {
 
 		t0 = time.Now()
@@ -246,7 +252,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 			return
 		}
 
-		slog.Log("AttachEdges: ", fmt.Sprintf(" Joined cUID --> pUID       %s -->  %s  %s Elapsed: %s  DML: %s\n", uuid.UID(e.Cuid).EncodeBase64(), uuid.UID(e.Puid).Base64(), e.Sortk, time.Now().Sub(t0), mt))
+		slog.LogAlert("AttachEdges: ", fmt.Sprintf(" Joined cUID --> pUID       %s -->  %s  %s Elapsed: %s  DML: %s\n", uuid.UID(e.Cuid).EncodeBase64(), uuid.UID(e.Puid).Base64(), e.Sortk, time.Now().Sub(t0), mt))
 		// monitor: increment attachnode counter
 		stat := mon.Stat{Id: mon.AttachNode}
 		mon.StatCh <- stat
@@ -261,7 +267,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	// The batch will contain a single update for the target SortK in the Parent Node, inserts for each scalar attribute and optionally inerts/updates for
 	// any Overflow blocks or batches, and update to the overflow batch
 
-	// Execute()
+	// err = cTx.Execute()
 	err = cTx.Commit()
 	if err != nil {
 		//cTx.Dump() // serialise cTx to mysql dump table
@@ -378,7 +384,7 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, cUID, pUI
 		// this will create an insert mutation if no mutation exists. If mutation exists then member data will be merged (usually appended)into existing mutation member values.
 		// As its an insert the MergeMutation will overwrite the associated item in the db, hence should only be used for initial load unless a read operation is undertaken to load the mutation values.
 		//	cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("Nd", c).AddMember("XF", x).AddMember("Id", i).AddMember("N", 1, mut.Add).AddMember("P", types.GraphSN()+"|"+apAttrNm).AddMember("Ty", pTySN)
-		cTx.MergeMutation2(tbl.EOP, mutop, keys).AddMember("Nd", c).AddMember("XF", x).AddMember("Id", i).AddMember("N", 1, mut.Add).AddMember("P", types.GraphSN()+"|"+apAttrNm).AddMember("Ty", pTySN)
+		cTx.MergeMutation(tbl.EOP, mutop, keys).AddMember("Nd", c).AddMember("XF", x).AddMember("Id", i).AddMember("N", 1, mut.Add).AddMember("P", types.GraphSN()+"|"+apAttrNm).AddMember("Ty", pTySN)
 
 		// for spanner, use stdMut of update with Set mutopr for all arrays. mutopr of Set works with dynamodb (stdMut Insert), as it will the value of mutopr is ignored.
 		//	cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("Nd", c,mut.Set).AddMember("XF", x,mut.Set).AddMember("Id", i,mut.Set).AddMember("N", 1, mut.Add)
@@ -395,7 +401,7 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, cUID, pUI
 
 		// append to overflow batch - ASZ records number of items in overflow batch (max: param.OvfwBatchSize (~300))
 		//cTx.MergeMutation(tbl.EOP, py.TUID, py.Osortk, mutop).AddMember("Nd", cuid).AddMember("XF", xf).AddMember("ASZ", 1, mut.Add)
-		cTx.MergeMutation2(tbl.EOP, mutop, keys).AddMember("Nd", cuid).AddMember("XF", xf).AddMember("ASZ", 1, mut.Add)
+		cTx.MergeMutation(tbl.EOP, mutop, keys).AddMember("Nd", cuid).AddMember("XF", xf).AddMember("ASZ", 1, mut.Add)
 
 		// Randomly chooses an overflow block. However before it can choose random it must create a set of overflow blocks
 		// which relies upon an Overflow batch limit being reached and a new batch created.
@@ -412,7 +418,7 @@ func AttachEdge(ctx context.Context, cTx *tx.Handle, mutop mut.StdMut, cUID, pUI
 		// increment N in parent UID-PRED, which maintains total of all attached nodes.
 		// Note it is not just the number of elements in the UID-PRED Nd (which could be mantained with ASZ - maybe)
 		//cTx.MergeMutation(tbl.EOP, pUID, sortK, mutop).AddMember("N", 1, mut.Add)
-		cTx.MergeMutation2(tbl.EOP, mutop, keys).AddMember("N", 1, mut.Add)
+		cTx.MergeMutation(tbl.EOP, mutop, keys).AddMember("N", 1, mut.Add)
 
 	}
 
@@ -677,7 +683,7 @@ func propagateMerge(cTx *tx.Handle, ty blk.TyAttrD, pUID uuid.UID, sortK string,
 	// keys = []key.Key{key.Key{"PKey", sortk}}                           // too few keys. Passed
 	//keys := []key.Key{key.Key{"Sortk", sortk}, key.Key{"PKey", tUID}, key.Key{"Key", tUID}} // too many keys
 	//merge := cTx.MergeMutation(tbl.EOP, tUID, sortk, mutop)
-	merge := cTx.MergeMutation2(tbl.EOP, mutop, keys)
+	merge := cTx.MergeMutation(tbl.EOP, mutop, keys)
 
 	//merge := cTx.NewInsert(tbl.EOP).AddMember("PKey", tUID).AddMember("SortK", sortk)
 

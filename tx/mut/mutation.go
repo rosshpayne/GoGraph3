@@ -8,16 +8,16 @@ import (
 
 	"github.com/GoGraph/dbs"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
+	"github.com/GoGraph/tx/key"
+	"github.com/GoGraph/tx/tbl"
 	"github.com/GoGraph/uuid"
 )
 
 type StdMut byte
-type MutOpr byte // aka update-expression in dynamodb (almost)
+type Modifer byte // aka update-expression in dynamodb (almost)
 type Cond byte
 
-//type MutOpr string
+//type Modifer string
 
 const (
 	Merge StdMut = iota + 1
@@ -26,16 +26,17 @@ const (
 	Update // update performing "set =" operation etc
 	TruncateTbl
 	//
-	Set MutOpr = iota + 1
+	Set Modifer = iota + 1
 	// Inc             // set col = col + 1 //TODO: deprecated - performed by Add, Substract
 	// Decr            // set col = col - 1 //TODO: deprecated -
 	Subtract // set col = col - <value>
 	Add      // set col = col - <num>
+	Multiply // set col = col x <value>
 	//
-	IsKey // used in query & update mode. Alternative to registering table/index and its keys. TODO: deprecated - GoGraph determines from DD
-	//
-	Append // update by appending to array/list attribute
-	Remove // remove attribute
+	IsKey    // used in query & update mode. Alternative to registering table/index and its keys. TODO: deprecated - GoGraph determines from DD
+	IsFilter //
+	Append   // update by appending to array/list attribute
+	Remove   // remove attribute
 	//
 	AttrExists Cond = iota
 	AttrNotExists
@@ -63,7 +64,7 @@ func (s StdMut) String() string {
 	return "not-defined"
 }
 
-func (s MutOpr) String() string {
+func (s Modifer) String() string {
 	switch s {
 	case Set:
 		return "Set"
@@ -105,29 +106,29 @@ type Member struct {
 	Name  string // attribute name: when contains "#",":"??
 	Param string // used in Spanner implementation. All value placements are identified by "@param"
 	Value interface{}
-	Array bool   // member can be appended to ie. is an array (List) type in Dynamodb
-	Opr   MutOpr // for update stmts only: default is to concat for Array type. When true will overide with set of array.
-	//Opr   StdMut // for update of numerics. Add rather than set e.g. set col = col + @v1. Default: set col=@v1
+	Array bool    // set in AddMember(). Append modifier is valid to ie. is an array (List) type in Dynamodb
+	Mod   Modifer // for update stmts only: default is to concat for Array type. When true will overide with set of array.
+	//Mod   StdMut // for update of numerics. Add rather than set e.g. set col = col + @v1. Default: set col=@v1
 }
 
 func (m *Member) IsKey() bool {
-	return m.Opr == IsKey
+	return m.Mod == IsKey
 }
 
 func (m *Member) Set() bool {
-	return m.Opr == Set
+	return m.Mod == Set
 }
 
 // func (m *Member) Inc() bool {
-// 	return m.Opr == Inc
+// 	return m.Mod == Inc
 // }
 
 func (m *Member) Subtract() bool {
-	return m.Opr == Subtract
+	return m.Mod == Subtract
 }
 
 func (m *Member) Add() bool {
-	return m.Opr == Add
+	return m.Mod == Add
 }
 
 // Examples of condition expression:
@@ -138,38 +139,48 @@ func (m *Member) Add() bool {
 // "contains(Color, :v_sub)"
 // "size(VideoClip) > :v_sub"
 
-type condition struct {
-	cond  Cond        // ]ASZ
-	attr  string      // =
-	value interface{} // size
+// type condition struct {
+// 	cond  Cond        // ]ASZ
+// 	attr  string      // =
+// 	value interface{} // size
+// }
+
+type Option struct {
+	Name string
+	Val  interface{}
 }
 
-func (c *condition) GetCond() Cond {
-	return c.cond
-}
+// func (c *condition) GetCond() Cond {
+// 	return c.cond
+// }
 
-func (c *condition) GetAttr() string {
-	return c.attr
-}
+// func (c *condition) GetAttr() string {
+// 	return c.attr
+// }
 
-func (c *condition) GetValue() interface{} {
-	return c.value
-}
+// func (c *condition) GetValue() interface{} {
+// 	return c.value
+// }
 
 type Mutation struct {
-	ms []Member
-	cd *condition
+	ms  []Member
+	tag string // label for mutation. Potentially useful as a source of aggregation for performance statistics.
+	//cd *condition
+	// Where, Values method
+	where  string
+	values []interface{}
 	// pk   uuid.UID
 	// sk   string
 	pKey interface{}
 	tbl  tbl.Name
 	keys []key.TableKey
-	opr  StdMut // update,insert(put)
+	opr  StdMut // update,insert(put), merge, delete
 	//
 	text     string      // alternate representation of a mutation e.g. sql
 	prepStmt interface{} // some db's may optional "prepare" mutations before execution Three phase 1) single prepare stmt 2) multiple stmt executions 3) close stmt
 	params   []interface{}
 	err      error
+	config   []Option
 }
 
 type Mutations []dbs.Mutation //*Mutation
@@ -182,14 +193,20 @@ func (im *Mutations) NumMutations() int {
 	return len(*im)
 }
 
-func NewInsert(tab tbl.Name) *Mutation {
+func NewInsert(tab tbl.Name, label ...string) *Mutation {
 
+	if len(label) > 0 {
+		return &Mutation{tbl: tab, opr: Insert, tag: label[0]}
+	}
 	return &Mutation{tbl: tab, opr: Insert}
 
 }
 
-func NewDelete(tab tbl.Name) *Mutation {
+func NewDelete(tab tbl.Name, label ...string) *Mutation {
 
+	if len(label) > 0 {
+		return &Mutation{tbl: tab, opr: Delete, tag: label[0]}
+	}
 	return &Mutation{tbl: tab, opr: Delete}
 
 }
@@ -197,13 +214,20 @@ func NewDelete(tab tbl.Name) *Mutation {
 // NewMerge
 // This operation is equivalent in a no-SQL Put operation as put will insert if new or update if present.
 // However for SQL database it will perform an update, if not present, then insert.
-func NewMerge(tab tbl.Name) *Mutation {
+func NewMerge(tab tbl.Name, label ...string) *Mutation {
+
+	if len(label) > 0 {
+		return &Mutation{tbl: tab, opr: Merge, tag: label[0]}
+	}
 
 	return &Mutation{tbl: tab, opr: Merge}
 }
 
-func NewUpdate(tab tbl.Name) *Mutation {
+func NewUpdate(tab tbl.Name, label ...string) *Mutation {
 
+	if len(label) > 0 {
+		return &Mutation{tbl: tab, opr: Update, tag: label[0]}
+	}
 	return &Mutation{tbl: tab, opr: Update}
 }
 
@@ -260,6 +284,22 @@ func (m *Mutation) PrepStmt() interface{} {
 
 func (m *Mutation) SetText(p string) {
 	m.text = p
+}
+
+func (q *Mutation) Where(s string) {
+	q.where = s
+}
+
+func (q *Mutation) GetWhere() string {
+	return q.where
+}
+
+func (q *Mutation) Values(v []interface{}) {
+	q.values = v
+}
+
+func (q *Mutation) GetValues() []interface{} {
+	return q.values
 }
 
 func (m *Mutation) Text() string {
@@ -335,7 +375,100 @@ func addErr(e error) {
 
 }
 
-func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mutation {
+// Config set for individual mutations e.g. Override scan database config, used to detect full scan operations and abort
+func (im *Mutation) Config(opt ...Option) *Mutation {
+	im.config = append(im.config, opt...)
+	return im
+}
+
+func (im *Mutation) GetConfig(s string) interface{} {
+	for _, k := range im.config {
+		if k.Name == s {
+			return k.Val
+		}
+	}
+	return nil
+}
+
+func (im *Mutation) Key(attr string, value interface{}) {
+	im.AddMember(attr, value, IsKey)
+}
+
+func (im *Mutation) Filter(attr string, value interface{}) {
+	im.AddMember(attr, value, IsFilter)
+}
+
+func (im *Mutation) Add(attr string, value interface{}) {
+	im.AddMember(attr, value, Add)
+}
+
+func (im *Mutation) Subtract(attr string, value interface{}) {
+	im.AddMember(attr, value, Subtract)
+}
+func (im *Mutation) Multiply(attr string, value interface{}) {
+	im.AddMember(attr, value, Multiply)
+}
+func (im *Mutation) Set(attr string, value interface{}) {
+	im.AddMember(attr, value, Set)
+}
+func (im *Mutation) Append(attr string, value interface{}) {
+	im.AddMember(attr, value, Append)
+}
+func (im *Mutation) Remove(attr string, value interface{}) {
+	im.AddMember(attr, value, Remove)
+}
+
+// Submit defines a mutation using struct tags with tag names emulating each mutation method and attribute mutation method
+func (im *Mutation) Submit(t interface{}) *Mutation {
+
+	if im.err != nil {
+		return im
+	}
+
+	f := reflect.TypeOf(t) // *[]struct
+	if f.Kind() != reflect.Ptr {
+		panic(fmt.Errorf("Fetch argument: expected a pointer, got a %s", f.Kind()))
+	}
+	//save addressable component of interface argument
+
+	s := f.Elem()
+	sv := reflect.Indirect(reflect.ValueOf(t))
+
+	switch s.Kind() {
+	case reflect.Struct:
+		// used in GetItem (single row select)
+		for i := 0; i < s.NumField(); i++ {
+			sf := s.Field(i) // StructField
+			fv := sv.Field(i)
+			if name, ok := sf.Tag.Lookup("methodDB"); ok {
+				switch strings.ToLower(name) {
+				case "key":
+					im.Key(sf.Name, fv.Interface())
+				case "add":
+					im.Add(sf.Name, fv.Interface())
+				case "subtract":
+					im.Subtract(sf.Name, fv.Interface())
+				case "multiply":
+					im.Multiply(sf.Name, fv.Interface())
+				case "filter":
+					im.Filter(sf.Name, fv.Interface())
+				case "append":
+					im.Append(sf.Name, fv.Interface())
+				case "remove":
+					im.Remove(sf.Name, fv.Interface())
+				default:
+					im.err = fmt.Errorf("Submit(): unsupported struct tag value: %q", name)
+				}
+			}
+		}
+	default:
+		im.err = fmt.Errorf("Submit(): expected a pointer to struct got pointer to %s", s.Kind())
+	}
+
+	return im
+}
+
+func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *Mutation {
 
 	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
 	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
@@ -346,8 +479,8 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 	}
 	m := Member{Name: attr, Param: "@" + p, Value: value}
 
-	// assign Set to mut.Opr even for Insert DML where Opr will be ignored.
-	m.Opr = Set
+	// assign Set to mut.Mod even for Insert DML where Mod will be ignored.
+	m.Mod = Set
 
 	// determine if member is an array type based on its value type. For Dynamobd  arrays are List or Set types.
 	// However, there is no way to distinguish between List or Set using the value type,
@@ -386,9 +519,9 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 			addErr(fmt.Errorf("Error in Mut. Specified merge key %q", attr))
 		}
 	}
-	// override Opr value with argument value if specified
-	if len(opr) > 0 {
-		m.Opr = opr[0]
+	// override Modifer value with argument value if specified
+	if len(mod) > 0 {
+		m.Mod = mod[0]
 	} else if m.Array {
 		// default operation for arrays is append.
 		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
@@ -397,21 +530,21 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 		// this is good as it means the the index entries in Nd match those in the scalar propagation atributes.
 		// After the initial load the default should be set to Append as all items exist and the associated array attributes exist in those items, so appending will succeed.
 		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
-		m.Opr = Append
+		m.Mod = Append
 	}
 
 	im.ms = append(im.ms, m)
 
 	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
 	// if attr == "Nd" {
-	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Opr: Inc}
+	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Mod: Inc}
 	// 	im.ms = append(im.ms, m)
 	// }
 	//	}
 	return im
 }
 
-// func (im *Mutation) AddMember2(attr string, value interface{}, opr ...MutOpr) *Mutation {
+// func (im *Mutation) AddMember2(attr string, value interface{}, opr ...Modifer) *Mutation {
 
 // 	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
 // 	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
@@ -422,8 +555,8 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 // 	}
 // 	m := Member{Name: attr, Param: "@" + p, Value: value}
 
-// 	// assign Set to mut.Opr even for Insert DML where Opr will be ignored.
-// 	m.Opr = Set
+// 	// assign Set to mut.Mod even for Insert DML where Mod will be ignored.
+// 	m.Mod = Set
 
 // 	// determine if member is an array type based on its value type. For Dynamobd  arrays are List or Set types.
 // 	// However, there is no way to distinguish between List or Set using the value type,
@@ -435,9 +568,9 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 // 	// TODO: come up with generic solution for both Dynamodb & Spanner - probably not possible so make use of conditional compilation.
 // 	m.Array = IsArray(value)
 
-// 	// override Opr value with argument value if specified
+// 	// override Mod value with argument value if specified
 // 	if len(opr) > 0 {
-// 		m.Opr = opr[0]
+// 		m.Mod = opr[0]
 // 	} else if m.Array {
 // 		// default operation for arrays is append.
 // 		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
@@ -446,55 +579,55 @@ func (im *Mutation) AddMember(attr string, value interface{}, opr ...MutOpr) *Mu
 // 		// this is good as it means the the index entries in Nd match those in the scalar propagation atributes.
 // 		// After the initial load the default should be set to Append as all items exist and the associated array attributes exist in those items, so appending will succeed.
 // 		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
-// 		m.Opr = Append
+// 		m.Mod = Append
 // 	}
 // 	im.ms = append(im.ms, m)
 
 // 	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
 // 	// if attr == "Nd" {
-// 	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Opr: Inc}
+// 	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Mod: Inc}
 // 	// 	im.ms = append(im.ms, m)
 // 	// }
 // 	//	}
 // 	return im
 // }
 
-func (im *Mutation) AddCondition(cond Cond, attr string, value ...interface{}) *Mutation { //, opr ...StdMut)
+// func (im *Mutation) AddCondition(cond Cond, attr string, value ...interface{}) *Mutation { //, opr ...StdMut)
 
-	im.cd = &condition{cond: cond, attr: attr, value: value}
+// 	im.cd = &condition{cond: cond, attr: attr, value: value}
 
-	return im
-}
+// 	return im
+// }
 
-func (im *Mutation) GetCondition() *condition {
-	return im.cd
-}
+// func (im *Mutation) GetCondition() *condition {
+// 	return im.cd
+// }
 
 // NewMutation is written specifically for GoGraph. Pkg Cache has its own GOGraph version of this function
 // Arguments pk,sk need to be replaced somehow, to remove dependency on types. Maybe use Tbl package in
 // which tables are registered with known pk and sk (names and datatypes)
-func NewMutation(tab tbl.Name, pk uuid.UID, sk string, opr StdMut) *Mutation {
+// func NewMutation(tab tbl.Name, pk uuid.UID, sk string, opr StdMut) *Mutation {
 
-	// not all table are represented in the Key table.
-	// Those that are not make use of the IsKey member attribute
-	kpk, ksk, _ := tbl.GetKeys(tab)
+// 	// not all table are represented in the Key table.
+// 	// Those that are not make use of the IsKey member attribute
+// 	kpk, ksk, _ := tbl.GetKeys(tab)
 
-	mut := &Mutation{tbl: tab, opr: opr}
+// 	mut := &Mutation{tbl: tab, opr: opr}
 
-	// presumes all Primary Keys are a UUID
-	// first two elements of mutations must be a PK and SK or a blank SK "__"
-	if len(kpk) > 0 {
+// 	// presumes all Primary Keys are a UUID
+// 	// first two elements of mutations must be a PK and SK or a blank SK "__"
+// 	if len(kpk) > 0 {
 
-		mut.AddMember(kpk, []byte(pk), IsKey)
-		if len(ksk) > 0 {
-			mut.AddMember(ksk, sk, IsKey)
-		} else {
-			mut.AddMember("__", "")
-		}
-	}
+// 		mut.AddMember(kpk, []byte(pk), IsKey)
+// 		if len(ksk) > 0 {
+// 			mut.AddMember(ksk, sk, IsKey)
+// 		} else {
+// 			mut.AddMember("__", "")
+// 		}
+// 	}
 
-	return mut
-}
+// 	return mut
+// }
 
 func NewMutation2(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
 

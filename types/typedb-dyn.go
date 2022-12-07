@@ -26,7 +26,7 @@ type tyNames struct {
 
 var (
 	gId     string
-	tynames []tyNames
+	tynames []*tyNames
 )
 
 // func init() {
@@ -61,13 +61,14 @@ func setGraph(graph_ string) (string, error) {
 	tyShortNm = make(map[string]string)
 	for _, v := range tynames {
 		tyShortNm[v.LongNm] = v.ShortNm
+		fmt.Println("longnm shortnm : ", v.LongNm, v.ShortNm)
 	}
 
 	return gId, nil
 
 }
 
-func GetTypeShortNames() ([]tyNames, error) {
+func GetTypeShortNames() ([]*tyNames, error) {
 	return tynames, nil
 }
 
@@ -75,10 +76,8 @@ func GetTypeShortNames() ([]tyNames, error) {
 // getSrv data, which can then be included in a init() in this package.
 // dbSrv := SrvCh <- struct{DB: "dynamodb"}
 func getSrv() *dyn.DynamodbHandle {
-	hdl, err := db.GetDBHdl("dynamodb")
-	if err != nil {
-		panic(err)
-	}
+	hdl := db.GetDefaultDBHdl()
+
 	return hdl.(*dyn.DynamodbHandle)
 }
 
@@ -87,7 +86,7 @@ func LoadDataDictionary() (blk.TyIBlock, error) {
 	//dynSrv = getSrv()
 	var dd blk.TyIBlock
 
-	ldd := tx.NewQuery2("LoadDataDictionary", tbl.Name(typesTblN))
+	ldd := tx.NewQuery("LoadDataDictionary", tbl.Name(typesTblN))
 	ldd.Select(&dd).Filter("PKey", gId, "BEGINSWITH")
 
 	if ldd.Error() != nil {
@@ -103,13 +102,13 @@ func LoadDataDictionary() (blk.TyIBlock, error) {
 
 }
 
-func loadTypeShortNames() ([]tyNames, error) {
+func loadTypeShortNames() ([]*tyNames, error) {
 
 	//	dynSrv = getSrv() // db.GetDBHdl("dynamodb").(db.DynamodbHandle)
 	syslog("db.loadTypeShortNames ")
-	var tys []tyNames // modify to accept tags
+	var tys []*tyNames // modify to accept tags
 
-	txg := tx.NewQuery2("TyShortNames", typesTblN)
+	txg := tx.NewQuery("TyShortNames", typesTblN)
 	txg.Select(&tys).Key("PKey", "#"+gId+"T")
 	err := txg.Execute()
 	if err != nil {
@@ -127,7 +126,7 @@ func getGraphId(graphNm string) (string, error) {
 
 	var sk []graphMeta
 
-	txg := tx.NewQuery2("GraphName", typesTblN)
+	txg := tx.NewQuery("GraphName", typesTblN)
 	txg.Select(&sk).Key("PKey", "#Graph").Filter("Name", graphNm)
 	err := txg.Execute()
 

@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	//	"github.com/GoGraph/db/internal/throttleSrv"
-	"github.com/GoGraph/tbl/key"
+	"github.com/GoGraph/tx/key"
 	//thtle "github.com/GoGraph/throttle"
 	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
@@ -42,6 +42,9 @@ var (
 	// dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
 	//
 	wpStart sync.WaitGroup
+
+	// runtime options
+	DbScan db.State
 )
 
 func newService(ctx_ context.Context, opt ...db.Option) (*dynamodb.Client, aws.Config) {
@@ -67,9 +70,10 @@ func newService(ctx_ context.Context, opt ...db.Option) (*dynamodb.Client, aws.C
 	return dynamodb.NewFromConfig(cfg), cfg
 }
 
-func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...db.Option) {
+func Register(ctx_ context.Context, label string, ctxEnd *sync.WaitGroup, opt ...db.Option) {
 
 	//var appThrottle thtle.Throttler
+	DbScan = db.Enabled
 
 	for _, v := range opt {
 		switch strings.ToLower(v.Name) {
@@ -78,6 +82,8 @@ func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...db.Option) {
 		case "region":
 			fmt.Println("Region = ", v.Val.(string))
 			v.Val = config.WithRegion(v.Val.(string))
+		case "scan":
+			DbScan = v.Val.(db.State)
 		}
 	}
 
@@ -86,7 +92,7 @@ func Init(ctx_ context.Context, ctxEnd *sync.WaitGroup, opt ...db.Option) {
 		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}
 
-	db.Register("dynamodb", &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}, true)
+	db.Register(label, &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig})
 	//dbRegistry[DefaultDB].Handle = &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
 
 	//

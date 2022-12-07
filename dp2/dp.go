@@ -14,8 +14,8 @@ import (
 	"github.com/GoGraph/grmgr"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
+	txtbl "github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/types"
@@ -63,7 +63,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return s.String()
 	}
 
-	mergeMutation := func(h *tx.Handle, tbl tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
+	mergeMutation := func(h *tx.Handle, tbl txtbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
 		keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
 		return h.MergeMutation2(tbl, opr, keys)
 	}

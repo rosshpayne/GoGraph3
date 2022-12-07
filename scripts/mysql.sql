@@ -43,6 +43,7 @@ alter table Graph add unique key (Graph);
  alter table mtn$Op add unique key (Name);
  
 insert into mtn$Op (Id,Name,MinIntervalDaySecond) Values ("DP","Double Propagation","0 0:0:30");
+
  // current operations - test & prod the same. Prod has prod tableName.
  drop table run$Op;
  create table run$Op (
@@ -67,7 +68,7 @@ insert into mtn$Op (Id,Name,MinIntervalDaySecond) Values ("DP","Double Propagati
  #where m.Enabled = "Y";
  
  create or replace view run$Op_Last_v as
- select r.OpId , r.GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, m.MinIntervalDaySecond
+ select r.OpId , r.GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, m.MinIntervalDaySecond, m.Enabled
  From run$Op r
  join mtn$Op m on (m.Id=r.OpId)
  where m.Enabled = "Y"
@@ -75,12 +76,17 @@ insert into mtn$Op (Id,Name,MinIntervalDaySecond) Values ("DP","Double Propagati
  limit 1;
  
  
+ create or replace view run$Op_PastInterval_v  as
+ select OpId , GraphId, Status, Created, LastUpdated, RunId, MinIntervalDaySecond
+ From run$Op_Last_v
+ where Enabled = "Y"
+ or DATE_SUB(NOW(), Interval MinIntervalDaySecond DAY_SECOND) > LastUpdated;
  
- create or replace view run$Op_PastInterval_v as
- select r.OpId, r.GraphId GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, r.Error, o.Enabled
- From run$Op r
- join mtn$Op o on (r.OpId = o.Id)
- where DATE_SUB(NOW(), Interval o.MinIntervalDaySecond DAY_SECOND) > r.LastUpdated;
+ -- create or replace view run$Op_PastInterval_v as
+ -- select r.OpId, r.GraphId GraphId, r.Status, r.Created, r.LastUpdated, r.RunId, r.Error, o.Enabled
+ -- From run$Op r
+ -- join mtn$Op o on (r.OpId = o.Id)
+ -- where DATE_SUB(NOW(), Interval o.MinIntervalDaySecond DAY_SECOND) > r.LastUpdated;
 
  drop table run$State;
  create table run$State (

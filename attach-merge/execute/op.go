@@ -1,6 +1,7 @@
 package execute
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/GoGraph/dbs"
@@ -25,7 +26,7 @@ func (a *AttachOp) Start() []dbs.Mutation {
 }
 
 // StatusEnd - set the task status to completed or errored.
-//func (a *AttachOp) End(err error) []*mut.Mutation {
+// func (a *AttachOp) End(err error) []*mut.Mutation {
 func (a *AttachOp) Update(err error) []dbs.Mutation {
 
 	sk := a.Sortk + "|" + string(a.Cuid.EncodeBase64())
@@ -52,9 +53,12 @@ func (a *AttachOp) Update(err error) []dbs.Mutation {
 }
 
 // StatusEnd - set the task status to completed or errored.
-//func (a *AttachOp) End(err error) []*mut.Mutation {
+// func (a *AttachOp) End(err error) []*mut.Mutation {
 func (a *AttachOp) End(err error) []dbs.Mutation {
 
+	if a == nil {
+		panic(fmt.Errorf("AttachOp is nil"))
+	}
 	sk := a.Sortk + "|" + string(a.Cuid.Base64())
 
 	if err != nil {

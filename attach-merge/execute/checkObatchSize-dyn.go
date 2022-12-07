@@ -10,8 +10,8 @@ import (
 	param "github.com/GoGraph/dygparam"
 	//slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/uuid"
 )
@@ -46,7 +46,7 @@ func checkOBatchSizeLimitReached(txh *tx.Handle, cUID uuid.UID, py *blk.ChPayloa
 		// update XF in UID-Pred (in parent node block) to overflow batch limit reached.
 		xf := py.DI.XF
 		xf[py.NdIndex] = blk.OBatchSizeLimit
-		txh.MergeMutation2(tbl.Block, mut.Update, keys).AddMember("XF", xf, mut.Set)
+		txh.MergeMutation(tbl.Block, mut.Update, keys).AddMember("XF", xf, mut.Set)
 	}
 
 	return nil

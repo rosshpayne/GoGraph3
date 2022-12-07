@@ -21,8 +21,8 @@ import (
 	"github.com/GoGraph/db/stats"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/run"
-	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/tbl"
 )
 
 const logid = "dbadmin"
@@ -125,7 +125,7 @@ func saveStats(final_ ...bool) {
 	ctx := context.Background()
 
 	runid := run.GetRunId()
-	tblRunStat := tbl.RunStat
+	tblRunStat := tbl.Name("runStats")
 
 	stx = tx.NewBatchContext(ctx, param.StatsSaveTag)
 	//stx = tx.NewTxContext(ctx, param.StatsSaveTag) //.DB("mysql-GoGraph")

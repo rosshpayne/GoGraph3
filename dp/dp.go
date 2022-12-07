@@ -13,11 +13,12 @@ import (
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
+	tbl "github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
+	txtbl "github.com/GoGraph/tx/tbl"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
 )
@@ -63,9 +64,9 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return s.String()
 	}
 
-	mergeMutation := func(h *tx.Handle, tbl tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
+	mergeMutation := func(h *tx.Handle, tbl txtbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
 		keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
-		return h.MergeMutation2(tbl, opr, keys)
+		return h.MergeMutation(tbl, opr, keys)
 	}
 
 	var (
@@ -334,7 +335,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return
 	}
 
-	etx := tx.NewSingle("IXFlag")
+	etx := tx.New("IXFlag")
 	if err != nil {
 		elog.Add(logid, err)
 		// update IX to E (errored) TODO: could create a Remove API
@@ -345,7 +346,8 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
 		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
 		// mut.IsKey is now redundant as GoGraph is aware of the table keys now.  TODO: test this works.
-		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID).AddMember("SortK", "A#A#T").AddMember("IX", nil, mut.Remove)
+		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID).AddMember("SortK", "A#A#T")
+		etx.AddMember("IX", nil, mut.Remove)
 	}
 	err = etx.Execute()
 	if err != nil {

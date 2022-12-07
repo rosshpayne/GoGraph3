@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoGraph/tbl/key"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 )
@@ -17,6 +17,13 @@ type Option struct {
 	Name string
 	Val  interface{}
 }
+
+type State int
+
+const (
+	Enabled State = iota
+	Disabled
+)
 
 type DBHandle interface {
 	Execute(context.Context, []*mut.Mutations, string, API, bool, ...Option) error
@@ -48,13 +55,13 @@ var (
 )
 
 // Register is used by non-default database services e.g. mysql
-func Register(n string, handle DBHandle, deflt ...bool) {
+func Register(label string, handle DBHandle) {
 
 	mu.Lock()
 
-	d := RegistryT{Name: strings.ToLower(n), Handle: handle}
+	d := RegistryT{Name: strings.ToLower(label), Handle: handle}
 
-	if len(deflt) > 0 && deflt[0] {
+	if strings.ToLower(label) == "default" {
 		dbRegistry[0] = d
 	} else {
 		dbRegistry = append(dbRegistry, d)
@@ -76,5 +83,8 @@ func GetDBHdl(n string) (DBHandle, error) {
 }
 
 func GetDefaultDBHdl() DBHandle {
+	if len(dbRegistry) == 0 {
+		panic(fmt.Errorf("No default database assigned"))
+	}
 	return dbRegistry[0].Handle
 }

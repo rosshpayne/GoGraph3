@@ -12,18 +12,18 @@ import (
 	param "github.com/GoGraph/dygparam"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
 )
 
-//  PropagationTargetMerge performs the same function as  PropagationTarget but is designed for the faster loader process
-//  of attach-merge package and should only be used straight after the loader process.
-//  This process batches the reqired DML in memory rather than populate/update the database for each attach operation.
-//  Attach-merge introduces a special mutation method for this purpose, MergeMutation, which is used to batch and handle
-//  appending of values.  The results are executed against the database in a single execute that may involve hundreds of child node being attached.
+// PropagationTargetMerge performs the same function as  PropagationTarget but is designed for the faster loader process
+// of attach-merge package and should only be used straight after the loader process.
+// This process batches the reqired DML in memory rather than populate/update the database for each attach operation.
+// Attach-merge introduces a special mutation method for this purpose, MergeMutation, which is used to batch and handle
+// appending of values.  The results are executed against the database in a single execute that may involve hundreds of child node being attached.
 func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, cUID uuid.UID, dip map[string]*blk.DataItem) error {
 	var (
 		err      error
@@ -71,7 +71,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 		//txh.NewMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember2("Id", di.Id, mut.Set)
 		keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
 		//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Id", di.Id, mut.Set)
-		txh.MergeMutation2(tbl.EOP, mut.Update, keys).AddMember("Id", di.Id, mut.Set)
+		txh.MergeMutation(tbl.EOP, mut.Update, keys).AddMember("Id", di.Id, mut.Set)
 
 		return s
 	}
@@ -100,7 +100,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 		keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
 		// update OUID to parent node's UID-PRED  - note: default operation for update is to append to array types
 		//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("Nd", o).AddMember("XF", x).AddMember("Id", i) //.AddMember("N", 1, mut.Inc) only icrement N when adding actual child nodes not overflow blocks
-		txh.MergeMutation2(tbl.EOP, mut.Update, keys).AddMember("Nd", o).AddMember("XF", x).AddMember("Id", i) //.AddMember("N", 1, mut.Inc) only icrement N when adding actual child nodes not overflow blocks
+		txh.MergeMutation(tbl.EOP, mut.Update, keys).AddMember("Nd", o).AddMember("XF", x).AddMember("Id", i) //.AddMember("N", 1, mut.Inc) only icrement N when adding actual child nodes not overflow blocks
 
 		// update cache with overflow block entry to keep state in sync.
 		di.Nd = append(di.Nd, oUID)
@@ -125,7 +125,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 			// upd := mut.MergeMutation(tbl.EOP, pUID, sortK, s)
 			keys := []key.Key{key.Key{"PKey", pUID}, key.Key{"SortK", sortK}}
 			//txh.MergeMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember("XF", di.XF, mut.Set)
-			txh.MergeMutation2(tbl.EOP, mut.Update, keys).AddMember("XF", di.XF, mut.Set)
+			txh.MergeMutation(tbl.EOP, mut.Update, keys).AddMember("XF", di.XF, mut.Set)
 		}
 
 	}

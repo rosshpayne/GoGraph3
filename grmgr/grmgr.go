@@ -9,9 +9,9 @@ import (
 	param "github.com/GoGraph/dygparam"
 	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/tbl"
 	"github.com/GoGraph/uuid"
 )
 

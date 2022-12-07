@@ -428,29 +428,22 @@ func setRunStatus(ctx context.Context, status string, err_ error, runid ...uuid.
 	if strings.IndexAny(status, "ERSC") == -1 {
 		panic(fmt.Errorf("setRunStatus : value is empty"))
 	}
+	ftx := tx.New("setRunStatus").DB("mysql-goGraph")
 	// runid supplied if it is the first time - ie. perform an insert
 	switch len(runid) > 0 {
 
 	case true: // first run
-		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
+
 		m := ftx.NewInsert("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("RunId", runid[0])
 		m.AddMember("Created", "$CURRENT_TIMESTAMP$")
-		err = ftx.Execute()
-		if err != nil {
-			return err
-		}
 
 	case false: // restart
 		// merge, preserving original runid which also happens to be the stateId used by the tx package for paginated queries.
 		ftx := tx.New("setRunStatus").DB("mysql-goGraph")
-		ftx.NewMerge("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
-		err = ftx.Execute()
-		if err != nil {
-			return err
-		}
+		ftx.NewUpdate("Run$Operation").AddMember("Graph", types.GraphSN(), mut.IsKey).AddMember("TableName", *table).AddMember("Operation", "DP", mut.IsKey).AddMember("Status", status).AddMember("LastUpdated", "$CURRENT_TIMESTAMP$")
 	}
 
-	return nil
+	return ftx.Execute()
 
 }
 

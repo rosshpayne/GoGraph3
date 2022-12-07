@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	tx "github.com/GoGraph/tx/tbl"
 )
 
 type (
-	Name    string
-	IdxName Name
+	Name    = tx.Name
+	IdxName = tx.Name
 )
 
 var (
@@ -28,9 +30,9 @@ const (
 	//
 	Type Name = "GoGraphSS"
 	//
-	Event             Name = "EV$event"
-	TaskEv            Name = "EV$task"
-	RunStat           Name = "runStats"
+	Event  Name = "EV$event"
+	TaskEv Name = "EV$task"
+	//RunStat           Name = "runStats" internal to db
 	Monrun            Name = "runStats"
 	Eslog             Name = "esLog"
 	State             Name = "State"
@@ -68,8 +70,8 @@ func init() {
 		TblName: key{"PKey", "SortK"},
 		Block:   key{"PKey", "SortK"},
 		Type:    key{"PKey", "SortK"},
-		Event: key{"eid", "id"},
-		State: key{pk: "Id", sk: "Name"},
+		Event:   key{"eid", "id"},
+		State:   key{pk: "Id", sk: "Name"},
 	}
 
 	idxtbl = make(idxTblMap)

@@ -26,7 +26,7 @@ func RootCnt(attr string, cnt int, opr query.Equality) (ds.QResult, error) {
 		err error
 		all ds.QResult
 	)
-	rc := tx.NewQuery2(ctx, "rootcnt", tbl.Graph, "P_N")
+	rc := tx.NewQueryContext(ctx, "rootcnt", tbl.Graph, "P_N")
 	rc.Select(&all).Key("P", types.GraphSN()+"|"+attr).Key("N", cnt, opr) // .Filter("Ty", ty)
 
 	err = rc.Execute()
@@ -115,7 +115,7 @@ func GSIQueryI(attr AttrName, lv int64, op query.Equality) (ds.QResult, error) {
 func GSIQueryF(attr AttrName, lv float64, op query.Equality) (ds.QResult, error) {
 
 	var qresult ds.QResult
-	rc := tx.NewQuery(tbl.Graph, "GSIQueryF", "P_N")
+	rc := tx.NewQuery("GSIQueryF", tbl.Graph, "P_N")
 	rc.Select(&qresult).Key("P", attr).Key("N", lv, op)
 
 	err := rc.Execute()
@@ -130,7 +130,7 @@ func GSIQueryS(attr AttrName, lv string, op query.Equality) (ds.QResult, error) 
 
 	var qresult ds.QResult
 
-	rc := tx.NewQuery2(ctx, "GSIQueryS", tbl.Graph, "P_S")
+	rc := tx.NewQueryContext(ctx, "GSIQueryS", tbl.Graph, "P_S")
 	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr).Key("S", lv, op)
 
 	err := rc.Execute()
@@ -144,7 +144,7 @@ func GSIhasS(attr AttrName) (ds.QResult, error) {
 
 	var qresult ds.QResult
 
-	rc := tx.NewQuery2(ctx, "GSIhasS", tbl.Graph, "P_S")
+	rc := tx.NewQueryContext(ctx, "GSIhasS", tbl.Graph, "P_S")
 	rc.Select(&qresult).Key("P", types.GraphSN()+"|"+attr)
 
 	err := rc.Execute()

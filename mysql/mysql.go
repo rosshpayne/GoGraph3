@@ -7,11 +7,11 @@ import (
 
 	//"github.com/GoGraph/db"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
+	"github.com/GoGraph/tx/tbl"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -45,14 +45,14 @@ func alertlog(s string) {
 	slog.LogAlert(logid, s)
 }
 
-func Init(ctx context.Context, path string) {
+func Register(ctx context.Context, label string, path string) {
 
 	client, err := newMySQL(path)
 	if err != nil {
 		logerr(err)
 	} else {
 		m := MySQL{DB: client, ctx: ctx}
-		db.Register("mysql-GoGraph", m)
+		db.Register(label, m)
 	}
 }
 

@@ -21,15 +21,12 @@ type Ty = string     // type
 type TyAttr = string // type:attr
 type AttrTy = string // attr#ty
 
-//type FacetIdent string // type:attr:facet
+// type FacetIdent string // type:attr:facet
 //
 // Derived Type Attributes cache
-//
 type TyCache map[Ty]blk.TyAttrBlock
 
-//
 // caches for type-attribute and type-attribute-facet
-//
 type TyAttrCache map[TyAttr]blk.TyAttrD // map[TyAttr]blk.TyItem
 
 //TODO: create a cache for lookup via attribute long name to get type, type-short-name, attribute-short-name. This map will be used to support the Has function.
@@ -38,7 +35,6 @@ type AttrTyCache map[AttrTy]string
 
 //var TyAttrC TyAttrCache
 
-//
 type TypeCache struct {
 	//sync.RWMutex // as all types are loaded at startup - no concurrency control required
 	TyAttrC TyAttrCache

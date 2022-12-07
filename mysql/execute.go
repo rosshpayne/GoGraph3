@@ -241,7 +241,7 @@ func genSQLMerge(m *mut.Mutation, params []interface{}) (string, []interface{}) 
 	//  ON DUPLICATE KEY UPDATE clause
 	var first = true
 	for _, col := range m.GetMembers() {
-		if col.Name == "__" || col.Opr == mut.IsKey {
+		if col.Name == "__" || col.Mod == mut.IsKey {
 			continue
 		}
 		if first {
@@ -253,7 +253,7 @@ func genSQLMerge(m *mut.Mutation, params []interface{}) (string, []interface{}) 
 		sql.WriteString(col.Name)
 		sql.WriteString(" = ")
 		//
-		switch col.Opr {
+		switch col.Mod {
 		case mut.Add:
 			sql.WriteString("ifnull(")
 			sql.WriteString(col.Name)
@@ -298,7 +298,7 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 	// set clause
 	for _, col := range m.GetMembers() {
 
-		if col.Name == "__" || col.Opr == mut.IsKey {
+		if col.Name == "__" || col.Mod == mut.IsKey {
 			continue
 		}
 		if first {
@@ -309,7 +309,7 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 		sql.WriteString(col.Name)
 		sql.WriteByte('=')
 
-		switch col.Opr {
+		switch col.Mod {
 		case mut.Add:
 			sql.WriteString("ifnull(")
 			sql.WriteString(col.Name)
@@ -331,7 +331,7 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 		}
 		sql.WriteString("?") //col.Param)
 
-		if col.Opr == mut.Remove {
+		if col.Mod == mut.Remove {
 			params = append(params, "NULL")
 		} else {
 			params = append(params, col.Value)
@@ -343,7 +343,7 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 		if col.Name == "__" {
 			continue
 		}
-		if col.Opr == mut.IsKey {
+		if col.Mod == mut.IsKey {
 
 			if first {
 				sql.WriteString(" where ")
