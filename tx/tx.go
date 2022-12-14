@@ -165,7 +165,7 @@ func NewSingleContext(ctx context.Context, tag string) *TxHandle {
 
 }
 
-// New - default represents standard api
+// New - default mutation represents standard api
 func New(tag string, m ...*mut.Mutation) *TxHandle {
 
 	tx := &TxHandle{Tag: tag, api: db.StdAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
@@ -259,18 +259,14 @@ func (q *TxHandle) GetErrors() []error {
 
 	for _, m := range *q.m {
 		if m, ok := m.(*mut.Mutation); ok {
-			if e := m.GetError(); e != nil {
-				es = append(es, e)
-			}
+			es = append(es, m.GetError()...)
 		}
 	}
 	for _, b := range q.batch {
 		for _, m := range *b {
 
 			if m, ok := m.(*mut.Mutation); ok {
-				if e := m.GetError(); e != nil {
-					es = append(es, e)
-				}
+				es = append(es, m.GetError()...)
 			}
 		}
 	}
@@ -297,7 +293,6 @@ func (h *TxHandle) Add(m ...dbs.Mutation) {
 // add a new mutation to active batch. Note the client will/can modify the mutation (i.e. AddMember) after it is added.
 // if number of mutations in active batch exceeds permitted maximum it will be added it to batch-of-batches and
 // a new active batch created
-// TODO: investigate  Execute() as goroutine, maybe a nice extension.
 func (h *TxHandle) add(m dbs.Mutation) {
 	if m == nil {
 		return
@@ -380,6 +375,24 @@ func (h *TxHandle) NewUpdate(table tbl.Name) *mut.Mutation {
 	return m
 }
 
+func (h *TxHandle) NewDelete(table tbl.Name) *mut.Mutation {
+	if h.api == db.BatchAPI {
+		panic(fmt.Errorf("Cannot have an Update operation included in a batch"))
+	}
+
+	// validate merge keys with actual table keys
+	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+	if err != nil {
+		h.addErr(fmt.Errorf("Error in finding table keys for table %q: %w", table, err))
+		return nil
+	}
+
+	m := mut.NewDelete(table)
+	m.AddTableKeys(tableKeys)
+	h.add(m)
+	return m
+}
+
 func (h *TxHandle) NewMerge(table tbl.Name) *mut.Mutation {
 	if h.api == db.BatchAPI {
 		panic(fmt.Errorf("Cannot have a Merge operation included in a batch"))
@@ -421,12 +434,6 @@ func (h *TxHandle) SetContext(ctx context.Context) *TxHandle {
 
 // 	}
 // 	m := mut.NewInsert(table)
-// 	h.add(m)
-// 	return m
-// }
-
-// func (h *TxHandle) NewBulkDelete(table tbl.Name) *mut.Mutation {
-// 	m := mut.NewDelete(table)
 // 	h.add(m)
 // 	return m
 // }
@@ -516,7 +523,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 		if len(errs) > 1 {
 			return fmt.Errorf("Errors in Tx setup [%d errors] (see system log for complete list): %w", len(errs), errs[0])
 		}
-		return fmt.Errorf("Error in Tx setup (see system log for complete list). First error: %w", errs[0])
+		return fmt.Errorf("Error in Tx setup (see system log for complete list): %w", errs[0])
 	}
 
 	if h.done {
@@ -592,7 +599,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 // }
 
 // MergeMutation2 will merge the current mutation with a previously defined source mutation based on the table and key(s) values.
-// Array data types will be appended too, and numbers will be driven by mut.Modifer. Other types will overwrite exising values.
+// Array data types will be appended too, and numbers will be driven by mut.Modifier. Other types will overwrite exising values.
 // Supplied key values will be validated against table definitions.
 func (h *TxHandle) MergeMutation(table tbl.Name, opr mut.StdMut, keys []key.Key) *TxHandle {
 
@@ -780,9 +787,9 @@ func (h *TxHandle) GetMergedMutation(table tbl.Name, keys []key.Key) (*mut.Mutat
 
 // AddMember specified with MergeMutation mutation. Member of TxHandle.
 // Alternate AddMember associated with NewInsert, NewUpdate, NewMerge, member of Mutation (not TxHandel)
-func (h *TxHandle) AddMember(attr string, value interface{}, mod_ ...mut.Modifer) *TxHandle {
+func (h *TxHandle) AddMember(attr string, value interface{}, mod_ ...mut.Modifier) *TxHandle {
 
-	var opr mut.Modifer
+	var opr mut.Modifier
 	// am - active mutation
 	// bm - batch of batch mutations
 	// sm - source mutation
@@ -841,7 +848,7 @@ func (h *TxHandle) AddMember(attr string, value interface{}, mod_ ...mut.Modifer
 			}
 			if opr == mut.Remove {
 				// set source member operator to remove
-				v.Mod = mut.Remove
+				v.Mod = mut.Remove // TODO: v.SetRemove()??, only occassion where Mod is assigned
 				return h
 			}
 

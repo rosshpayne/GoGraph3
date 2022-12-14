@@ -8,15 +8,17 @@ import (
 	"strconv"
 	"strings"
 	"text/scanner"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-func buildConditionExpr(src string, exprNames map[string]string) (string, int) {
+func buildConditionExpr(src string, exprNames map[string]string, exprValues map[string]types.AttributeValue) (string, int) {
 
-	return buildFilterExpr(src, exprNames)
+	return buildFilterExpr(src, exprNames, exprValues)
 }
 
-// validateWhere() validates where clause and builds attribute: map[string]strig and value map[string]attribuveValue (based on Value() arguments)
-func buildFilterExpr(src string, exprNames map[string]string) (string, int) {
+// buildFilterExpr() validates MethodDB where()  and builds attribute: map[string]strig and value map[string]attribuveValue (based on Value() arguments)
+func buildFilterExpr(src string, exprNames map[string]string, exprValues map[string]types.AttributeValue) (string, int) {
 	// 1. validate
 	// open paranthesis equals closed
 	// count of ?
@@ -24,6 +26,7 @@ func buildFilterExpr(src string, exprNames map[string]string) (string, int) {
 
 	// 2.convert this:
 	// (`Name = ? and (Nd in (?,?) or Age > ? and Height < ?)
+	// (`Name = ? and (Nd in (3,4) or Age  > and Height < 176))
 	// to this:
 	//  `#a = :1 and #b in (:2,:3) or #c > :4 and #d < :5
 	//
@@ -47,8 +50,7 @@ func buildFilterExpr(src string, exprNames map[string]string) (string, int) {
 	// * Comparison
 	// operators: = | <> | < | > | <= | >= | BETWEEN | IN
 	//
-	// * Logical operators: AND |
-	// OR | NOT
+	// * Logical operators: AND | OR | NOT
 	//
 	//  condition and condition or condition
 	////////////////////////////////////////////////////////
@@ -66,15 +68,37 @@ func buildFilterExpr(src string, exprNames map[string]string) (string, int) {
 	var (
 		parOpen, parClose, binds int
 		sc                       scanner.Scanner
-		sub                      rune = 'a'
+		genId                    []byte
 		s                        strings.Builder
 	)
+	genId = append(genId, 'a'-1)
 
+	// gen generates a name and value identifier, a..z, aa..az, ba..bz.,
+	gen := func() {
+		// increment genId
+		for i := len(genId) - 1; i >= 0; i-- {
+			genId[i]++
+			if genId[i] == 'z'+1 {
+				if i == 0 && genId[0] == 'z'+1 {
+					genId = append(genId, 'a')
+					for ii := i; ii > -1; ii-- {
+						genId[ii] = 'a'
+					}
+					break
+				} else {
+					genId[i] = 'a'
+				}
+			} else {
+				break
+			}
+		}
+
+	}
 	sc.Init(strings.NewReader(src))
 
 	for tok := sc.Scan(); tok != scanner.EOF; tok = sc.Scan() {
 
-		fmt.Printf("%s: %s\n", sc.Position, sc.TokenText())
+		//fmt.Printf("%s: %s\n", sc.Position, sc.TokenText())
 
 		// TODO: check non-keys only
 
@@ -98,32 +122,46 @@ func buildFilterExpr(src string, exprNames map[string]string) (string, int) {
 			s.WriteString(sc.TokenText())
 		case "attribute_exists", "attribute_not_exists", "attribute_type", "begins_with", "contains", "size":
 			s.WriteString(sc.TokenText())
-			for tok := sc.Scan(); tok != scanner.EOF; tok = sc.Scan() {
-				// go to )
-				s.WriteString(sc.TokenText())
-				switch sc.TokenText() {
-				case "(":
-					parOpen++
-				case ")":
-					parClose++
-				case "?":
-					binds++
-				}
-				if sc.TokenText() == ")" {
-					break
-				}
-			}
 		default:
-			// must be a table attribute
-			fmt.Println("Must be an attribute: ", sc.TokenText())
-			// add to ExpressionNames
-			v := "#x" + string(sub)
-			exprNames[sc.TokenText()] = v
-			sub++
-			if sub == 'z' {
-				sub = 'a'
+			// must be a table attribute or equality condition
+			//	fmt.Println("Must be an attribute: ", sc.TokenText(), tok)
+			// add to ExpressionNames sc.TokenText()[0] == '"'
+			if tok == scanner.String || tok == scanner.Int || tok == scanner.Float {
+				gen()
+				v := ":v" + string(genId)
+				switch tok {
+				case scanner.Int:
+					av := new(types.AttributeValueMemberN)
+					av.Value = sc.TokenText()
+					exprValues[v] = av
+				case scanner.Float:
+					av := new(types.AttributeValueMemberN)
+					av.Value = sc.TokenText()
+					exprValues[v] = av
+				case scanner.String:
+					av := new(types.AttributeValueMemberS)
+					av.Value = sc.TokenText()
+					exprValues[v] = av
+				}
+				s.WriteString(v)
+
+			} else {
+
+				var n string
+				var found bool
+				for k, v := range exprNames {
+					if v == sc.TokenText() {
+						found = true
+						n = k
+					}
+				}
+				if !found {
+					gen()
+					n = "#n" + string(genId)
+					exprNames[n] = sc.TokenText()
+				}
+				s.WriteString(n)
 			}
-			s.WriteString(v)
 		}
 		// add  whitespace
 		s.WriteString(" ")

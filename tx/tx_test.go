@@ -2,13 +2,18 @@ package tx
 
 import (
 	"context"
+	//	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
 	dyn "github.com/GoGraph/db"
 	"github.com/GoGraph/mysql"
+	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/mut"
 )
 
 type Person struct {
@@ -464,4 +469,1046 @@ func TestQueryTypesPtrSlicePtrNested2SQL3(t *testing.T) {
 	for _, v := range sk {
 		t.Log(v.Xyz.Test, v.Xyz.Fred, v.Status, v.Nodes)
 	}
+}
+
+func TestQueryPop1(t *testing.T) {
+
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", "GoUnitTest")
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+}
+
+func TestQueryPop2(t *testing.T) {
+
+	type City struct {
+		Pop int `mdb:"Population"` // will not convert to dynamodbav
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", "GoUnitTest")
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+}
+
+func TestQueryPopUpdate(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).AddMember("PKey", 1001, mut.IsKey).AddMember("SortK", "Sydney", mut.IsKey).AddMember("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+	if sk2.Pop != sk.Pop+1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateKey(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey", 1001, "GT").Key("SortK", "Sydney").Set("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		if err.Error() != `Expression error in txUpdate. Equality operator for Dynamodb Partition Key must be "EQ"` {
+			t.Errorf("Update error: %s", err.Error())
+		}
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+	if sk2.Pop != sk.Pop {
+		t.Fail()
+	}
+
+}
+func TestQueryPopUpdate2(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).AddMember("PKey", 1001).AddMember("SortK", "Sydney").AddMember("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+	if sk2.Pop != sk.Pop+1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdate3(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").AddMember("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop+1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateSet(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Set("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop+1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateSetKeyWrong(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Set("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop+1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateError(t *testing.T) {
+	var err error
+	//start syslog services (if any)
+	// err := slog.Start()
+	// if err != nil {
+	// 	panic(fmt.Errorf("Error starting syslog services: %w", err))
+	// }
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey2", 1001).Key("SortK", "Sydney").AddMember("Population", sk.Pop+1)
+
+	err = utx.Execute()
+	if err != nil {
+		if err.Error() != `Error in Tx setup (see system log for complete list): Error: "PKey2" is not a key in table` {
+			t.Errorf("Update error: %s", err.Error())
+		}
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateSAdd(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Add("Population", 1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop+1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere22(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		SortK string
+		Pop   int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err := txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation)`).Subtract("Population", 1)
+
+	err = utx.Execute()
+	if err != nil {
+		t.Errorf("Update error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop-1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere23(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists("MaxPopulation") and Population<MaxPopulation`).Subtract("Population", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) `).Subtract("Population", 1)
+
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "ConditionalCheckFailedException") == -1 {
+			t.Errorf("Update error: %s", err.Error())
+		}
+		t.Logf("xxxx error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop-1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere23a(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists("MaxPopulation") and Population<MaxPopulation`).Subtract("Population", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_not_exists(MaxPopulation) `).Subtract("Population", 1)
+
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "ConditionalCheckFailedException") == -1 {
+			t.Errorf("Update error: %s", err.Error())
+		}
+		//	t.Logf("xxxx error: %s", err.Error())
+	}
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop {
+		t.Fail()
+	}
+
+}
+
+func TestShortNames(t *testing.T) {
+	var (
+		past []byte
+	)
+	past = append(past, 'a'-1)
+	// aa, ab...az, ba,..bz, ca, .. cz, da,..dz, ea
+	for i := 0; i < 1800; i++ {
+
+		for i := len(past) - 1; i >= 0; i-- {
+			past[i]++
+			if past[i] == 'z'+1 {
+				if i == 0 && past[0] == 'z'+1 {
+					past = append(past, 'a')
+					for ii := i; ii > -1; ii-- {
+						past[ii] = 'a'
+					}
+					break
+				} else {
+					past[i] = 'a'
+				}
+			} else {
+				break
+			}
+		}
+
+		t.Logf("subnn: %s\n", past)
+
+	}
+
+}
+
+func TestQueryPopUpdateWhere24(t *testing.T) {
+
+	var tbl tbl.Name = "GoUnitTest"
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>MaxPopulation`).Subtract("MaxPopulation", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>20000`).Subtract("Population", 1)
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "ConditionalCheckFailedException") == -1 {
+			t.Errorf("Update xtz error: %s", err.Error())
+		}
+	}
+	//tce := &types.TransactionCanceledException{}
+
+	// if errors.As(err, &tce) {
+	// 	for _, e := range tce.CancellationReasons {
+
+	// 		if *e.Code == "ConditionalCheckFailed" {
+	// 			t.Errorf("Update xtz error: %s", tce.Error())
+	// 		}
+	// 	}
+	// }
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop-1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere25(t *testing.T) {
+
+	var (
+		tbl    tbl.Name = "GoUnitTest"
+		plimit          = 20000
+	)
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>MaxPopulation`).Subtract("MaxPopulation", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>?`).Values(plimit).Subtract("Population", 1)
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "ConditionalCheckFailedException") == -1 {
+			t.Errorf("Update xtz error: %s", err.Error())
+		}
+	}
+	//tce := &types.TransactionCanceledException{}
+
+	// if errors.As(err, &tce) {
+	// 	for _, e := range tce.CancellationReasons {
+
+	// 		if *e.Code == "ConditionalCheckFailed" {
+	// 			t.Errorf("Update xtz error: %s", tce.Error())
+	// 		}
+	// 	}
+	// }
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop-1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere26(t *testing.T) {
+
+	var (
+		tbl    tbl.Name = "GoUnitTest"
+		plimit          = 20000
+	)
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>MaxPopulation`).Subtract("MaxPopulation", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and (Population>? or Population<?)`).Values(plimit).Subtract("Population", 1)
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "expected 2 bind variables in Values, got 1") == -1 {
+			t.Errorf("Update error: %s", err.Error())
+		}
+	}
+	//tce := &types.TransactionCanceledException{}
+
+	// if errors.As(err, &tce) {
+	// 	for _, e := range tce.CancellationReasons {
+
+	// 		if *e.Code == "ConditionalCheckFailed" {
+	// 			t.Errorf("Update xtz error: %s", tce.Error())
+	// 		}
+	// 	}
+	// }
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere28(t *testing.T) {
+
+	var (
+		tbl     tbl.Name = "GoUnitTest"
+		plimit           = 20000000
+		plimit2          = 2000000
+	)
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>MaxPopulation`).Subtract("MaxPopulation", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and (Population>? or Population<?)`).Values(plimit, plimit2).Subtract("Population", 1)
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "ConditionalCheckFailedException") == -1 {
+			t.Errorf("Update xtz error: %s", err.Error())
+		}
+	}
+	//tce := &types.TransactionCanceledException{}
+
+	// if errors.As(err, &tce) {
+	// 	for _, e := range tce.CancellationReasons {
+
+	// 		if *e.Code == "ConditionalCheckFailed" {
+	// 			t.Errorf("Update xtz error: %s", tce.Error())
+	// 		}
+	// 	}
+	// }
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	// expect no change
+	if sk2.Pop == sk.Pop-1 {
+		t.Fail()
+	}
+
+}
+
+func TestQueryPopUpdateWhere29(t *testing.T) {
+
+	var (
+		tbl     tbl.Name = "GoUnitTest"
+		plimit           = 2000000
+		plimit2          = 200000
+	)
+	type City struct {
+		Pop int `dynamodbav:"Population"`
+	}
+	var wpEnd sync.WaitGroup
+
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+
+	var sk City
+
+	txg := NewQuery("pop", tbl)
+
+	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk.Pop)
+
+	utx := New("IXFlag")
+	//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+	//	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and Population>MaxPopulation`).Subtract("MaxPopulation", 1)
+	utx.NewUpdate(tbl).Key("PKey", 1001).Key("SortK", "Sydney").Where(`attribute_exists(MaxPopulation) and (Population>? or Population<?)`).Values(plimit, plimit2).Subtract("Population", 1)
+	err = utx.Execute()
+	if err != nil {
+		if strings.Index(err.Error(), "ConditionalCheckFailedException") == -1 {
+			t.Errorf("Update xtz error: %s", err.Error())
+		}
+	}
+	//tce := &types.TransactionCanceledException{}
+
+	// if errors.As(err, &tce) {
+	// 	for _, e := range tce.CancellationReasons {
+
+	// 		if *e.Code == "ConditionalCheckFailed" {
+	// 			t.Errorf("Update xtz error: %s", tce.Error())
+	// 		}
+	// 	}
+	// }
+	var sk2 City
+	txg = NewQuery("pop", tbl)
+	txg.Select(&sk2).Key("PKey", 1001).Key("SortK", "Sydney")
+	err = txg.Execute()
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
+	t.Logf("Query Population Sydney  %#v\n", sk2.Pop)
+
+	if sk2.Pop != sk.Pop-1 {
+		t.Fail()
+	}
+
 }

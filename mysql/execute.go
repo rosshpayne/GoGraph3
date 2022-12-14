@@ -78,7 +78,7 @@ func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag strin
 					if err != nil {
 						add(err)
 						// save error to mutation
-						m.SetError(err)
+						//m.AddError(err)
 						continue
 					}
 
@@ -241,7 +241,7 @@ func genSQLMerge(m *mut.Mutation, params []interface{}) (string, []interface{}) 
 	//  ON DUPLICATE KEY UPDATE clause
 	var first = true
 	for _, col := range m.GetMembers() {
-		if col.Name == "__" || col.Mod == mut.IsKey {
+		if col.Name == "__" || col.Aty() == mut.IsKey || col.Aty() == mut.IsFilter {
 			continue
 		}
 		if first {
@@ -291,6 +291,9 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 		first bool = true
 		sql   strings.Builder
 	)
+	for _, v := range m.GetMembers() {
+		fmt.Printf("show1 v: %#v\n", v)
+	}
 
 	sql.WriteString(`update `)
 	sql.WriteString(m.GetTable())
@@ -298,7 +301,7 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 	// set clause
 	for _, col := range m.GetMembers() {
 
-		if col.Name == "__" || col.Mod == mut.IsKey {
+		if col.Name == "__" || col.Aty() == mut.IsKey || col.Aty() == mut.IsFilter {
 			continue
 		}
 		if first {
@@ -320,6 +323,9 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 			sql.WriteString(col.Name)
 			sql.WriteString(",0)")
 			sql.WriteByte('-')
+		case mut.Literal:
+			sql.WriteString(col.Value.(string))
+			continue
 		}
 
 		// non-Array attributes - set
@@ -337,13 +343,14 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 			params = append(params, col.Value)
 		}
 	}
-	// Predicate clause
+	// Predicate Key clause
 	first = true
+	wkeys := 0
 	for _, col := range m.GetMembers() {
 		if col.Name == "__" {
 			continue
 		}
-		if col.Mod == mut.IsKey {
+		if col.Aty() == mut.IsKey {
 
 			if first {
 				sql.WriteString(" where ")
@@ -351,8 +358,9 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 			} else {
 				sql.WriteString(" and ")
 			}
+			wkeys++
 			sql.WriteString(col.Name)
-			sql.WriteString(" = ")
+			sql.WriteString(sqlOpr(col.GetOprStr()))
 			sql.WriteString("?")
 			//
 			// params[col.Param[1:]] = col.Value
@@ -360,6 +368,73 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 		}
 	}
 
+	// ************** Where() non-key *************
+	p := 0
+	if len(m.GetWhere()) > 0 {
+
+		// TODO: check non-keys only
+
+		if m.GetOr() > 0 || m.GetAnd() > 0 {
+			panic(fmt.Errorf("Cannot mix Filter() with d Where()"))
+		}
+
+		if wkeys > 0 {
+			sql.WriteString(" and (")
+			p++
+		}
+
+		where := m.GetWhere()
+		sql.WriteString(where)
+
+		if p > 0 {
+			sql.WriteByte(')')
+		}
+
+		params = append(params, m.GetValues()...)
+
+	} else {
+
+		// ************** Filter *************
+
+		// TODO: check non-keys only
+
+		for _, v := range m.GetMembers() {
+			fmt.Printf("show v: %#v\n", v)
+		}
+		wa := len(m.GetFilter())
+		for i, v := range m.GetFilter() {
+
+			if m.GetOr() > 0 && m.GetAnd() > 0 {
+				panic(fmt.Errorf("Cannot mix OrFilter, AndFilter conditions. Use Where() & Values() instead"))
+			}
+
+			//	var found bool
+
+			if i == 0 {
+				if wkeys > 0 {
+					sql.WriteString(" and (")
+				}
+			} else if wa > 0 && i <= wa-1 {
+				switch v.BoolCd() {
+				case mut.AND:
+					sql.WriteString(" and ")
+				case mut.OR:
+					sql.WriteString(" or ")
+				}
+			}
+			// search - swap for literal tag value if Filter() attr name matches attr name in Select()
+			sql.WriteString(v.Name)
+			sql.WriteString(sqlOpr(v.GetOprStr()))
+			sql.WriteByte('?')
+
+			params = append(params, v.Value)
+
+			if i == wa-1 {
+				sql.WriteByte(')')
+			}
+		}
+	}
+	fmt.Printf("txUpdate: [%s] %#v\n ", sql.String(), params)
 	return sql.String(), params
 
 }

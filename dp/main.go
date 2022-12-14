@@ -137,7 +137,7 @@ func main() {
 
 	// TODO: how to register default database from app rather than inside Init
 
-	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "scan", Val: db.Disabled}, db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "scan", Val: db.Enabled}, db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	//	tbl.Register("pgState", "Id", "Name")
@@ -376,6 +376,8 @@ func main() {
 				<-limiterDP.RespCh()
 
 				go Propagate(ctx, limiterDP, &wgc, uid, ty_, has11)
+
+				// check for errors based on logid
 			}
 			wgc.Wait()
 			time.Sleep(500 * time.Millisecond) // wait for all dynamodb distributed writes to complete. Required for index scan (no fullconsistency)

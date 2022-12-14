@@ -363,6 +363,9 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 			}
 		}
 	}
+
+	// add condition expression...
+
 	expr, err = expression.NewBuilder().WithUpdate(upd).Build()
 	if err != nil {
 		return nil, newDBExprErr("txUpdate", "", "", err)
@@ -374,20 +377,27 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 	av := make(map[string]types.AttributeValue)
 	// generate key AV
 	for _, v := range m.GetKeys() {
+		if v.IsPartitionKey() && v.GetOprStr() != "EQ" {
+			return nil, newDBExprErr("txUpdate", "", "", fmt.Errorf(`Equality operator for Dynamodb Partition Key must be "EQ"`))
+		}
 		av[v.Name] = marshalAvUsingValue(v.Value)
 	}
 	var update *types.Update
 	// Where expression defined
 	if len(m.GetWhere()) > 0 {
 
-		exprCond, binds := buildConditionExpr(m.GetWhere(), exprNames)
+		exprCond, binds := buildConditionExpr(m.GetWhere(), exprNames, exprValues)
+
 		if binds != len(m.GetValues()) {
-			panic(fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(m.GetValues())))
+			return nil, fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(m.GetValues()))
 		}
 
 		for i, v := range m.GetValues() {
-			exprValues[":"+strconv.Itoa(i)] = marshalAvUsingValue(v)
+			ii := i + 1
+			exprValues[":"+strconv.Itoa(ii)] = marshalAvUsingValue(v)
+			fmt.Printf("exprValues: %#v\n", exprValues)
 		}
+		fmt.Println("xxexprCond: ", exprCond, exprNames, exprValues)
 		update = &types.Update{
 			Key:                       av,
 			ExpressionAttributeNames:  exprNames,
@@ -906,7 +916,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 						t1 := time.Now()
 						if err != nil {
 
-							fmt.Printf("UpdateItem error: %s\n", err)
+							//fmt.Printf("UpdateItem error: %s\n", err)
 
 							tce := &types.TransactionCanceledException{}
 
@@ -1340,7 +1350,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 			panic(fmt.Errorf(fmt.Sprintf("Cannot mix Filter and Where methods.")))
 		}
 
-		exprStr, binds := buildFilterExpr(q.GetWhere(), exprNames)
+		exprStr, binds := buildFilterExpr(q.GetWhere(), exprNames, exprValues)
 		if binds != len(q.GetValues()) {
 			panic(fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(q.GetValues())))
 		}

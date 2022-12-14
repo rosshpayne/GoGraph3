@@ -143,7 +143,7 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	// ************** Key() *************
 
 	wa := len(q.GetKeyAttrs())
-
+	wkeys := wa
 	// TODO: check keys only
 
 	for i, v := range q.GetKeyAttrs() {
@@ -165,16 +165,19 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	}
 
 	// ************** Where() *************
+	var p int // parenthesis counter
 
 	if len(q.GetWhere()) > 0 {
 
 		// TODO: check non-keys only
 
 		if q.GetOr() > 0 || q.GetAnd() > 0 {
-			panic(fmt.Errorf("Cannot mix Filter() with  Where()"))
+			panic(fmt.Errorf("Cannot mix Filter() with d Where()"))
 		}
-
-		s.WriteString(" and (")
+		if wkeys > 0 {
+			s.WriteString(" and (")
+			p++
+		}
 
 		where := q.GetWhere()
 		// replace any literal (struct tag) references
@@ -186,7 +189,9 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 		}
 		s.WriteString(where)
 
-		s.WriteByte(')')
+		if p > 0 {
+			s.WriteByte(')')
+		}
 
 		whereVals = append(whereVals, q.GetValues()...)
 
@@ -195,18 +200,27 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 		// ************** Filter *************
 
 		// TODO: check non-keys only
-
-		wa = len(q.GetFilterAttrs())
-		for i, v := range q.GetFilterAttrs() {
+		fltr := q.GetFilterAttrs()
+		wa = len(fltr)
+		for i, v := range fltr {
 
 			if q.GetOr() > 0 && q.GetAnd() > 0 {
-				panic(fmt.Errorf("Cannot mix OrFilter, AndFilter conditions. Use Where() & Values() instead"))
+				return fmt.Errorf("Cannot mix OrFilter, AndFilter conditions. Use Where() & Values() instead")
 			}
 
 			var found bool
 
 			if i == 0 {
-				s.WriteString(" and (")
+				if wkeys > 0 {
+					s.WriteString(" and (")
+				}
+			} else if wa > 0 && i <= wa-1 {
+				switch v.BoolCd() {
+				case query.AND:
+					s.WriteString(" and ")
+				case query.OR:
+					s.WriteString(" or ")
+				}
 			}
 			// search - swap for literal tag value if Filter() attr name matches attr name in Select()
 			for _, vv := range q.GetAttr() {
@@ -243,16 +257,11 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 				whereVals = append(whereVals, v.Value())
 			}
 			// (Key and key) and (filter or filter)
-			if wa > 0 && i < wa-1 {
-				switch v.BoolCd() {
-				case query.AND:
-					s.WriteString(" and ")
-				case query.OR:
-					s.WriteString(" or ")
-				}
-			}
+
 			if i == wa-1 {
-				s.WriteByte(')')
+				if wkeys > 0 {
+					s.WriteByte(')')
+				}
 			}
 		}
 	}
@@ -262,6 +271,7 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	}
 
 	slog.Log("executeQuery", fmt.Sprintf("generated sql: [%s]", s.String()))
+	fmt.Printf("generated sql: [%s]", s.String())
 	if q.Prepare() {
 
 		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))
@@ -319,6 +329,7 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 		return err
 	}
 
+	fmt.Println("ExecuteQUery: ")
 	if oSingleRow {
 		if err = row.Scan(q.Split()...); err != nil {
 

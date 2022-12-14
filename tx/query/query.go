@@ -345,16 +345,18 @@ func (q *QueryHandle) SetPrepStmt(p interface{}) {
 	q.prepStmt = p
 }
 
-func (q *QueryHandle) Where(s string) {
+func (q *QueryHandle) Where(s string) *QueryHandle {
 	q.where = s
+	return q
 }
 
 func (q *QueryHandle) GetWhere() string {
 	return q.where
 }
 
-func (q *QueryHandle) Values(v []interface{}) {
+func (q *QueryHandle) Values(v ...interface{}) *QueryHandle {
 	q.values = v
+	return q
 }
 
 func (q *QueryHandle) GetValues() []interface{} {
@@ -739,6 +741,7 @@ func (q *QueryHandle) appendFilter(a string, v interface{}, bcd BoolCd, e ...str
 	}
 
 	at := &Attr{name: a, value: v, aty: IsFilter, eqy: eq, boolCd: bcd}
+
 	q.attr = append(q.attr, at)
 
 }
@@ -746,12 +749,14 @@ func (q *QueryHandle) Filter(a string, v interface{}, e ...string) *QueryHandle 
 
 	var found bool
 
+	// is there another Filter expression?
 	for _, a := range q.attr {
 		if a.aty == IsFilter {
 			found = true
 			break
 		}
 	}
+	// if so use AndFilter...
 	if found {
 		q.AndFilter(a, v, e...)
 		// err := errors.New("A filter condition has already been specified. Use either AndFilter or OrFilter")
@@ -968,7 +973,7 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	if st.Kind() == reflect.Struct {
 
 		// used in GetItem (single row select)
-		var name, lit string
+		var name string
 
 		for i := 0; i < st.NumField(); i++ {
 
@@ -989,13 +994,23 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 				if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
 					if name = f.Tag.Get("mdb"); len(name) == 0 {
 						name = f.Name
-						lit = f.Tag.Get("literal")
+					}
+				} else {
+					i := strings.Index(name, ",")
+					if i > 0 {
+						name = name[:i]
 					}
 				}
-				// mdb noselect tag value
-				if name != "-" {
-					at := &Attr{name: name, aty: IsFetch, literal: lit}
+
+				switch {
+				case name == "-":
+				case len(name) > 7 && strings.ToLower(name[:8]) == "literal:":
+					at := &Attr{name: f.Name, aty: IsFetch, literal: name[8:]}
 					q.attr = append(q.attr, at)
+				default:
+					at := &Attr{name: name, aty: IsFetch}
+					q.attr = append(q.attr, at)
+
 				}
 
 			}
@@ -1044,10 +1059,22 @@ func (q *QueryHandle) rSelect(nm string, st reflect.Type) {
 				if name = f.Tag.Get("mdb"); len(name) == 0 {
 					name = f.Name
 				}
+			} else {
+				i := strings.Index(name, ",")
+				if i > 0 {
+					name = name[:i]
+				}
 			}
-			if name != "-" {
+
+			switch {
+			case name == "-":
+			case len(name) > 7 && strings.ToLower(name[:8]) == "literal:":
+				at := &Attr{name: f.Name, aty: IsFetch, literal: name[8:]}
+				q.attr = append(q.attr, at)
+			default:
 				at := &Attr{name: name, aty: IsFetch}
 				q.attr = append(q.attr, at)
+
 			}
 
 		}
@@ -1160,6 +1187,11 @@ func (q *QueryHandle) Split() []interface{} { // )
 					if name = f.Tag.Get("mdb"); len(name) == 0 {
 						name = f.Name
 					}
+				} else {
+					i := strings.Index(name, ",")
+					if i > 0 {
+						name = name[:i]
+					}
 				}
 				if name != "-" {
 					// scalar types
@@ -1194,6 +1226,11 @@ func (q *QueryHandle) rBinds(v reflect.Value) { // v is a reflect.struct
 			if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
 				if name = f.Tag.Get("mdb"); len(name) == 0 {
 					name = f.Name
+				}
+			} else {
+				i := strings.Index(name, ",")
+				if i > 0 {
+					name = name[:i]
 				}
 			}
 			if name != "-" {

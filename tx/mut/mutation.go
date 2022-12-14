@@ -14,10 +14,22 @@ import (
 )
 
 type StdMut byte
-type Modifer byte // aka update-expression in dynamodb (almost)
+type Modifier byte // aka update-expression in dynamodb (almost)
 type Cond byte
+type BoolCd byte
+type KeyTy byte
 
-//type Modifer string
+const (
+	NIL BoolCd = iota
+	AND
+	OR
+
+	Partition KeyTy = iota + 1
+)
+
+//type OpTag Label
+
+//type Modifier string
 
 const (
 	Merge StdMut = iota + 1
@@ -26,17 +38,20 @@ const (
 	Update // update performing "set =" operation etc
 	TruncateTbl
 	//
-	Set Modifer = iota + 1
+	Set Modifier = iota + 1
 	// Inc             // set col = col + 1 //TODO: deprecated - performed by Add, Substract
 	// Decr            // set col = col - 1 //TODO: deprecated -
 	Subtract // set col = col - <value>
 	Add      // set col = col - <num>
 	Multiply // set col = col x <value>
-	//
-	IsKey    // used in query & update mode. Alternative to registering table/index and its keys. TODO: deprecated - GoGraph determines from DD
-	IsFilter //
+	Literal
 	Append   // update by appending to array/list attribute
 	Remove   // remove attribute
+	IsKey    // more a type of attribute than a modifier - but keep it here..
+	IsFilter // more a type of attribute than a modifier - but keep it here
+	//
+	// IsKey    // Key(a,v) used in query & update mode. Alternative to registering table/index and its keys. TODO: deprecated - GoGraph determines from DD
+	// IsFilter // Filter(a,v)
 	//
 	AttrExists Cond = iota
 	AttrNotExists
@@ -64,7 +79,7 @@ func (s StdMut) String() string {
 	return "not-defined"
 }
 
-func (s Modifer) String() string {
+func (s Modifier) String() string {
 	switch s {
 	case Set:
 		return "Set"
@@ -74,12 +89,14 @@ func (s Modifer) String() string {
 		return "Subtract"
 	case Add:
 		return "Add"
-	case IsKey:
-		return "IsKey"
 	case Append:
 		return "Append"
 	case Remove:
 		return "Remove"
+	case IsKey:
+		return "IsKey"
+	case IsFilter:
+		return "IsFilter"
 	}
 	return "not-defined"
 }
@@ -98,21 +115,60 @@ var (
 	err error
 )
 
+// Member defines all attributes in the Mutation, as either
 //
-// database API meta structures
+//	Set (used in update set), -- modify attribute in update
+//	Append, Remove, Subtract, Add, Multiply -- all modify attribute in update
+//	... now for where attributes...
+//	IsKey in where predicate, Key()
+//	IsFilter in where predicate, Filter(), AndFilter(), OrFilter()
 //
+// TODO hide Member fields - directly access from tx so needs to be exposed but not to world, so make it an internal (no need to be world too)
 type Member struct {
 	//sortk string
-	Name  string // attribute name: when contains "#",":"??
-	Param string // used in Spanner implementation. All value placements are identified by "@param"
-	Value interface{}
-	Array bool    // set in AddMember(). Append modifier is valid to ie. is an array (List) type in Dynamodb
-	Mod   Modifer // for update stmts only: default is to concat for Array type. When true will overide with set of array.
-	//Mod   StdMut // for update of numerics. Add rather than set e.g. set col = col + @v1. Default: set col=@v1
+	Name    string // attribute name: when contains "#",":"??
+	Param   string // used in Spanner implementation. All value placements are identified by "@param"
+	Value   interface{}
+	Array   bool     // set in AddMember(). Append modifier is valid to ie. is an array (List) type in Dynamodb
+	Mod     Modifier // for update stmts only: default is to concat for Array type. When true will overide with set of array.
+	keyTy   KeyTy    // attribute type, e.g. Key, Filter, Fetch
+	eqy     string   // Scalar Opr: EQ, LE,...  Slice Opr: IN, ANY
+	boolCd  BoolCd   // And, Or - appropriate for Filter only.
+	literal string   // literal struct tag value - . alternative to value - replace attribute name with literal in query stmt.
+
 }
+
+// func (m *Member) Name() string {
+// 	return m.name
+// }
+
+// func (m *Member) Param() string {
+// 	return m.param
+// }
+
+// func (m *Member) Value() interface{} {
+// 	return m.Value
+// }
+
+// func (m *Member) Array() bool {
+// 	return m.array
+// }
+
+// func (m *Member) Mod() Modifier {
+// 	return m.mod
+// }
 
 func (m *Member) IsKey() bool {
 	return m.Mod == IsKey
+}
+
+func (m *Member) IsPartitionKey() bool {
+	return m.keyTy == Partition
+}
+
+// Aty emulates query aty -
+func (m *Member) Aty() Modifier {
+	return m.Mod
 }
 
 func (m *Member) Set() bool {
@@ -120,7 +176,7 @@ func (m *Member) Set() bool {
 }
 
 // func (m *Member) Inc() bool {
-// 	return m.Mod == Inc
+// 	return m.mod == Inc
 // }
 
 func (m *Member) Subtract() bool {
@@ -129,6 +185,23 @@ func (m *Member) Subtract() bool {
 
 func (m *Member) Add() bool {
 	return m.Mod == Add
+}
+
+// TODO: use IsLiteral ??? or change IsFilter, IsKey in mutation.
+
+func (m *Member) Literal() string {
+	return m.literal
+}
+
+func (m *Member) IsFilter() bool {
+	return m.Mod == IsFilter
+}
+func (m *Member) BoolCd() BoolCd {
+	return m.boolCd
+}
+
+func (m *Member) GetOprStr() string {
+	return strings.ToUpper(m.eqy)
 }
 
 // Examples of condition expression:
@@ -169,17 +242,19 @@ type Mutation struct {
 	// Where, Values method
 	where  string
 	values []interface{}
+	// AndFilter, OrFilter counts
+	af, of int
 	// pk   uuid.UID
 	// sk   string
 	pKey interface{}
 	tbl  tbl.Name
-	keys []key.TableKey
-	opr  StdMut // update,insert(put), merge, delete
+	keys []key.TableKey // table keys
+	opr  StdMut         // update,insert(put), merge, delete
 	//
 	text     string      // alternate representation of a mutation e.g. sql
 	prepStmt interface{} // some db's may optional "prepare" mutations before execution Three phase 1) single prepare stmt 2) multiple stmt executions 3) close stmt
 	params   []interface{}
-	err      error
+	err      []error
 	config   []Option
 }
 
@@ -270,6 +345,26 @@ func (m *Mutation) GetKeys() []Member {
 	return k
 }
 
+func (m *Mutation) GetFilter() []Member {
+	var k []Member
+	for _, v := range m.GetMembers() {
+		if v.IsFilter() {
+			k = append(k, v)
+		}
+	}
+	return k
+}
+
+func (m *Mutation) GetLiterals() []Member {
+	var k []Member
+	for _, v := range m.GetMembers() {
+		if len(v.Literal()) > 0 {
+			k = append(k, v)
+		}
+	}
+	return k
+}
+
 func (m *Mutation) AddTableKeys(k []key.TableKey) {
 	m.keys = k
 }
@@ -286,31 +381,122 @@ func (m *Mutation) SetText(p string) {
 	m.text = p
 }
 
-func (q *Mutation) Where(s string) {
-	q.where = s
+func (m *Mutation) Where(s string) *Mutation {
+	m.where = s
+	return m
 }
 
-func (q *Mutation) GetWhere() string {
-	return q.where
+func (m *Mutation) GetWhere() string {
+	return m.where
 }
 
-func (q *Mutation) Values(v []interface{}) {
-	q.values = v
+func (m *Mutation) Values(v ...interface{}) *Mutation {
+	m.values = v
+	return m
 }
 
-func (q *Mutation) GetValues() []interface{} {
-	return q.values
+func (m *Mutation) GetValues() []interface{} {
+	return m.values
 }
 
 func (m *Mutation) Text() string {
 	return m.text
 }
 
-func (m *Mutation) SetError(e error) {
-	m.err = e
+func (m *Mutation) Key(attr string, v interface{}, e ...string) *Mutation {
+	eqy := "EQ"
+	if len(e) > 0 {
+		eqy = strings.ToUpper(e[0])
+	}
+
+	m.AddMember(attr, v, IsKey)
+	mm := &m.ms[len(m.ms)-1] // grab member just added and set equality condition, SQL feature only. Checked at execute.
+	mm.eqy = eqy
+
+	return m
 }
 
-func (m *Mutation) GetError() error {
+func (m *Mutation) appendFilter(attr string, v interface{}, bcd BoolCd, e ...string) {
+
+	eqy := "EQ"
+	if len(e) > 0 {
+		eqy = strings.ToUpper(e[0])
+	}
+
+	m.AddMember(attr, v, IsFilter)
+	mm := &m.ms[len(m.ms)-1] // grab member just added and set equality condition
+	mm.eqy = eqy
+	fmt.Printf("appendFilter: %#v\n", mm)
+
+}
+func (m *Mutation) Filter(a string, v interface{}, e ...string) *Mutation {
+
+	var found bool
+
+	for _, mm := range m.GetMembers() {
+		if mm.IsFilter() {
+			found = true
+			break
+		}
+	}
+	if found {
+		m.AndFilter(a, v, e...)
+		return m
+		//
+	}
+
+	m.appendFilter(a, v, NIL, e...)
+
+	return m
+}
+
+func (m *Mutation) appendBoolFilter(attr string, v interface{}, bcd BoolCd, e ...string) *Mutation {
+
+	var found bool
+
+	for _, mm := range m.GetMembers() {
+		if mm.IsFilter() && mm.boolCd == NIL {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		m.addErr(fmt.Errorf(`Mutation no "Filter" condition specified`))
+		return m
+		//
+	}
+
+	m.appendFilter(attr, v, bcd, e...)
+
+	return m
+}
+
+func (m *Mutation) AndFilter(a string, v interface{}, e ...string) *Mutation {
+	m.af++
+	return m.appendBoolFilter(a, v, AND, e...)
+
+}
+
+func (m *Mutation) OrFilter(a string, v interface{}, e ...string) *Mutation {
+	m.of++
+	return m.appendBoolFilter(a, v, OR, e...)
+}
+
+func (m *Mutation) GetOr() int {
+	return m.of
+}
+func (m *Mutation) GetAnd() int {
+	return m.af
+}
+
+// end - func (q *QueryHandle)
+
+// func (m *Mutation) SetError(e error) {
+// 	m.err = e
+// }
+
+func (m *Mutation) GetError() []error {
 	return m.err
 }
 
@@ -371,8 +557,9 @@ func (m *Mutation) SetMemberValue(attr string, v interface{}) {
 	m.ms[i].Value = g
 }
 
-func addErr(e error) {
-
+func (m *Mutation) addErr(e error) {
+	syslog(e.Error())
+	m.err = append(m.err, e)
 }
 
 // Config set for individual mutations e.g. Override scan database config, used to detect full scan operations and abort
@@ -390,33 +577,45 @@ func (im *Mutation) GetConfig(s string) interface{} {
 	return nil
 }
 
-func (im *Mutation) Key(attr string, value interface{}) {
-	im.AddMember(attr, value, IsKey)
+// func (im *Mutation) Filter(attr string, value interface{}) *Mutation {
+// 	return im.AddMember(attr, value, IsFilter)
+// }
+
+func (im *Mutation) Add(attr string, value interface{}) *Mutation {
+	return im.AddMember(attr, value, Add)
 }
 
-func (im *Mutation) Filter(attr string, value interface{}) {
-	im.AddMember(attr, value, IsFilter)
+func (im *Mutation) Subtract(attr string, value interface{}) *Mutation {
+	return im.AddMember(attr, value, Subtract)
+}
+func (im *Mutation) Multiply(attr string, value interface{}) *Mutation {
+	return im.AddMember(attr, value, Multiply)
 }
 
-func (im *Mutation) Add(attr string, value interface{}) {
-	im.AddMember(attr, value, Add)
+// Set("col2","upper(name")=:ABC",mut.Literal)
+func (im *Mutation) Set(attr string, value interface{}, m ...Modifier) *Mutation {
+	if len(m) > 0 {
+		if m[0] != Literal {
+			im.addErr(fmt.Errorf("Only literal modifier accepted in Set()"))
+			return im
+		}
+		return im.AddMember(attr, value, Literal)
+	}
+	return im.AddMember(attr, value, Set)
+}
+func (im *Mutation) Append(attr string, value interface{}) *Mutation {
+	return im.AddMember(attr, value, Append)
+}
+func (im *Mutation) Remove(attr string) *Mutation {
+	return im.AddMember(attr, nil, Remove)
 }
 
-func (im *Mutation) Subtract(attr string, value interface{}) {
-	im.AddMember(attr, value, Subtract)
-}
-func (im *Mutation) Multiply(attr string, value interface{}) {
-	im.AddMember(attr, value, Multiply)
-}
-func (im *Mutation) Set(attr string, value interface{}) {
-	im.AddMember(attr, value, Set)
-}
-func (im *Mutation) Append(attr string, value interface{}) {
-	im.AddMember(attr, value, Append)
-}
-func (im *Mutation) Remove(attr string, value interface{}) {
-	im.AddMember(attr, value, Remove)
-}
+// func (im *Mutation) Attribute(attr string, value interface{}, m ...Modifier) *Mutation {
+// 	if len(m) > 0 {
+// 		return im.AddMember(attr, value, m...)
+// 	}
+// 	return im.AddMember(attr, value)
+// }
 
 // Submit defines a mutation using struct tags with tag names emulating each mutation method and attribute mutation method
 func (im *Mutation) Submit(t interface{}) *Mutation {
@@ -440,7 +639,7 @@ func (im *Mutation) Submit(t interface{}) *Mutation {
 		for i := 0; i < s.NumField(); i++ {
 			sf := s.Field(i) // StructField
 			fv := sv.Field(i)
-			if name, ok := sf.Tag.Lookup("methodDB"); ok {
+			if name, ok := sf.Tag.Lookup("mdb"); ok {
 				switch strings.ToLower(name) {
 				case "key":
 					im.Key(sf.Name, fv.Interface())
@@ -455,20 +654,19 @@ func (im *Mutation) Submit(t interface{}) *Mutation {
 				case "append":
 					im.Append(sf.Name, fv.Interface())
 				case "remove":
-					im.Remove(sf.Name, fv.Interface())
+					im.Remove(sf.Name)
 				default:
-					im.err = fmt.Errorf("Submit(): unsupported struct tag value: %q", name)
+					im.addErr(fmt.Errorf("Submit(): unsupported struct tag value: %q", name))
 				}
 			}
 		}
 	default:
-		im.err = fmt.Errorf("Submit(): expected a pointer to struct got pointer to %s", s.Kind())
+		im.addErr(fmt.Errorf("Submit(): expected a pointer to struct got pointer to %s", s.Kind()))
 	}
 
 	return im
 }
-
-func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *Mutation {
+func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifier) *Mutation {
 
 	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
 	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
@@ -477,7 +675,7 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *M
 	if p[0] == '0' {
 		p = "1" + p
 	}
-	m := Member{Name: attr, Param: "@" + p, Value: value}
+	m := Member{Name: attr, Param: "@" + p, Value: value, eqy: "EQ"}
 
 	// assign Set to mut.Mod even for Insert DML where Mod will be ignored.
 	m.Mod = Set
@@ -494,35 +692,68 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *M
 
 	// check attr is key
 	var (
-		found, found2 bool
-		mean          string
+		isKey bool
 	)
 
 	//tableKeys are correctly ordered based on table def
-	for _, kk := range im.keys {
+	for i, kk := range im.keys {
+		//
 		if kk.Name == attr {
-			found = true
+			isKey = true
+			if i == 0 {
+				m.keyTy = Partition
+			}
 		}
-		if strings.ToUpper(kk.Name) == strings.ToUpper(attr) {
-			found2 = true
-			mean = kk.Name
-		}
-		if strings.ToUpper(kk.Name[:len(kk.Name)-1]) == strings.ToUpper(attr) {
-			found2 = true
-			mean = kk.Name
-		}
+		// TODO: dynamodb is case sensitive to attribute names, wheras SQL is not. How to handle.
+		// no case check
+		// if strings.ToUpper(kk.Name) == strings.ToUpper(attr) {
+		// 	isKey = true
+		// }
 	}
-	if !found {
-		if found2 {
-			addErr(fmt.Errorf("Error in Mut Specified merge key %q Do you mean %q", attr, mean))
+	// validate Modifier value.
+	// Must specifiy IsFilter to be used in where clause or filter expression, otherwise will be used to Set in a Update mutation.
+	switch len(mod) {
+	case 0:
+		if isKey {
+			m.Mod = IsKey
 		} else {
-			addErr(fmt.Errorf("Error in Mut. Specified merge key %q", attr))
+			if im.opr == Delete {
+				m.Mod = IsFilter
+			}
 		}
-	}
-	// override Modifer value with argument value if specified
-	if len(mod) > 0 {
+
+	case 1:
 		m.Mod = mod[0]
-	} else if m.Array {
+		fmt.Println("addmember ", attr, m.Mod, len(im.keys), isKey)
+		if len(im.keys) > 0 {
+			switch m.Mod {
+			case IsKey:
+				if !isKey {
+					im.addErr(fmt.Errorf("Error: %q is not a key in table", attr))
+				}
+			case IsFilter:
+				if isKey {
+					im.addErr(fmt.Errorf("Error: Specified %q is a Key not a filter", attr))
+				}
+			case Append:
+				if isKey {
+					im.addErr(fmt.Errorf("Error: Specified %q is a Key, cannot use Append modifier", attr))
+				}
+			case Remove:
+				if isKey {
+					im.addErr(fmt.Errorf("Error:  Specified %q is a Key, cannot use Remove modifier", attr))
+				}
+			case Literal:
+				if isKey {
+					im.addErr(fmt.Errorf("Error:  Specified %q is a Key, cannot use Literal modifier", attr))
+				}
+			}
+		}
+	default:
+		im.addErr(fmt.Errorf("Error in AddMember for %q. Cannot specifty more than one modifier", attr))
+	}
+
+	if m.Array {
 		// default operation for arrays is append.
 		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
 		// in such cases you must Put
@@ -535,16 +766,10 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *M
 
 	im.ms = append(im.ms, m)
 
-	// Nd attribute is specified only during attach operations. Increment ASZ (Array Size) attribute in this case only.
-	// if attr == "Nd" {
-	// 	m = Member{Name: "ASZ", Param: "@ASZ", Value: 1, Mod: Inc}
-	// 	im.ms = append(im.ms, m)
-	// }
-	//	}
 	return im
 }
 
-// func (im *Mutation) AddMember2(attr string, value interface{}, opr ...Modifer) *Mutation {
+// func (im *Mutation) AddMember2(attr string, value interface{}, opr ...Modifier) *Mutation {
 
 // 	// Parameterised names based on spanner's. Spanner uses a parameter name based on attribute name starting with "@". Params can be ignored in other dbs.
 // 	// For other database, such as MySQL, will need to convert from Spanner's repesentation to relevant database during query formulation in the Execute() phase.
@@ -556,7 +781,7 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *M
 // 	m := Member{Name: attr, Param: "@" + p, Value: value}
 
 // 	// assign Set to mut.Mod even for Insert DML where Mod will be ignored.
-// 	m.Mod = Set
+// 	m.mod = Set
 
 // 	// determine if member is an array type based on its value type. For Dynamobd  arrays are List or Set types.
 // 	// However, there is no way to distinguish between List or Set using the value type,
@@ -570,7 +795,7 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *M
 
 // 	// override Mod value with argument value if specified
 // 	if len(opr) > 0 {
-// 		m.Mod = opr[0]
+// 		m.mod = opr[0]
 // 	} else if m.Array {
 // 		// default operation for arrays is append.
 // 		// However, if array attribute does not exist Dynamo generates error: ValidationException: The provided expression refers to an attribute that does not exist in the item
@@ -579,7 +804,7 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifer) *M
 // 		// this is good as it means the the index entries in Nd match those in the scalar propagation atributes.
 // 		// After the initial load the default should be set to Append as all items exist and the associated array attributes exist in those items, so appending will succeed.
 // 		// Alternative solution is to add a update condition that test for attribute_exists(PKey) - fails and uses PUT otherwise Updates.
-// 		m.Mod = Append
+// 		m.mod = Append
 // 	}
 // 	im.ms = append(im.ms, m)
 
@@ -634,7 +859,7 @@ func NewMutation2(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
 	mut := &Mutation{tbl: tab, opr: opr}
 
 	for _, v := range keys {
-		mut.AddMember(v.Name, v.Value, IsKey)
+		mut.Key(v.Name, v.Value)
 	}
 	return mut
 }

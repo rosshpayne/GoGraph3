@@ -346,8 +346,12 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
 		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
 		// mut.IsKey is now redundant as GoGraph is aware of the table keys now.  TODO: test this works.
-		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID).AddMember("SortK", "A#A#T")
-		etx.AddMember("IX", nil, mut.Remove)
+		//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
+		// developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+		etx.NewUpdate(tbl.Block).Key("PKey", pUID).Key("SortK", "A#A#T").Remove("IX")
+		//  no keys specified, must have implemented  GetTableKeys()
+		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
 	}
 	err = etx.Execute()
 	if err != nil {
