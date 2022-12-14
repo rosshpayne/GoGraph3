@@ -427,6 +427,71 @@ func TestSQLUpdateStaffWhereOr2(t *testing.T) {
 	//	}
 }
 
+func TestSQLUpdateStaffWhereValuesLimit(t *testing.T) {
+
+	type Person struct {
+		Id       int
+		SirName  string
+		LastName string
+		Age      int
+		Salary   float64
+		DOB      string
+		Height   int
+	}
+	var (
+		staff []Person
+		tbl   = tbl.Name("unit$Test")
+		err   error
+	)
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var b int
+	var c float64
+	//a = 2
+	b = 30
+	c = 100000
+	// err := slog.Start()
+	// if err != nil {
+	// 	t.Error(err)
+	// }
+	// defer slog.Stop()
+
+	slog.Log("SQLUpdateStaff", "Here...")
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	//select test,logdt,status,nodes from Log$GoTest;
+
+	txg := NewQuery("query-test-label", tbl).DB("mysql-GoGraph").Prepare()
+
+	for i := 0; i < 4; i++ {
+		txg.Select(&staff).Key("Id", i, "GT").Where(" AGE > ? or salary > ?").Values(b+i, c).Limit(1)
+		err = txg.Execute()
+
+		if err != nil {
+			t.Logf("Error: %s", err)
+		}
+		for i, v := range staff {
+
+			t.Logf("Staff %d  %#v\n", i, v)
+		}
+		staff = nil
+	}
+
+	// 	txg := New("LogTest").DB("mysql-GoGraph")
+	// 	txg.NewUpdate("unit$Test").Key("test", "TestMoviex")
+	// 	err := txg.Execute()
+
+	// 	if err != nil {
+	// 		t.Logf("Error: %s", err)
+	// 	}
+
+	// t.Logf("Query count %d\n", len(sk))
+	//
+	//	for _, v := range sk {
+	//		t.Log(v.Test, v.Logdt, v.Status, v.Nodes)
+	//	}
+}
+
 func TestSQLUpdateStaff9(t *testing.T) {
 
 	type Person struct {

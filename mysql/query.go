@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	//"github.com/GoGraph/db"
@@ -268,6 +269,11 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	//
 	if q.HasOrderBy() {
 		s.WriteString(q.OrderByString())
+	}
+
+	if l := q.GetLimit(); l > 0 {
+		s.WriteString(" limit " + strconv.Itoa(l))
+
 	}
 
 	slog.Log("executeQuery", fmt.Sprintf("generated sql: [%s]", s.String()))
