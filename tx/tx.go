@@ -340,13 +340,13 @@ func (h *TxHandle) MakeBatch() error {
 // 	return m
 // }
 
-func (h *TxHandle) NewMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
+func (h *TxHandle) NewMutation2(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
 	keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
-	return mut.NewMutation2(table, opr, keys)
+	return mut.NewMutation(table, opr, keys)
 }
 
-func (h *TxHandle) NewMutation2(table tbl.Name, opr mut.StdMut, keys []key.Key) *mut.Mutation {
-	m := mut.NewMutation2(table, opr, keys)
+func (h *TxHandle) NewMutation(table tbl.Name, opr mut.StdMut, keys []key.Key) *mut.Mutation {
+	m := mut.NewMutation(table, opr, keys)
 	h.add(m)
 	return m
 }
@@ -660,7 +660,7 @@ func (h *TxHandle) MergeMutation(table tbl.Name, opr mut.StdMut, keys []key.Key)
 		}
 	}
 
-	h.am = mut.NewMutation2(table, opr, keys)
+	h.am = mut.NewMutation(table, opr, keys)
 
 	h.sm = h.findSourceMutation2(table, mergeKeys)
 	if h.sm == nil {

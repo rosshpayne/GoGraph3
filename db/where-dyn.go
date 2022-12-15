@@ -26,9 +26,12 @@ func buildFilterExpr(src string, exprNames map[string]string, exprValues map[str
 
 	// 2.convert this:
 	// (`Name = ? and (Nd in (?,?) or Age > ? and Height < ?)
-	// (`Name = ? and (Nd in (3,4) or Age  > and Height < 176))
 	// to this:
-	//  `#a = :1 and #b in (:2,:3) or #c > :4 and #d < :5
+	//  `#a = :1 and #b in (:2,:3) or #c > :4 and #d < :5`
+	//
+	// (`Name = ? and (Nd in (3,?) or Age  > 55 and Height < ?)
+	// to this:
+	//  `#a = :3 and #b in (:1,:4) or #c > :2 and #d < :5`
 	//
 	// 3.populate these two variables
 	// attributeNames: string[]string
@@ -74,7 +77,7 @@ func buildFilterExpr(src string, exprNames map[string]string, exprValues map[str
 	genId = append(genId, 'a'-1)
 
 	// gen generates a name and value identifier, a..z, aa..az, ba..bz.,
-	gen := func() {
+	genId_ := func() []byte {
 		// increment genId
 		for i := len(genId) - 1; i >= 0; i-- {
 			genId[i]++
@@ -92,7 +95,7 @@ func buildFilterExpr(src string, exprNames map[string]string, exprValues map[str
 				break
 			}
 		}
-
+		return genId
 	}
 	sc.Init(strings.NewReader(src))
 
@@ -123,12 +126,11 @@ func buildFilterExpr(src string, exprNames map[string]string, exprValues map[str
 		case "attribute_exists", "attribute_not_exists", "attribute_type", "begins_with", "contains", "size":
 			s.WriteString(sc.TokenText())
 		default:
-			// must be a table attribute or equality condition
+			// must be a table attribute or a literal
 			//	fmt.Println("Must be an attribute: ", sc.TokenText(), tok)
 			// add to ExpressionNames sc.TokenText()[0] == '"'
 			if tok == scanner.String || tok == scanner.Int || tok == scanner.Float {
-				gen()
-				v := ":v" + string(genId)
+				v := ":v" + string(genId_())
 				switch tok {
 				case scanner.Int:
 					av := new(types.AttributeValueMemberN)
@@ -156,8 +158,7 @@ func buildFilterExpr(src string, exprNames map[string]string, exprValues map[str
 					}
 				}
 				if !found {
-					gen()
-					n = "#n" + string(genId)
+					n = "#n" + string(genId_())
 					exprNames[n] = sc.TokenText()
 				}
 				s.WriteString(n)

@@ -1128,7 +1128,7 @@ func TestShortNames(t *testing.T) {
 	)
 	past = append(past, 'a'-1)
 	// aa, ab...az, ba,..bz, ca, .. cz, da,..dz, ea
-	for i := 0; i < 1800; i++ {
+	for i := 0; i < 6800; i++ {
 
 		for i := len(past) - 1; i >= 0; i-- {
 			past[i]++
@@ -1146,9 +1146,7 @@ func TestShortNames(t *testing.T) {
 				break
 			}
 		}
-
 		t.Logf("subnn: %s\n", past)
-
 	}
 
 }

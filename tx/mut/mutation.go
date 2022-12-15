@@ -854,7 +854,7 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifier) *
 // 	return mut
 // }
 
-func NewMutation2(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
+func NewMutation(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
 
 	mut := &Mutation{tbl: tab, opr: opr}
 

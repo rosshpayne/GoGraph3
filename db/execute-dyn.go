@@ -391,11 +391,10 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 		if binds != len(m.GetValues()) {
 			return nil, fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(m.GetValues()))
 		}
-
+		ii := 0
 		for i, v := range m.GetValues() {
-			ii := i + 1
+			ii = i + 1
 			exprValues[":"+strconv.Itoa(ii)] = marshalAvUsingValue(v)
-			fmt.Printf("exprValues: %#v\n", exprValues)
 		}
 		fmt.Println("xxexprCond: ", exprCond, exprNames, exprValues)
 		update = &types.Update{

@@ -383,8 +383,8 @@ func genSQLUpdate(m *mut.Mutation, params []interface{}) (string, []interface{})
 			p++
 		}
 
-		where := m.GetWhere()
-		sql.WriteString(where)
+		//where := m.GetWhere()
+		sql.WriteString(m.GetWhere())
 
 		if p > 0 {
 			sql.WriteByte(')')
