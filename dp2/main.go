@@ -497,7 +497,7 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 
 func UnprocessedCh(ctx context.Context, dpty []string, stateId uuid.UID, restart bool) <-chan []unprocBuf {
 
-	dpCh := make(chan []unprocBuf, 1) // NB: only use 0 or 1 for buffer size
+	dpCh := make(chan []unprocBuf, 1) // NB: only use 0  buffer size when two bind variables, use chan buf 1 when 3 bind vars
 
 	go ScanForDPitems(ctx, dpty, dpCh, stateId, restart)
 

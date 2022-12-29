@@ -391,9 +391,9 @@ func txUpdate(m *mut.Mutation) (*types.TransactWriteItem, error) {
 		if binds != len(m.GetValues()) {
 			return nil, fmt.Errorf("expected %d bind variables in Values, got %d", binds, len(m.GetValues()))
 		}
-		ii := 0
+
 		for i, v := range m.GetValues() {
-			ii = i + 1
+			ii := i + 1
 			exprValues[":"+strconv.Itoa(ii)] = marshalAvUsingValue(v)
 		}
 		fmt.Println("xxexprCond: ", exprCond, exprNames, exprValues)
@@ -1102,12 +1102,24 @@ func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle,
 	if err != nil {
 		return err
 	}
-	fmt.Println("")
+
 	switch e.access {
 
 	case cGetItem:
+		if q.Paginated() {
+			return fmt.Errorf("Query is a single item query, remove Parginate() method")
+		}
+		if q.Worker() > 0 {
+			return fmt.Errorf("Query is not a scan, remove Worker() method")
+		}
+		if q.ExecMode() != q.Std() {
+			return fmt.Errorf("Query is a single item query, use Execute() method as its much more efficient")
+		}
 		return exGetItem(ctx, dh, q, e, av, proj)
 	case cQuery:
+		if q.Worker() > 0 {
+			return fmt.Errorf("Query is not a scan, remove Worker() method")
+		}
 		return exQuery(ctx, dh, q, e, proj)
 	case cScan:
 		// check if scan has been disabled at either the db or stmt level
@@ -1174,7 +1186,7 @@ func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle
 		// }
 		return query.NoDataFoundErr
 	}
-	err = attributevalue.UnmarshalMap(result.Item, q.GetFetch())
+	err = attributevalue.UnmarshalMap(result.Item, q.GetBind())
 	if err != nil {
 		return newDBUnmarshalErr("xGetItem", "", "", "UnmarshalMap", err)
 	}
@@ -1185,6 +1197,86 @@ func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle
 }
 
 func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, proj *expression.ProjectionBuilder) error {
+	var err error
+
+	switch x := q.ExecMode(); x {
+
+	case q.Std():
+
+		return exQueryStd(ctx, client, q, e, proj)
+
+	default:
+
+		// all q.Func() will have been configured with 1 worker if no Worker specified.
+
+		bindvars := len(q.Bufs()) // bind vars in Select()
+
+		if bindvars < 2 {
+			panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
+		}
+
+		// create wrks number of bind vars (double buf)
+		// q.bind == *[]rec
+		r := reflect.ValueOf(q.Bind()).Elem()
+
+		// create channel
+		chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
+		ch := reflect.MakeChan(chT, bindvars-2)
+		q.SetChannel(ch.Interface())
+
+		// start worker scan service
+		go queryChannelSrv(ctx, q, ch, client, e, proj)
+
+		if x == q.Func() {
+			// place func on receive end of channel:  func(a interface{}) error, where a is channel created above
+			// blocking call
+			var wg sync.WaitGroup
+			slog.LogAlert("exQuery", "About to initiate: go.q.GetFunc() ")
+			wg.Add(1)
+			go q.GetFunc()(&wg, ch.Interface())
+			wg.Wait()
+
+		} else {
+
+			// assign slice of channels to original queryHandler
+			q.SetChannel(ch.Interface())
+		}
+	}
+	return err
+}
+
+func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, e *qryEntry, proj *expression.ProjectionBuilder) {
+
+	var err error
+
+	slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+
+	for !q.EOD() {
+
+		err = exQueryStd(ctx, client, q, e, proj)
+
+		if err != nil {
+			if errors.Is(query.NoDataFoundErr, err) {
+				slog.LogAlert("scanChannelSrv", "NO data found..")
+				q.SetEOD()
+				continue
+			}
+			elog.Add("scanChannelSrv", err)
+		}
+		// check for ctrl-C
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
+	}
+
+	chv.Close()
+
+}
+
+func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, proj *expression.ProjectionBuilder) error {
 	//
 	var (
 		keyc   expression.KeyConditionBuilder
@@ -1200,7 +1292,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		exprFilter  *string
 	)
 
-	syslog(fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+	//slog.Log("exQueryStd", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
 	exprNames = make(map[string]string)
 
 	// check bind variable is a slice
@@ -1212,10 +1304,13 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		slog.LogAlert("exQuery", "restart: retrieve pg state...")
-		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
+		slog.LogAlert("exQueryStd", "restart: retrieve pg state...")
+		pg, err := getPgState(ctx, client, q.PgStateId(), q.Worker())
+		if err != nil {
+			return err
+		}
+		q.SetPgStateValI(unmarshalPgState(pg))
 		q.SetRestart(false)
-
 	}
 	//
 	keyAttrs := q.GetKeys()
@@ -1228,11 +1323,13 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		// always EQ
 		keyc = expression.KeyEqual(expression.Key(e.GetPK()), expression.Value(q.GetKeyValue(e.GetPK())))
 	case 2:
-		if keyAttrs[0] != e.GetPK() {
-			panic(fmt.Errorf(fmt.Sprintf("Expected Partition Key %q got %q", e.GetPK(), keyAttrs[0])))
-		}
-		if keyAttrs[1] != e.GetSK() {
-			panic(fmt.Errorf(fmt.Sprintf("Expected SortKey %q got %q", e.GetSK(), keyAttrs[1])))
+		// TODO: this check of keyAttrs is redundant??
+		for _, v := range keyAttrs {
+			if v != e.GetPK() {
+				if v != e.GetSK() {
+					return (fmt.Errorf(fmt.Sprintf("Expected key attribute to be one of (%q %q) got %q", e.GetPK(), e.GetSK(), v)))
+				}
+			}
 		}
 		//
 		keyc = expression.KeyEqual(expression.Key(e.GetPK()), expression.Value(q.GetKeyValue(e.GetPK())))
@@ -1334,7 +1431,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	}
 	expr, err := b.Build()
 	if err != nil {
-		return newDBExprErr("exQuery", "", "", err)
+		return newDBExprErr("exQueryStd", "", "", err)
 	}
 	exprProj = expr.Projection()
 	exprKeyCond = expr.KeyCondition()
@@ -1366,7 +1463,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 
 		expr, err := b.Build()
 		if err != nil {
-			return newDBExprErr("exQuery", "", "", err)
+			return newDBExprErr("exQueryStd", "", "", err)
 		}
 		// append expression Names and Values
 		for k, v := range expr.Names() {
@@ -1398,11 +1495,10 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 
 	if q.IndexSpecified() {
 		input.IndexName = aws.String(string(q.GetIndex()))
-		//syslog(fmt.Sprintf("exQuery: index specified: %s", q.GetIndex()))
+		//syslog(fmt.Sprintf("exQueryStd: index specified: %s", q.GetIndex()))
 	}
 	if l := q.GetLimit(); l > 0 {
 		input.Limit = aws.Int32(int32(l))
-		//syslog(fmt.Sprintf("exQuery: limit specified %d", l))
 	}
 	if lk := q.PgStateValI(); lk != nil {
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
@@ -1414,38 +1510,45 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 	result, err := client.Query(ctx, input)
 	t1 := time.Now()
 	if err != nil {
-		return newDBSysErr("exQuery", "Query", err)
+		return newDBSysErr("exQueryStd", "Query", err)
 	}
 
 	// pagination cont....
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
-		syslog(fmt.Sprintf("exQuery: LastEvaluatedKey = 0"))
 		//EOD
-		q.SetPgStateValS("")
-		q.SetPgStateValI(nil)
-		q.SetEOD()
-		if q.PgStateValI() != nil {
-			err := deletePgState(ctx, client, q.PgStateId())
-			if err != nil {
-				elog.Add(fmt.Sprintf("Error in deletePgState: %s", err))
+		if q.PaginatedQuery() {
+			q.SetPgStateValS("")
+			q.SetPgStateValI(nil)
+			q.SetEOD()
+			if q.PgStateValI() != nil {
+				err := deletePgState(ctx, client, q.PgStateId())
+				if err != nil {
+					elog.Add(fmt.Sprintf("Error in deletePgState: %s", err))
+				}
 			}
 		}
 
 	} else {
 
-		// save old pg state before assigning latest
-		if q.PgStateValI() != nil {
-			slog.LogAlert("exQuery", " save pg state...")
-			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
-			if err != nil {
-				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
-				return err
+		// if not a paginated query - throw error
+		if q.PaginatedQuery() {
+			// save old pg state before assigning latest
+			if q.PgStateValI() != nil {
+				err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
+				if err != nil {
+					elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
+					return err
+				}
 			}
-		}
 
-		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
-		q.SetPgStateValI(result.LastEvaluatedKey)
+			q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
+			q.SetPgStateValI(result.LastEvaluatedKey)
+		} else {
+			err := "Query continues need to specifiy Paginate()."
+			elog.Add(err)
+			return errors.New(err)
+		}
 	}
 
 	dur := t1.Sub(t0)
@@ -1459,7 +1562,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		return query.NoDataFoundErr
 	}
 
-	err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
+	err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetBind())
 	if err != nil {
 		return newDBUnmarshalErr("exQuery", "", "", "UnmarshalListOfMaps", err)
 	}
@@ -1481,11 +1584,15 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		case q.Channel():
 
+			bindvars := len(q.Bufs()) // GetSelect()
+			if bindvars < 2 {
+				panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
+			}
 			// ExecuteByChannel()
-			r := reflect.ValueOf(q.Fetch()).Elem() // *[]unprocBuf
-			// fmt.Println("q.Fetch() : ", reflect.ValueOf(q.Fetch()).Elem().Kind())
+			r := reflect.ValueOf(q.Bind()).Elem() // *[]unprocBuf
+			// fmt.Println("q.Bind() : ", reflect.ValueOf(q.Bind()).Elem().Kind())
 			// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
-			ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
+			ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), bindvars-2)
 			//fmt.Println("chv: ", chv.Kind())
 			q.SetChannel(ch.Interface())
 
@@ -1504,13 +1611,15 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		if x := q.ExecMode(); x == q.Channel() || x == q.Func() {
 
-			if len(q.Bufs()) < 2 {
+			bindvars := len(q.Bufs()) // GetSelect()
+
+			if bindvars < 2 {
 				panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
 			}
 
 			// create wrks number of bind vars (double buf)
-			// q.Fetch == *[]rec
-			r := reflect.ValueOf(q.Fetch()).Elem()
+			// q.bind == *[]rec
+			r := reflect.ValueOf(q.Bind()).Elem()
 
 			// create slice of channels
 			chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
@@ -1525,7 +1634,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				cq := q.Clone()
 
 				//ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
-				ch := reflect.MakeChan(chT, 1)
+				ch := reflect.MakeChan(chT, bindvars-2)
 				cq.SetChannel(ch.Interface())
 				ichs = reflect.Append(ichs, ch)
 				// set bind vars
@@ -1561,7 +1670,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				var wg sync.WaitGroup
 				wg.Add(wrks)
 				for i := 0; i < wrks; i++ {
-					go q.GetFunc()(&wg, chs.Index(i).Interface())
+					go q.GetFunc()(&wg, ichs.Index(i).Interface())
 				}
 				wg.Wait()
 
@@ -1587,7 +1696,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 
 	var err error
 
-	slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+	//slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
 
 	for !q.EOD() {
 
@@ -1600,6 +1709,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 
 		if err != nil {
 			if errors.Is(query.NoDataFoundErr, err) {
+				q.SetEOD()
 				continue
 			}
 			elog.Add("scanChannelSrv", err)
@@ -1661,8 +1771,12 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		syslog(fmt.Sprintf("exNonParallelScan: restart"))
-		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId())))
+		alertlog("exNonParallelScan: restart")
+		pg, err := getPgState(ctx, client, q.PgStateId())
+		if err != nil {
+			return err
+		}
+		q.SetPgStateValI(unmarshalPgState(pg))
 		q.SetRestart(false)
 
 	}
@@ -1804,24 +1918,24 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 
 	if result.Count > 0 {
 
-		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
+		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetBind())
 		if err != nil {
 			return newDBUnmarshalErr("exNonParallelScan", "", "", "UnmarshalListOfMaps", err)
 		}
-		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetFetch()).Elem().Len()))
+		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetBind()).Elem().Len()))
 
 	} else {
 
-		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetFetch()).Elem().Len()))
+		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetBind()).Elem().Len()))
 
-		// zero out q.fetch (client select variable) if populated
-		if reflect.ValueOf(q.GetFetch()).Elem().Kind() == reflect.Slice {
+		// zero out q.bind (client select variable) if populated
+		if reflect.ValueOf(q.GetBind()).Elem().Kind() == reflect.Slice {
 
-			if reflect.ValueOf(q.GetFetch()).Elem().Len() > 0 {
+			if reflect.ValueOf(q.GetBind()).Elem().Len() > 0 {
 				slog.LogAlert("exNonParallelScan", fmt.Sprintf(" Zero out bind variable "))
-				t := reflect.ValueOf(q.GetFetch()).Type().Elem()
+				t := reflect.ValueOf(q.GetBind()).Type().Elem()
 				n := reflect.New(t) // *slice to empty slice
-				q.SetFetchValue(n.Elem())
+				q.SetBindValue(n.Elem())
 
 			}
 
@@ -1847,9 +1961,12 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		q.SetPgStateValI(unmarshalPgState(getPgState(ctx, client, q.PgStateId(), q.Worker())))
+		pg, err := getPgState(ctx, client, q.PgStateId(), q.Worker())
+		if err != nil {
+			return err
+		}
+		q.SetPgStateValI(unmarshalPgState(pg))
 		q.SetRestart(false)
-
 	}
 
 	var flt, f expression.ConditionBuilder
@@ -1925,8 +2042,11 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	if q.IndexSpecified() {
 		input.IndexName = aws.String(string(q.GetIndex()))
 	}
+	if l := q.GetLimit(); l > 0 {
+		input.Limit = aws.Int32(int32(l))
+	}
 	if lk := q.PgStateValI(); lk != nil {
-		//	q.FetchState()
+		//	q.bindState()
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
 		//syslog(fmt.Sprintf("exScanWorker: SetExclusiveStartKey %s", input.String()))
 	}
@@ -1977,21 +2097,21 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 
 	if result.Count > 0 {
 
-		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetFetch())
+		err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetBind())
 		if err != nil {
 			return newDBUnmarshalErr("exScanWorker", "", "", "UnmarshalListOfMaps", err)
 		}
 
 	} else {
 
-		// zero out q.fetch (client select variable) if populated
-		if reflect.ValueOf(q.GetFetch()).Elem().Kind() == reflect.Slice {
+		// zero out q.bind (client select variable) if populated
+		if reflect.ValueOf(q.GetBind()).Elem().Kind() == reflect.Slice {
 
-			if reflect.ValueOf(q.GetFetch()).Elem().Len() > 0 {
+			if reflect.ValueOf(q.GetBind()).Elem().Len() > 0 {
 
-				t := reflect.ValueOf(q.GetFetch()).Type().Elem()
+				t := reflect.ValueOf(q.GetBind()).Type().Elem()
 				n := reflect.New(t) // *slice to empty slice
-				q.SetFetchValue(n.Elem())
+				q.SetBindValue(n.Elem())
 			}
 		} else {
 			panic(fmt.Errorf("Expected a slice for scan output variable."))
@@ -2092,7 +2212,7 @@ func deletePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, wor
 
 }
 
-func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker ...int) string {
+func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker ...int) (string, error) {
 
 	var state string = "LastEvaluatedKey"
 
@@ -2112,9 +2232,9 @@ func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker
 
 	err := executeQuery(ctx, client, q)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	return val.Value
+	return val.Value, nil
 
 }
 
@@ -2126,6 +2246,7 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 		attr string
 		tok  string
 	)
+
 	mm := make(map[string]types.AttributeValue)
 
 	alertlog(fmt.Sprintf("unmarshalPgState: %s ", in))

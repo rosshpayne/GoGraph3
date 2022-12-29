@@ -340,16 +340,38 @@ func (h *TxHandle) MakeBatch() error {
 // 	return m
 // }
 
-func (h *TxHandle) NewMutation2(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
+// AddMutation2 renamed from NewMutation2. Accessed only in attach-mrege/execute/propagationTarget.go
+func (h *TxHandle) AddMutation2(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
 	keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
-	return mut.NewMutation(table, opr, keys)
-}
+	// validate merge keys with actual table keys
+	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+	if err != nil {
+		h.addErr(fmt.Errorf("Error in finding table keys for table %q: %w", table, err))
+		return nil
+	}
 
-func (h *TxHandle) NewMutation(table tbl.Name, opr mut.StdMut, keys []key.Key) *mut.Mutation {
-	m := mut.NewMutation(table, opr, keys)
+	m := mut.NewMutation(table, opr)
+	m.AddTableKeys(tableKeys)
+	m.AddKeys(keys)
 	h.add(m)
 	return m
 }
+
+// func (h *TxHandle) NewMutation(table tbl.Name, opr mut.StdMut, keys []key.Key) *mut.Mutation {
+// 	//m := mut.NewMutation(table, opr, keys)
+// 	// validate merge keys with actual table keys
+// 	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
+// 	if err != nil {
+// 		h.addErr(fmt.Errorf("Error in finding table keys for table %q: %w", table, err))
+// 		return nil
+// 	}
+
+// 	m := mut.NewMutation(table, opr)
+// 	m.AddTableKeys(tableKeys)
+// 	m.AddKeys(keys)
+// 	h.add(m)
+// 	return m
+// }
 
 func (h *TxHandle) NewInsert(table tbl.Name) *mut.Mutation {
 	m := mut.NewInsert(table)
@@ -576,29 +598,7 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 
 ////////////////////  MergeMutation. /////////////////////////
 
-// MergeMutation - deprecate this func. Refers to keys by name and type so is not generic. Use MergeMutation2.
-// func (h *TxHandle) MergeMutation(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *TxHandle {
-
-// 	h.mergeMut = true
-// 	// null source mutation from previous MergeMutation
-// 	h.sm = nil
-// 	h.am = nil
-
-// 	// assign active mutation with new mutation and add to active batch
-// 	if opr == mut.Merge {
-// 		panic(fmt.Errorf("Merge not supported in a MergeMutation operation. Use Insert, Update or Delete"))
-// 	}
-// 	h.am = mut.NewMutation(table, pk, sk, opr)
-
-// 	h.sm = h.findSourceMutation(table, pk, sk)
-// 	if h.sm == nil {
-// 		h.add(h.am)
-// 	}
-
-// 	return h
-// }
-
-// MergeMutation2 will merge the current mutation with a previously defined source mutation based on the table and key(s) values.
+// MergeMutation will merge the current mutation with a previously defined source mutation based on the table and key(s) values.
 // Array data types will be appended too, and numbers will be driven by mut.Modifier. Other types will overwrite exising values.
 // Supplied key values will be validated against table definitions.
 func (h *TxHandle) MergeMutation(table tbl.Name, opr mut.StdMut, keys []key.Key) *TxHandle {
@@ -628,7 +628,7 @@ func (h *TxHandle) MergeMutation(table tbl.Name, opr mut.StdMut, keys []key.Key)
 	// generate ordered list of merge keys based on table key order and argument keys.
 	mergeKeys := make([]key.MergeKey, len(keys), len(keys))
 
-	// keys are not necessarily correctly ordered as per table definition
+	// keys may not be  ordered as per table definition
 	for _, k := range keys {
 		var found, found2 bool
 		var mean string
@@ -660,7 +660,10 @@ func (h *TxHandle) MergeMutation(table tbl.Name, opr mut.StdMut, keys []key.Key)
 		}
 	}
 
-	h.am = mut.NewMutation(table, opr, keys)
+	h.am = mut.NewMutation(table, opr) //, keys)
+
+	h.am.AddTableKeys(tableKeys) // added 27 Dec 2022
+	h.am.AddKeys(keys)           // added 27 Dec 2022
 
 	h.sm = h.findSourceMutation2(table, mergeKeys)
 	if h.sm == nil {
@@ -1119,6 +1122,7 @@ func (h *QHandle) DB(s string, opt ...db.Option) *QHandle {
 	return h
 }
 
+// RetryOp - used by dp1
 // func (h *QHandle) RetryOp(e error) bool {
 
 // 	return db.RetryOp(e)
@@ -1166,6 +1170,13 @@ func (h *QHandle) Close() error {
 
 func (h *QHandle) ExecuteByChannel() (interface{}, error) {
 
+	switch h.ExecMode() {
+	case h.Func():
+		return nil, fmt.Errorf("ExecuteByFunc() already executed cannot ExecuteByChannel()")
+	case h.Std():
+		return nil, fmt.Errorf("Execute() already executed cannot ExecuteByChannel()")
+	}
+
 	h.SetExecMode(h.Channel())
 
 	err := h.Execute()
@@ -1179,13 +1190,20 @@ func (h *QHandle) ExecuteByChannel() (interface{}, error) {
 
 func (h *QHandle) ExecuteByFunc(f query.Cfunc) error {
 
+	switch h.ExecMode() {
+	case h.Channel():
+		return fmt.Errorf("ExecuteByChannel() already executed cannot ExecuteByFunc()")
+	case h.Std():
+		return fmt.Errorf("Execute() already executed cannot ExecuteByFunc()")
+	}
+
 	h.SetExecMode(h.Func())
 
 	h.SetFunc(f)
 
 	if h.NumWorkers() == 0 {
 		// no Workers() specififed set to 1 so it can work with channels.
-		// which will be setup internally
+		// which will be orchestrated in the driver
 		h.SetWorkers(1)
 	}
 
@@ -1195,6 +1213,12 @@ func (h *QHandle) ExecuteByFunc(f query.Cfunc) error {
 
 // Execute - single threaded operations only. ExecuteByFunc or ExecuteByChannel for multi-threaded
 func (h *QHandle) Execute(w ...int) error {
+
+	switch h.ExecMode() {
+	case h.Func(), h.Channel():
+	default:
+		h.SetExecMode(h.Std())
+	}
 
 	if h.Error() != nil {
 		return h.Error()

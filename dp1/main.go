@@ -16,7 +16,7 @@ import (
 	//"github.com/GoGraph/attach/anmgr"
 	//"github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
-	"github.com/GoGraph/db"
+	dyn "github.com/GoGraph/db"
 	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
@@ -27,6 +27,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	tx "github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/types"
@@ -137,8 +138,8 @@ func main() {
 	}()
 
 	// register default database client
-	db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Init(ctx, "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "scan", Val: db.Enabled}, db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
 	//	tbl.Register("pgState", "Id", "Name")
 	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
@@ -414,16 +415,16 @@ func main() {
 
 }
 
-func Init(ctx context.Context) {
+// func Init(ctx context.Context) {
 
-	client, err := newMySQL("admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
-	if err != nil {
-		logerr(err)
-	} else {
-		m := MySQL{DB: client, ctx: ctx}
-		db.Register("mysql-GoGraph", m)
-	}
-}
+// 	client, err := newMySQL("admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+// 	if err != nil {
+// 		logerr(err)
+// 	} else {
+// 		m := MySQL{DB: client, ctx: ctx}
+// 		db.Register("mysql-GoGraph", m)
+// 	}
+// }
 
 //type PKey []byte
 
@@ -532,7 +533,7 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 
 func UnprocessedCh(ctx context.Context, ty string, stateId uuid.UID, restart bool) <-chan []UnprocRec {
 
-	dpCh := make(chan []UnprocRec) // NB: only use 0 or 1 for buffer size
+	dpCh := make(chan []UnprocRec)
 
 	go ScanForDPitems(ctx, ty, dpCh, stateId, restart)
 
@@ -566,13 +567,13 @@ func ScanForDPitems(ctx context.Context, ty string, dpCh chan<- []UnprocRec, id 
 			if errors.Is(query.NoDataFoundErr, err) {
 				continue
 			}
-			if !ptx.RetryOp(err) {
-				panic(err)
-			}
+			// if !ptx.RetryOp(err) {
+			// 	panic(err)
+			// }
 			continue
 		}
 
-		dpCh <- buf // because of 0 channel buffer, buf is being written too while being read - must use double buffer
+		dpCh <- buf
 
 	}
 }

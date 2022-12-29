@@ -59,6 +59,7 @@ func RunErrored() bool {
 
 	ErrCntCh <- respCh
 	errs := <-respCh
+
 	if errs > 0 {
 		return true
 	}
@@ -129,12 +130,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 		case respCh := <-ErrCntCh:
 
-			var v int
-			for _, v := range errCnt {
-				v++
-			}
-
-			respCh <- v
+			respCh <- len(errors)
 
 		case id := <-ResetCntCh:
 

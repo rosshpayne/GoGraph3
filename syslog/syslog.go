@@ -22,8 +22,8 @@ const (
 
 // global logger - accessible from any routine
 var (
-	logr *log.Logger
-	iow  io.Writer
+	//logr *log.Logger
+	iow io.Writer
 	//
 	logrMap map[string]*log.Logger
 	logWRm  sync.RWMutex
@@ -125,7 +125,7 @@ func Log(prefix string, s string, panic ...bool) {
 	// get a logger from the map for the particular prefix
 
 	logWRm.RLock()
-	logr, ok = logrMap[prefix]
+	logr, ok := logrMap[prefix]
 	logWRm.RUnlock()
 
 	if !ok {
@@ -154,7 +154,7 @@ func LogAlert(prefix string, s string, panic ...bool) {
 
 	// get a logger from the map for the particular prefix
 	alertWRm.RLock()
-	logr, ok = logrAlertMap[prefix]
+	logr, ok := logrAlertMap[prefix]
 	alertWRm.RUnlock()
 	if !ok {
 		fmt.Println("create new alert logr for prefix: ", prefix)
@@ -175,7 +175,7 @@ func LogErr(prefix string, s string, panic ...bool) {
 
 	// get a logger from the map for the particular prefix
 	errWRm.RLock()
-	logr, ok = logrErrMap[prefix]
+	logr, ok := logrErrMap[prefix]
 	errWRm.RUnlock()
 	if !ok {
 		fmt.Println("create new critical logr for prefix: ", prefix)

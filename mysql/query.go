@@ -32,7 +32,7 @@ func crProjection(q *query.QueryHandle) *strings.Builder {
 		first = true
 	)
 	var s strings.Builder
-	s.WriteString(fmt.Sprintf("select /* tag: %s */ ", q.GetTag()))
+	s.WriteString(fmt.Sprintf("select /* tag: %s %s */ ", q.GetTag(), q.GetHint()))
 	for _, v := range q.GetAttr() {
 		if v.IsFetch() {
 			if first {
@@ -276,8 +276,8 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 
 	}
 
-	slog.Log("executeQuery", fmt.Sprintf("generated sql: [%s]", s.String()))
-	fmt.Printf("generated sql: [%s]", s.String())
+	// slog.Log("executeQuery", fmt.Sprintf("generated sql: [%s]", s.String()))
+	// fmt.Printf("generated sql: [%s]", s.String())
 	if q.Prepare() {
 
 		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))

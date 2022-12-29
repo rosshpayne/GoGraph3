@@ -358,7 +358,7 @@ func main() {
 		)
 		for {
 
-			unproc, err := scanForDP(ctx, ty)
+			unproc, err := queryForDP(ctx, ty)
 			if err != nil {
 				break
 			}
@@ -528,16 +528,16 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 	return nil
 }
 
-// scanForDP fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
-func scanForDP(ctx context.Context, ty string) ([]Unprocessed, error) {
+// queryForDP fetches candiate items to which DP will be applied. Items fetched in batches and sent on channel to be picked up by main process DP loop.
+func queryForDP(ctx context.Context, ty string) ([]Unprocessed, error) {
 
 	var (
-		logid = "scanForDP"
+		logid = "queryForDP"
 		stx   *tx.QHandle
 		err   error
 	)
 
-	slog.LogAlert(logid, fmt.Sprintf("scanForDP for type %q started.", ty))
+	slog.LogAlert(logid, fmt.Sprintf("queryForDP for type %q started.", ty))
 
 	rec := []Unprocessed{}
 

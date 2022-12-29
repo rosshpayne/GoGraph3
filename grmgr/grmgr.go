@@ -52,9 +52,7 @@ type rWaitMap map[Routine]int
 
 var rWait rWaitMap
 
-//
 // Channels
-//
 var (
 	EndCh          = make(chan Routine, 1)
 	throttleDownCh = make(chan struct{})
@@ -64,9 +62,7 @@ var (
 	rExpirehCh = make(chan Routine)
 )
 
-//
 // Limiter
-//
 type respCh chan struct{}
 
 type Limiter struct {
@@ -330,7 +326,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		case r = <-EndCh:
 
 			rCnt[r] -= 1
-			syslog(fmt.Sprintf("EndCh for %s. #concurrent count: %d", r, rCnt[r]))
+			//syslog(fmt.Sprintf("EndCh for %s. #concurrent count: %d", r, rCnt[r]))
 
 			if b, ok := rWait[r]; ok {
 				if b > 0 && rCnt[r] < rLimit[r].c {

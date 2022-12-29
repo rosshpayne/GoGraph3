@@ -843,6 +843,11 @@ func TestQueryPopUpdateError(t *testing.T) {
 	// 	panic(fmt.Errorf("Error starting syslog services: %w", err))
 	// }
 
+	err = slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
 	var tbl tbl.Name = "GoUnitTest"
 	type City struct {
 		Pop int `dynamodbav:"Population"`
@@ -1122,34 +1127,34 @@ func TestQueryPopUpdateWhere23a(t *testing.T) {
 
 }
 
-func TestShortNames(t *testing.T) {
-	var (
-		past []byte
-	)
-	past = append(past, 'a'-1)
-	// aa, ab...az, ba,..bz, ca, .. cz, da,..dz, ea
-	for i := 0; i < 6800; i++ {
+// func TestShortNames(t *testing.T) {
+// 	var (
+// 		past []byte
+// 	)
+// 	past = append(past, 'a'-1)
+// 	// aa, ab...az, ba,..bz, ca, .. cz, da,..dz, ea
+// 	for i := 0; i < 1800; i++ {
 
-		for i := len(past) - 1; i >= 0; i-- {
-			past[i]++
-			if past[i] == 'z'+1 {
-				if i == 0 && past[0] == 'z'+1 {
-					past = append(past, 'a')
-					for ii := i; ii > -1; ii-- {
-						past[ii] = 'a'
-					}
-					break
-				} else {
-					past[i] = 'a'
-				}
-			} else {
-				break
-			}
-		}
-		t.Logf("subnn: %s\n", past)
-	}
+// 		for i := len(past) - 1; i >= 0; i-- {
+// 			past[i]++
+// 			if past[i] == 'z'+1 {
+// 				if i == 0 && past[0] == 'z'+1 {
+// 					past = append(past, 'a')
+// 					for ii := i; ii > -1; ii-- {
+// 						past[ii] = 'a'
+// 					}
+// 					break
+// 				} else {
+// 					past[i] = 'a'
+// 				}
+// 			} else {
+// 				break
+// 			}
+// 		}
+// 		t.Logf("subnn: %s\n", past)
+// 	}
 
-}
+// }
 
 func TestQueryPopUpdateWhere24(t *testing.T) {
 

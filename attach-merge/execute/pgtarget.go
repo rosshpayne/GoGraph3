@@ -19,7 +19,7 @@ import (
 	"github.com/GoGraph/uuid"
 )
 
-// PropagationTargetMerge performs the same function as  PropagationTarget but is designed for the faster loader process
+// PropagationTarget determines if target is embedded array or array in overflow block
 // of attach-merge package and should only be used straight after the loader process.
 // This process batches the reqired DML in memory rather than populate/update the database for each attach operation.
 // Attach-merge introduces a special mutation method for this purpose, MergeMutation, which is used to batch and handle
@@ -65,7 +65,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 		s := batchSortk(id)
 
 		// add new overflow batch to overflow block
-		txh.NewMutation2(tbl.EOP, oUID, s, mut.Insert)
+		txh.AddMutation2(tbl.EOP, oUID, s, mut.Insert)
 
 		// update batch Id in parent UID (parent Node block)
 		//txh.NewMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember2("Id", di.Id, mut.Set)
@@ -111,7 +111,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 		// - do not use crOBatch as this will add multiple mutations to same item which is not allowed in Dynamodb ???
 		syslog(fmt.Sprintf("PropagationTarget: create Overflow Batch - sortk %s index %d", sortK, index))
 		s := batchSortk(1)
-		txh.NewMutation2(tbl.EOP, oUID, s, mut.Insert)
+		txh.AddMutation2(tbl.EOP, oUID, s, mut.Insert)
 
 		return s
 	}

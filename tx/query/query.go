@@ -19,7 +19,9 @@ type NullOrder int8
 type AccessTy byte
 type BoolCd byte
 type Mode byte
+
 type Cfunc func(*sync.WaitGroup, interface{}) // channel consumer func arg to ExecuteByFunc()
+//type Cfunc func() error // channel consumer func arg to ExecuteByFunc()
 
 const (
 	NA string = "NA"
@@ -47,6 +49,7 @@ const (
 	//
 	CHANNEL Mode = iota
 	FUNC
+	STD
 	//
 )
 
@@ -142,7 +145,7 @@ type QueryHandle struct {
 	queryMode Mode
 	//
 	channel interface{} // returned from ExecByChannel() - slice of channels from 1 to #workers
-	f       Cfunc       // channel consumer func : channel type []<fetch type>
+	f       Cfunc       // channel consumer func : channel type []<bind type>
 	// prepare mutation in db's that support separate preparation phase
 	prepare  bool
 	prepStmt interface{}
@@ -151,7 +154,7 @@ type QueryHandle struct {
 	//
 	eodlc int           // eod loop counter - used to determine first EOD execution which drives switch logic
 	abuf  int           // active buffer - index into bufs. See EOD()
-	bufs  []interface{} // buffers : variadic arg of bind variables passed in Select()  : type []*[]unprocBuf
+	bufs  []interface{} // buffers : variadic arg of bind variables passed in Select()  : type []*[]unprocBuf. Used in switchBuf to select active buffer and set to bind.
 	//
 	scan bool // NewScan specified
 	//
@@ -163,12 +166,13 @@ type QueryHandle struct {
 	//
 	accessTy AccessTy // TODO: remove
 	// select() handlers
-	fetch   interface{}   //  Select()
+	bind    interface{}   //  First Select() argument. Database loads into bind. switchBuf will change bind to active buffer (bufs) when multiple binds (bufs)  used in paginate.
 	select_ bool          // indicates Select() has been executed. Catches cases when Select() specified more than once.
-	binds   []interface{} // populated by Split() with address of all struct fields in fetch type, which can included embedded struct. Used in SQL.Scan()
+	binds   []interface{} // populated by Split() with address of all struct fields in bind type, which can included embedded struct. Used in SQL.Scan()
 	// is query restarted. Paginated queries only.
 	restart bool
 	// pagination state
+	paginate    bool
 	pgStateId   uuid.UID
 	pgStateValI interface{}
 	pgStateValS string
@@ -179,6 +183,8 @@ type QueryHandle struct {
 	worker int
 	// AndFilter, OrFilter counts
 	af, of int
+	//
+	hint string
 	// Where, Values method
 	where  string
 	values []interface{}
@@ -220,6 +226,7 @@ func (q *QueryHandle) Clone() *QueryHandle {
 	d.idx = q.idx
 	d.limit = q.limit
 	d.workers = q.workers
+	//d.worker = q.worker
 	d.parallel = q.parallel
 	d.css = q.css
 	//
@@ -237,6 +244,7 @@ func (q *QueryHandle) Clone() *QueryHandle {
 	// is query restarted. Paginated queries only.
 	d.restart = q.restart
 	// pagination state
+	d.paginate = q.paginate
 	d.pgStateId = q.pgStateId
 	d.pgStateValI = q.pgStateValI
 	d.pgStateValS = q.pgStateValS
@@ -244,6 +252,8 @@ func (q *QueryHandle) Clone() *QueryHandle {
 
 	// AndFilter, OrFilter counts
 	d.af, d.of = q.af, q.of
+	//
+	d.hint = q.hint
 	// Where, Values method
 	d.where = q.where
 	d.values = q.values
@@ -284,6 +294,10 @@ func (q *QueryHandle) Channel() Mode {
 
 func (q *QueryHandle) Func() Mode {
 	return FUNC
+}
+
+func (q *QueryHandle) Std() Mode {
+	return STD
 }
 
 func (q *QueryHandle) SetFunc(f Cfunc) {
@@ -370,6 +384,15 @@ func (q *QueryHandle) GetValues() []interface{} {
 // func (q *QueryHandle) Channel() interface{} {
 // 	return q.channel
 // }
+
+func (q *QueryHandle) Hint(h string) *QueryHandle {
+	q.hint = h
+	return q
+}
+
+func (q *QueryHandle) GetHint() string {
+	return q.hint
+}
 
 func (q *QueryHandle) SetChannel(c interface{}) {
 	q.channel = c
@@ -462,21 +485,22 @@ func (q *QueryHandle) Access() AccessTy {
 	return q.accessTy
 }
 
-func (q *QueryHandle) GetFetch() interface{} {
-	return q.fetch
+// GetBind return bind variable slice
+func (q *QueryHandle) GetBind() interface{} {
+	return q.bind
 }
 
-func (q *QueryHandle) Fetch() interface{} {
-	return q.fetch
+func (q *QueryHandle) Bind() interface{} {
+	return q.bind
 }
 
-func (q *QueryHandle) SetFetch(v interface{}) {
-	q.fetch = v
-}
+// func (q *QueryHandle) SetFetch(v interface{}) {
+// 	q.bind = v
+// }
 
-// SetFetch uses reflect to set the internal value of a value.
-func (q *QueryHandle) SetFetchValue(v reflect.Value) {
-	reflect.ValueOf(q.fetch).Elem().Set(v)
+// SetBindValue uses reflect to set the internal value of a bind.
+func (q *QueryHandle) SetBindValue(v reflect.Value) {
+	reflect.ValueOf(q.bind).Elem().Set(v)
 }
 
 // func (q *QueryHandle) GetPkSk() (string, string) {
@@ -526,12 +550,17 @@ func (q *QueryHandle) SetEOD() {
 // should accept int arg for worker id (segmet id)???
 func (q *QueryHandle) EOD() bool {
 
-	if len(q.pgStateId) == 0 {
+	if q.eod {
+		return q.eod
+	}
+
+	if !q.paginate {
 		// query has not configured paginate
 		q.err = fmt.Errorf("Query [tag: %s] has not configured paginate. EOD is therefore not available", q.Tag)
 		elog.Add(q.Tag, q.err)
 		return false
 	}
+
 	// check if multiple select bind vars (bv) used and switch appropriate
 	// to support non-blocking db reads need two bv per table segment (workers). Five workers requires 10 bv (2 per worker)
 	if len(q.bufs) > 0 {
@@ -539,9 +568,20 @@ func (q *QueryHandle) EOD() bool {
 			// ignore first execution of EOD to switch buffer
 			q.switchBuf()
 		}
-		q.eodlc++
+		q.eodlc++ // TODO: stop counter when 1
 	}
 	return q.eod
+}
+
+// switchBuf, assign the query bind variable the database will populate to the active buffer
+func (q *QueryHandle) switchBuf() {
+
+	q.abuf++
+	if q.abuf > len(q.bufs)-1 {
+		q.abuf = 0
+	}
+	q.bind = q.bufs[q.abuf]
+	syslogAlert(fmt.Sprintf("switch Buffer now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
 }
 
 func (q *QueryHandle) FilterSpecified() bool {
@@ -730,7 +770,16 @@ func (q *QueryHandle) Paginate(id uuid.UID, restart bool) *QueryHandle {
 
 	q.restart = restart
 	q.pgStateId = id
+	q.paginate = true
 	return q
+}
+
+func (q *QueryHandle) Paginated() bool {
+	return q.paginate
+}
+
+func (q *QueryHandle) PaginatedQuery() bool {
+	return q.paginate
 }
 
 func (q *QueryHandle) appendFilter(a string, v interface{}, bcd BoolCd, e ...string) {
@@ -832,8 +881,12 @@ func (q *QueryHandle) Sort(so ScanOrder) *QueryHandle {
 }
 
 // OrderBy used for SQL
-func (q *QueryHandle) OrderBy(ob string, s Orderby) *QueryHandle {
-	q.orderBy = orderby{ob, s}
+func (q *QueryHandle) OrderBy(ob string, s ...Orderby) *QueryHandle {
+	ord := Asc
+	if len(s) > 0 {
+		ord = s[0]
+	}
+	q.orderBy = orderby{ob, ord}
 	return q
 }
 
@@ -860,18 +913,11 @@ func (q *QueryHandle) Result() int {
 	return abuf
 }
 
-func (q *QueryHandle) switchBuf() {
-
-	q.abuf++
-	if q.abuf > len(q.bufs)-1 {
-		q.abuf = 0
-	}
-	q.fetch = q.bufs[q.abuf]
-	syslogAlert(fmt.Sprintf("switch Buffer now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
-
+func (q *QueryHandle) Bufs() []interface{} {
+	return q.bufs
 }
 
-func (q *QueryHandle) Bufs() []interface{} {
+func (q *QueryHandle) GetSelect() []interface{} {
 	return q.bufs
 }
 
@@ -941,11 +987,11 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	}
 	//save addressable component of interface argument
 
-	if q.fetch != nil {
-		q.fetch = a
+	if q.bind != nil {
+		q.bind = a
 		return q
 	}
-	q.fetch = a
+	q.bind = a
 
 	st := t.Elem() // what a points to
 
@@ -1096,7 +1142,7 @@ func (q *QueryHandle) HasInstring() bool {
 
 func (q *QueryHandle) IsBindVarASlice() bool {
 
-	v := reflect.ValueOf(q.fetch).Elem() // q.fetch ([]interface{}) is dynamically built with results from query one row at a time.
+	v := reflect.ValueOf(q.bind).Elem() // q.bind ([]interface{}) is dynamically built with results from query one row at a time.
 
 	if v.Kind() == reflect.Slice {
 		return true
@@ -1119,7 +1165,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 
 	q.binds = nil
 
-	v := reflect.ValueOf(q.fetch).Elem() // q.fetch ([]interface{}) is dynamically built with results from query one row at a time.
+	v := reflect.ValueOf(q.bind).Elem() // q.bind ([]interface{}) is dynamically built with results from query one row at a time.
 	vt := v.Type()
 
 	if v.Kind() == reflect.Slice {
@@ -1140,7 +1186,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 				// var aa []*struct
 				// alloc ptr to new struct
 				v = reflect.New(vt.Elem())
-				// append v to q.fetch
+				// append v to q.bind
 				vs.Set(reflect.Append(vs, v))
 				// assign v to newly alloc struct
 				v = v.Elem()
@@ -1153,7 +1199,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 		case reflect.Struct:
 
 			// aa []struct
-			// use New to allocate memory for a new struct that will be appended to the slice pointed to by q.fetch pointer.
+			// use New to allocate memory for a new struct that will be appended to the slice pointed to by q.bind pointer.
 			v = reflect.New(vt).Elem()
 			// following Set is equiv to x:=append(x,a) to allow for allocation of a new underlying x array when current array size will be exceeded.
 			vs.Set(reflect.Append(vs, v))

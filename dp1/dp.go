@@ -13,11 +13,12 @@ import (
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tbl/key"
+	tbl "github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
+	txtbl "github.com/GoGraph/tx/tbl"
 	"github.com/GoGraph/types"
 	"github.com/GoGraph/uuid"
 )
@@ -63,9 +64,9 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return s.String()
 	}
 
-	mergeMutation := func(h *tx.Handle, tbl tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
+	mergeMutation := func(h *tx.Handle, tbl txtbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
 		keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
-		return h.MergeMutation2(tbl, opr, keys)
+		return h.MergeMutation(tbl, opr, keys)
 	}
 
 	var (
@@ -95,7 +96,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		found = true
 		psortk := concat(types.GraphSN(), "|A#G#:", v.C)
 		syslog(fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
-		return
 
 		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
@@ -335,14 +335,28 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return
 	}
 
+	etx := tx.New("IXFlag")
 	if err != nil {
 		elog.Add(logid, err)
-		etx := tx.NewSingle("IXFlag")
+		// update IX to E (errored) TODO: could create a Remove API
 		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
-		err = etx.Execute()
-		if err != nil {
-			elog.Add(logid, err)
-		}
+
+	} else {
+		//Remove index entry of processed item by removing the IX attribute
+		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
+		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
+		// mut.IsKey is now redundant as GoGraph is aware of the table keys now.  TODO: test this works.
+		//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
+		// developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
+		etx.NewUpdate(tbl.Block).Key("PKey", pUID).Key("SortK", "A#A#T").Remove("IX")
+
+		//  no keys specified, must have implemented  GetTableKeys()
+		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
+	}
+	err = etx.Execute()
+	if err != nil {
+		elog.Add(logid, err)
 	}
 
 }

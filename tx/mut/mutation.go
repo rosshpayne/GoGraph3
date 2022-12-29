@@ -248,7 +248,7 @@ type Mutation struct {
 	// sk   string
 	pKey interface{}
 	tbl  tbl.Name
-	keys []key.TableKey // table keys
+	keys []key.TableKey // table keys from database data dictionary
 	opr  StdMut         // update,insert(put), merge, delete
 	//
 	text     string      // alternate representation of a mutation e.g. sql
@@ -256,6 +256,7 @@ type Mutation struct {
 	params   []interface{}
 	err      []error
 	config   []Option
+	hint     string
 }
 
 type Mutations []dbs.Mutation //*Mutation
@@ -365,6 +366,7 @@ func (m *Mutation) GetLiterals() []Member {
 	return k
 }
 
+// AddTableKeys adds  keys on table sourced from database
 func (m *Mutation) AddTableKeys(k []key.TableKey) {
 	m.keys = k
 }
@@ -401,6 +403,15 @@ func (m *Mutation) GetValues() []interface{} {
 
 func (m *Mutation) Text() string {
 	return m.text
+}
+
+func (m *Mutation) Hint(h string) *Mutation {
+	m.hint = h
+	return m
+}
+
+func (m *Mutation) GetHint() string {
+	return m.hint
 }
 
 func (m *Mutation) Key(attr string, v interface{}, e ...string) *Mutation {
@@ -558,7 +569,7 @@ func (m *Mutation) SetMemberValue(attr string, v interface{}) {
 }
 
 func (m *Mutation) addErr(e error) {
-	syslog(e.Error())
+	logAlert(e.Error())
 	m.err = append(m.err, e)
 }
 
@@ -698,7 +709,7 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifier) *
 	//tableKeys are correctly ordered based on table def
 	for i, kk := range im.keys {
 		//
-		if kk.Name == attr {
+		if strings.ToUpper(kk.Name) == strings.ToUpper(attr) {
 			isKey = true
 			if i == 0 {
 				m.keyTy = Partition
@@ -725,7 +736,11 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifier) *
 	case 1:
 		m.Mod = mod[0]
 		fmt.Println("addmember ", attr, m.Mod, len(im.keys), isKey)
+		// check only if table keys supplied
 		if len(im.keys) > 0 {
+			if im.opr == Insert {
+				break
+			}
 			switch m.Mod {
 			case IsKey:
 				if !isKey {
@@ -854,14 +869,21 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifier) *
 // 	return mut
 // }
 
-func NewMutation(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
-
+// func NewMutation(tab tbl.Name, opr StdMut, keys []key.Key) *Mutation {
+func NewMutation(tab tbl.Name, opr StdMut) *Mutation {
 	mut := &Mutation{tbl: tab, opr: opr}
 
-	for _, v := range keys {
-		mut.Key(v.Name, v.Value)
-	}
+	// for _, v := range keys { // moved to SetKeys()
+	// 	mut.Key(v.Name, v.Value)
+	// }
 	return mut
+}
+
+// AddKeys assigns keys passed into  tx.MergeMutation
+func (m *Mutation) AddKeys(keys []key.Key) {
+	for _, v := range keys {
+		m.Key(v.Name, v.Value)
+	}
 }
 
 // FindMutation searches the associated batch of mutations based on argument values.

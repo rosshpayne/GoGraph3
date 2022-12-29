@@ -427,7 +427,7 @@ func TestSQLUpdateStaffWhereOr2(t *testing.T) {
 	//	}
 }
 
-func TestSQLUpdateStaffWhereValuesLimit(t *testing.T) {
+func xfW(t *testing.T) {
 
 	type Person struct {
 		Id       int
@@ -457,7 +457,6 @@ func TestSQLUpdateStaffWhereValuesLimit(t *testing.T) {
 	// }
 	// defer slog.Stop()
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -875,4 +874,57 @@ func TestSQLUpdateStaffFilter5(t *testing.T) {
 
 		t.Logf("Staff %d  %#v\n", i, v)
 	}
+}
+
+func TestSQLPaginate(t *testing.T) {
+
+	type Rec struct {
+		Id int
+		A  []byte
+		B  string
+		C  int
+		D  float64
+	}
+
+	var (
+		recs     []*Rec
+		tbl      = tbl.Name("test$Page")
+		err      error
+		pageSize = 5
+	)
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	a := "B"
+	e := "H"
+	b := "AI"
+	c := 19
+
+	slog.Log("SQLUpdateStaff", "Here...")
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	//select test,logdt,status,nodes from Log$GoTest;
+
+	txg := NewQuery("query-test-label", tbl).DB("mysql-GoGraph").Prepare()
+	id := 0
+	for i := 0; i < 3; i++ {
+		txg.Select(&recs).Key("Id", id, "GT").Where(` A > ? and A < ? or (B >= ? and C < ? )`).Values(a, e, b, c+i).Limit(pageSize).OrderBy("Id")
+		err = txg.Execute()
+
+		if err != nil {
+			t.Errorf("Error: %s", err)
+		}
+		for i, v := range recs {
+			t.Logf("rec %d  %#v\n", i, v)
+		}
+
+		id = recs[len(recs)-1].Id
+		t.Log("\nNext page....")
+		recs = nil
+	}
+
+	if err != nil {
+		t.Logf("Error: %s", err)
+	}
+
 }

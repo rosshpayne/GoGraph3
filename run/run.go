@@ -28,7 +28,7 @@ func New(logid string, program string) (uuid.UID, error) {
 	status := "R"
 	param.RunId = runid.String()
 	rtx := tx.New(param.StatsSystemTag)
-	m := rtx.NewInsert(tbl.Monrun).AddMember("run", runid).AddMember("sortk", "AA", mut.IsKey).AddMember("start", "$CURRENT_TIMESTAMP$").AddMember("program", program).AddMember("status", status)
+	m := rtx.NewInsert(tbl.Monrun).AddMember("run", runid).AddMember("sortk", "AA").AddMember("start", "$CURRENT_TIMESTAMP$").AddMember("program", program).AddMember("status", status)
 	m.AddMember("logfile", param.LogFile)
 	rtx.Add(m)
 	err = rtx.Execute()
