@@ -10,7 +10,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 )
 
-type Errors []*payload
+type Errors_ []*payload
 
 type payload struct {
 	Id  string
@@ -26,7 +26,7 @@ var (
 	ListCh       chan error
 	ClearCh      chan struct{}
 	checkLimit   chan chan bool
-	RequestCh    chan Errors
+	RequestCh    chan Errors_
 	PrintCh      chan chan struct{}
 	ErrCntByIdCh chan string
 	ErrCntRespCh chan int
@@ -41,6 +41,10 @@ func CheckLimit(lc chan bool) bool {
 
 func Add(logid string, err ...error) {
 
+	if len(err) == 0 {
+		panic(fmt.Errorf("elog Add had no second (error) argument"))
+	}
+
 	logid = strings.TrimRight(logid, " :")
 
 	for _, e := range err {
@@ -54,7 +58,7 @@ func PrintErrors() {
 	<-respCh
 }
 
-func RunErrored() bool {
+func AsyncErrors_() bool {
 	respCh := make(chan int)
 
 	ErrCntCh <- respCh
@@ -66,12 +70,20 @@ func RunErrored() bool {
 	return false
 }
 
+func RunErrored() bool {
+	return AsyncErrors_()
+}
+
+func Errors() bool {
+	return AsyncErrors_()
+}
+
 func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 
 	defer wgEnd.Done()
 	var (
 		pld      *payload
-		errors   Errors
+		errors   Errors_
 		errLimit = 5
 		lc       chan bool
 	)
@@ -83,7 +95,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	//	Add = make(chan error)
 	ClearCh = make(chan struct{})
 	checkLimit = make(chan chan bool)
-	RequestCh = make(chan Errors)
+	RequestCh = make(chan Errors_)
 	ErrCntByIdCh = make(chan string)
 	ErrCntRespCh = make(chan int)
 	ErrCntCh = make(chan chan int)
@@ -99,6 +111,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		case pld = <-addCh:
 
 			var errmsg strings.Builder
+			fmt.Println("addCh pld ", pld.Id)
 			errmsg.WriteString(pld.Id)
 			errmsg.WriteString(" ")
 			errmsg.WriteString(pld.Err.Error())

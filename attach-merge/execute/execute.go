@@ -252,7 +252,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 			return
 		}
 
-		slog.LogAlert("AttachEdges: ", fmt.Sprintf(" Joined cUID --> pUID       %s -->  %s  %s Elapsed: %s  DML: %s\n", uuid.UID(e.Cuid).EncodeBase64(), uuid.UID(e.Puid).Base64(), e.Sortk, time.Now().Sub(t0), mt))
+		slog.Log("AttachEdges: ", fmt.Sprintf(" Joined cUID --> pUID       %s -->  %s  %s Elapsed: %s  DML: %s\n", uuid.UID(e.Cuid).EncodeBase64(), uuid.UID(e.Puid).Base64(), e.Sortk, time.Now().Sub(t0), mt))
 		// monitor: increment attachnode counter
 		stat := mon.Stat{Id: mon.AttachNode}
 		mon.StatCh <- stat

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 
 	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
@@ -20,8 +19,7 @@ type AccessTy byte
 type BoolCd byte
 type Mode byte
 
-type Cfunc func(*sync.WaitGroup, interface{}) // channel consumer func arg to ExecuteByFunc()
-//type Cfunc func() error // channel consumer func arg to ExecuteByFunc()
+type Cfunc func(interface{}) error
 
 const (
 	NA string = "NA"
@@ -47,7 +45,8 @@ const (
 	AND
 	OR
 	//
-	CHANNEL Mode = iota
+	_ Mode = iota
+	CHANNEL
 	FUNC
 	STD
 	//
@@ -144,7 +143,7 @@ type QueryHandle struct {
 	//
 	queryMode Mode
 	//
-	channel interface{} // returned from ExecByChannel() - slice of channels from 1 to #workers
+	channel interface{} // handles communication between db query/scan (sender) and consumer (func or client function)
 	f       Cfunc       // channel consumer func : channel type []<bind type>
 	// prepare mutation in db's that support separate preparation phase
 	prepare  bool
@@ -172,15 +171,15 @@ type QueryHandle struct {
 	// is query restarted. Paginated queries only.
 	restart bool
 	// pagination state
-	paginate    bool
-	pgStateId   uuid.UID
-	pgStateValI interface{}
-	pgStateValS string
+	paginate    bool        // is query paginated.
+	pgStateId   uuid.UID    // id in pgState table
+	pgStateValI interface{} // last evaluated key value - used as start key value in next execute of query
+	pgStateValS []string    // FIFO stack of last evaluated key value (string version). Queue size equal to number of bind vars (len(bufs))
 	// other runtime state data
-	eod bool
+	eod bool // end-of-data returned from query execute
 	// varM map[string]interface{}
 	// varS []interface{}
-	worker int
+	worker int // number of workers in scan operations (only)
 	// AndFilter, OrFilter counts
 	af, of int
 	//
@@ -584,6 +583,10 @@ func (q *QueryHandle) switchBuf() {
 	syslogAlert(fmt.Sprintf("switch Buffer now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
 }
 
+func (q *QueryHandle) SavePgState() {
+	syslogAlert(fmt.Sprintf("switch Buffer now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
+}
+
 func (q *QueryHandle) FilterSpecified() bool {
 	for _, v := range q.attr {
 		if v.aty == IsFilter {
@@ -606,20 +609,33 @@ func (q *QueryHandle) PgStateId() uuid.UID {
 	return q.pgStateId
 }
 
-func (q *QueryHandle) SetPgStateValS(val string) {
-	q.pgStateValS = val
+func (q *QueryHandle) AddPgStateValS(val string) {
+	slog.LogAlert("AddPgStateValS", fmt.Sprintf("PgStateValS: %q", val))
+	q.pgStateValS = append(q.pgStateValS, val)
 }
 
-func (q *QueryHandle) PgStateValS() string {
+func (q *QueryHandle) PgStateValS() []string {
 	return q.pgStateValS
 }
 
-func (q *QueryHandle) SetPgStateValI(val interface{}) {
-	q.pgStateValI = val
+func (q *QueryHandle) PopPgStateValS() string {
+	var v string
+	if len(q.pgStateValS) > 0 {
+		v = q.pgStateValS[0]
+		q.pgStateValS = q.pgStateValS[1:]
+	} else {
+		panic(fmt.Errorf("PopPgStateValS: Nothing to pop..."))
+	}
+	slog.LogAlert("PopPgStateValS", fmt.Sprintf("PgStateValS: %q   len: %d", v, len(q.pgStateValS)))
+	return v
 }
 
 func (q *QueryHandle) PgStateValI() interface{} {
 	return q.pgStateValI
+}
+
+func (q *QueryHandle) SetPgStateValI(val interface{}) {
+	q.pgStateValI = val
 }
 
 func (q *QueryHandle) IsRestart() bool {
@@ -966,9 +982,14 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 	}
 
 	if len(a_) == 0 {
-		q.err = fmt.Errorf("requires atleast one bind variable")
+		q.err = fmt.Errorf("requires upto two bind variables")
 		return q
 	}
+	if len(a_) > 2 {
+		q.err = fmt.Errorf("no more than two bind variables are allowed.")
+		return q
+	}
+
 	a := a_[0]
 
 	q.abuf = 0

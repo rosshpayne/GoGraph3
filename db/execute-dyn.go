@@ -1112,13 +1112,13 @@ func executeQuery(ctx context.Context, dh *DynamodbHandle, q *query.QueryHandle,
 		if q.Worker() > 0 {
 			return fmt.Errorf("Query is not a scan, remove Worker() method")
 		}
-		if q.ExecMode() != q.Std() {
+		if q.ExecMode() == q.Func() || q.ExecMode() == q.Channel() {
 			return fmt.Errorf("Query is a single item query, use Execute() method as its much more efficient")
 		}
 		return exGetItem(ctx, dh, q, e, av, proj)
 	case cQuery:
 		if q.Worker() > 0 {
-			return fmt.Errorf("Query is not a scan, remove Worker() method")
+			return fmt.Errorf("Remove Worker() method. Cannot be assigned to non-scan operations.")
 		}
 		return exQuery(ctx, dh, q, e, proj)
 	case cScan:
@@ -1199,17 +1199,21 @@ func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle
 func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, proj *expression.ProjectionBuilder) error {
 	var err error
 
+	bindvars := len(q.Bufs()) // bind vars in Select()
+
 	switch x := q.ExecMode(); x {
 
 	case q.Std():
+
+		if bindvars != 1 {
+			panic(fmt.Errorf("Query is not paginated. Specify one bind variable only in Select()"))
+		}
 
 		return exQueryStd(ctx, client, q, e, proj)
 
 	default:
 
 		// all q.Func() will have been configured with 1 worker if no Worker specified.
-
-		bindvars := len(q.Bufs()) // bind vars in Select()
 
 		if bindvars < 2 {
 			panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
@@ -1221,7 +1225,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 
 		// create channel
 		chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
-		ch := reflect.MakeChan(chT, bindvars-2)
+		ch := reflect.MakeChan(chT, bindvars)            // always unbuffered so we known when receiver has consumed a page/buffer.
 		q.SetChannel(ch.Interface())
 
 		// start worker scan service
@@ -1230,11 +1234,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 		if x == q.Func() {
 			// place func on receive end of channel:  func(a interface{}) error, where a is channel created above
 			// blocking call
-			var wg sync.WaitGroup
-			slog.LogAlert("exQuery", "About to initiate: go.q.GetFunc() ")
-			wg.Add(1)
-			go q.GetFunc()(&wg, ch.Interface())
-			wg.Wait()
+			err = q.GetFunc()(ch.Interface())
 
 		} else {
 
@@ -1248,6 +1248,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Value, client *DynamodbHandle, e *qryEntry, proj *expression.ProjectionBuilder) {
 
 	var err error
+	var first bool = true
 
 	slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
 
@@ -1269,7 +1270,19 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 			break
 		default:
 		}
+
 		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
+
+		// unblocked, receiver has consumed a page, save state (ignore on first loop)
+		if q.Paginated() && !first {
+			err := savePgState(ctx, client, q.PgStateId(), q.PopPgStateValS())
+			if err != nil {
+				elog.Add("savePgState", err)
+				q.SetEOD()
+				continue
+			}
+		}
+		first = false
 	}
 
 	chv.Close()
@@ -1305,10 +1318,11 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
 		slog.LogAlert("exQueryStd", "restart: retrieve pg state...")
-		pg, err := getPgState(ctx, client, q.PgStateId(), q.Worker())
+		pg, err := getPgState(ctx, client, q.PgStateId())
 		if err != nil {
 			return err
 		}
+		q.AddPgStateValS(pg)
 		q.SetPgStateValI(unmarshalPgState(pg))
 		q.SetRestart(false)
 	}
@@ -1518,7 +1532,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 
 		//EOD
 		if q.PaginatedQuery() {
-			q.SetPgStateValS("")
+			q.AddPgStateValS("")
 			q.SetPgStateValI(nil)
 			q.SetEOD()
 			if q.PgStateValI() != nil {
@@ -1533,21 +1547,12 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 
 		// if not a paginated query - throw error
 		if q.PaginatedQuery() {
-			// save old pg state before assigning latest
-			if q.PgStateValI() != nil {
-				err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
-				if err != nil {
-					elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
-					return err
-				}
-			}
-
-			q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
+			q.AddPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 			q.SetPgStateValI(result.LastEvaluatedKey)
 		} else {
-			err := "Query continues need to specifiy Paginate()."
-			elog.Add(err)
-			return errors.New(err)
+			err := errors.New("Query results continue, need to add Paginate() to query specification and use ExecuteByChannel() or ExecuteByFunc().")
+			elog.Add("exQueryStd", err)
+			return err
 		}
 	}
 
@@ -1670,7 +1675,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				var wg sync.WaitGroup
 				wg.Add(wrks)
 				for i := 0; i < wrks; i++ {
-					go q.GetFunc()(&wg, ichs.Index(i).Interface())
+					go exWorker(&wg, q, ichs.Index(i).Interface())
 				}
 				wg.Wait()
 
@@ -1682,12 +1687,19 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		} else {
 
-			elog.Add("Execute", fmt.Errorf("Not supported. Use ExecuteWithChannel() instead"))
+			elog.Add("exScan", fmt.Errorf("Not supported. Use ExecuteWithChannel() instead"))
 		}
 
 	}
 
 	return err
+}
+
+// exWorker, a blocking call to scan worker function
+func exWorker(wg *sync.WaitGroup, q *query.QueryHandle, ch interface{}) {
+	err := q.GetFunc()(ch)
+	elog.Add("workerFunc", err)
+	wg.Done()
 }
 
 // scanChannelSrv is a goroutine (service) created for each worker (on a table partition/segment)
@@ -1720,48 +1732,23 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 			break
 		default:
 		}
-
+		// block when all buffers are used - wait for receiver to read one
 		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
+
+		// unblocked, receiver has consumed a page, save state (ignore on first loop)
+		if q.Paginated() && len(q.PgStateValS()) > 0 {
+			err := savePgState(ctx, client, q.PgStateId(), q.PopPgStateValS(), q.Worker())
+			if err != nil {
+				elog.Add("savePgState", err)
+				q.SetEOD()
+				continue
+			}
+		}
 	}
 
 	chv.Close()
 
 }
-
-// func scanFuncSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, client *DynamodbHandle, proj *expression.ProjectionBuilder) {
-
-// 	var err error
-
-// 	slog.LogAlert("scanFuncSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
-
-// 	for !q.EOD() {
-
-// 		switch scan {
-// 		case nonParallel:
-// 			err = exNonParallelScan(ctx, client, q, proj)
-// 		case parallel:
-// 			err = exScanWorker(ctx, client, q, proj)
-// 		}
-
-// 		if err != nil {
-// 			if errors.Is(query.NoDataFoundErr, err) {
-// 				continue
-// 			}
-// 			elog.Add("scanFuncSrv", err)
-// 		}
-// 		// check for ctrl-C
-// 		select {
-// 		case <-ctx.Done():
-// 			break
-// 		default:
-// 		}
-
-// 		// blocking func call
-// 		err = q.GetFunc()()
-
-// 	}
-
-// }
 
 // exNonParallelScan - non-parallel scan. Scan of table or index.
 func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
@@ -1776,6 +1763,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 		if err != nil {
 			return err
 		}
+		q.AddPgStateValS(pg)
 		q.SetPgStateValI(unmarshalPgState(pg))
 		q.SetRestart(false)
 
@@ -1885,23 +1873,13 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
 		slog.LogAlert("exNonParallelScan", " LastEvaluatedKey is nil, setEOD()")
-		q.SetPgStateValS("")
+		q.AddPgStateValS("")
 		q.SetPgStateValI(nil)
 		q.SetEOD()
 
 	} else {
 
-		// save old pg state before assigning latest
-		if q.PgStateValI() != nil {
-			slog.LogAlert("exNonParallelScan", " save pg state...")
-			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS())
-			if err != nil {
-				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
-				return err
-			}
-		}
-
-		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
+		q.AddPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 		q.SetPgStateValI(result.LastEvaluatedKey)
 	}
 
@@ -1965,6 +1943,7 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 		if err != nil {
 			return err
 		}
+		q.AddPgStateValS(pg)
 		q.SetPgStateValI(unmarshalPgState(pg))
 		q.SetRestart(false)
 	}
@@ -2064,23 +2043,13 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	// save LastEvaluatedKey
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
-		q.SetPgStateValS("")
+		q.AddPgStateValS("")
 		q.SetPgStateValI(nil)
 		q.SetEOD()
 
 	} else {
 
-		// save old pg state before assigning latest
-		if q.PgStateValI() != nil {
-			slog.Log("exQuery", " save pg state...")
-			err := savePgState(ctx, client, q.PgStateId(), q.PgStateValS(), q.Worker())
-			if err != nil {
-				elog.Add(fmt.Sprintf("Error in savePgState: %s", err))
-				return err
-			}
-		}
-
-		q.SetPgStateValS(stringifyPgState(result.LastEvaluatedKey))
+		q.AddPgStateValS(stringifyPgState(result.LastEvaluatedKey))
 		q.SetPgStateValI(result.LastEvaluatedKey)
 	}
 
@@ -2152,31 +2121,11 @@ func stringifyPgState(d map[string]types.AttributeValue) string {
 	return lek.String()
 }
 
-func txPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val string, worker ...int) error {
-
-	var state string = "LastEvaluatedKey"
-
-	syslog(fmt.Sprintf("savePgState id: %s ", id.Base64()))
-
-	m := mut.NewInsert("pgState")
-	if len(worker) > 0 {
-		state += "-w" + strconv.Itoa(worker[0])
-	}
-	m.AddMember("Id", id, mut.IsKey).AddMember("Name", state, mut.IsKey).AddMember("Value", val).AddMember("Updated", "$CURRENT_TIMESTAMP$")
-
-	// add single mutation to mulitple-mutation configuration usually performed within a tx.
-	mt := mut.Mutations([]dbs.Mutation{m})
-	bs := []*mut.Mutations{&mt}
-
-	return execTransaction(ctx, client.Client, bs, "internal-state", db.StdAPI)
-
-}
-
 func savePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val string, worker ...int) error {
 
 	var state string = "LastEvaluatedKey"
 
-	syslog(fmt.Sprintf("savePgState id: %s ", id.Base64()))
+	slog.LogAlert("savePgState", fmt.Sprintf("savePgState id: %s val: %q  worker: %d", id.Base64(), val, worker))
 
 	m := mut.NewInsert("pgState")
 	if len(worker) > 0 {
@@ -2220,7 +2169,7 @@ func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker
 		state += "-w" + strconv.Itoa(worker[0])
 	}
 
-	syslog(fmt.Sprintf("getPgState id: %s ", id.String()))
+	slog.LogAlert("getPgState", fmt.Sprintf("getPgState id: %s ", id.String()))
 
 	type Val struct {
 		Value string
@@ -2232,8 +2181,10 @@ func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker
 
 	err := executeQuery(ctx, client, q)
 	if err != nil {
+		slog.LogAlert("getPgState", fmt.Sprintf("getPgState errored: %s ", err.Error()))
 		return "", err
 	}
+	slog.LogAlert("getPgState", fmt.Sprintf("getPgState value: %s ", val.Value))
 	return val.Value, nil
 
 }

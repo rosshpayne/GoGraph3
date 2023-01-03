@@ -65,7 +65,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 		s := batchSortk(id)
 
 		// add new overflow batch to overflow block
-		txh.AddMutation2(tbl.EOP, oUID, s, mut.Insert)
+		txh.NewMutation2(tbl.EOP, oUID, s, mut.Insert)
 
 		// update batch Id in parent UID (parent Node block)
 		//txh.NewMutation(tbl.EOP, pUID, sortK, mut.Update).AddMember2("Id", di.Id, mut.Set)
@@ -111,7 +111,7 @@ func propagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, c
 		// - do not use crOBatch as this will add multiple mutations to same item which is not allowed in Dynamodb ???
 		syslog(fmt.Sprintf("PropagationTarget: create Overflow Batch - sortk %s index %d", sortK, index))
 		s := batchSortk(1)
-		txh.AddMutation2(tbl.EOP, oUID, s, mut.Insert)
+		txh.NewMutation2(tbl.EOP, oUID, s, mut.Insert)
 
 		return s
 	}

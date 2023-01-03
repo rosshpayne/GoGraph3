@@ -340,8 +340,9 @@ func (h *TxHandle) MakeBatch() error {
 // 	return m
 // }
 
-// AddMutation2 renamed from NewMutation2. Accessed only in attach-mrege/execute/propagationTarget.go
-func (h *TxHandle) AddMutation2(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
+// NewMutation2 creates.a new mutation of type Insert, Update etc that is passed in.
+// used  in attach-mrege/execute/propagationTarget.go
+func (h *TxHandle) NewMutation2(table tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Mutation {
 	keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
 	// validate merge keys with actual table keys
 	tableKeys, err := h.dbHdl.GetTableKeys(h.ctx, string(table))
@@ -1172,9 +1173,9 @@ func (h *QHandle) ExecuteByChannel() (interface{}, error) {
 
 	switch h.ExecMode() {
 	case h.Func():
-		return nil, fmt.Errorf("ExecuteByFunc() already executed cannot ExecuteByChannel()")
+		return nil, fmt.Errorf("Cannot ExecuteByChannel() after ExecuteByFunc()")
 	case h.Std():
-		return nil, fmt.Errorf("Execute() already executed cannot ExecuteByChannel()")
+		return nil, fmt.Errorf("Cannot ExecuteByChannel() after Execute()")
 	}
 
 	h.SetExecMode(h.Channel())
@@ -1192,9 +1193,9 @@ func (h *QHandle) ExecuteByFunc(f query.Cfunc) error {
 
 	switch h.ExecMode() {
 	case h.Channel():
-		return fmt.Errorf("ExecuteByChannel() already executed cannot ExecuteByFunc()")
+		return fmt.Errorf("Cannot ExecuteByFunc() after  ExecuteByChannel()")
 	case h.Std():
-		return fmt.Errorf("Execute() already executed cannot ExecuteByFunc()")
+		return fmt.Errorf("Cannot ExecuteByFunc() after Execute()")
 	}
 
 	h.SetExecMode(h.Func())

@@ -511,44 +511,44 @@ func addRun(ctx context.Context, stateid, runid uuid.UID) error {
 // DP passes a propagate function to index query using key with node type
 func DP(ctx context.Context, ty string, id uuid.UID, restart bool, has11 map[string]struct{}) error {
 
-	var (
-		//	buf        UnprocBuf
-		buf1, buf2 []UnprocRec
-	//	bufs       []interface{}
-	)
+	var buf1, buf2 []UnprocRec
 
-	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v, grmgr-parallel: ", id.Base64(), restart, *parallel))
+	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v, grmgr-parallel: %d ", id.Base64(), restart, *parallel))
 
-	bufs := [2][]UnprocRec{buf1, buf2}
+	//bufs := [2][]UnprocRec{buf1, buf2}
 
-	ptx := tx.NewQueryContext(ctx, "dpScan", tbl.Block, "TyIX")
-	ptx.Select(&bufs[0], &bufs[1]).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X")
+	ptx := tx.NewQueryContext(ctx, "dpQuery", tbl.Block, "TyIX")
+	//	ptx.Select(&bufs[0], &bufs[1]).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X")
+	ptx.Select(&buf1, &buf2).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X")
 	ptx.Limit(param.DPbatch).Paginate(id, restart) // not a scan so no worker possible
 
 	limiterDP := grmgr.New("dp", *parallel)
 
 	// blocking call...retrun when operation is completed
-	err := ptx.ExecuteByFunc(func(wg *sync.WaitGroup, ch_ interface{}) {
-
-		defer wg.Done()
+	err := ptx.ExecuteByFunc(func(ch_ interface{}) error {
 
 		ch := ch_.(chan []UnprocRec)
 
 		for qs := range ch {
-			// page of UnprocRec{}
+			// page (aka buffer) of UnprocRec{}
 			for _, u := range qs {
 
 				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
 
+				// limit concurrent Propagates...
 				limiterDP.Ask()
 				<-limiterDP.RespCh()
 
 				go Propagate(ctx, limiterDP, u.PKey, ty, has11)
-			}
-		}
-	})
 
-	slog.LogAlert("ExecuteByFunc", fmt.Sprintf("Exiting DP... "))
+				if elog.Errors() {
+					return fmt.Errorf("Error in an asynchronous routine - see system log")
+				}
+			}
+
+		}
+		return nil
+	})
 
 	return err
 

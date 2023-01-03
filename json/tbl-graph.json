@@ -32,10 +32,6 @@
         {
             "AttributeName": "E", 
             "AttributeType": "S"
-        },
-        {
-            "AttributeName": "IX", 
-            "AttributeType": "S"
         }
     ], 
     "KeySchema": [
@@ -105,7 +101,7 @@
                     "KeyType": "HASH"
                 },
                 {
-                    "AttributeName": "IX", 
+                    "AttributeName": "PKey", 
                     "KeyType": "RANGE"
                 }
             ], 

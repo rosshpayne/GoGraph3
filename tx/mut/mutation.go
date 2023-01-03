@@ -735,7 +735,6 @@ func (im *Mutation) AddMember(attr string, value interface{}, mod ...Modifier) *
 
 	case 1:
 		m.Mod = mod[0]
-		fmt.Println("addmember ", attr, m.Mod, len(im.keys), isKey)
 		// check only if table keys supplied
 		if len(im.keys) > 0 {
 			if im.opr == Insert {

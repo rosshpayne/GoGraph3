@@ -176,8 +176,14 @@ func TestQueryTypesPtrSlice(t *testing.T) {
 	}
 
 	t.Logf("Query count %d\n", len(sk))
+	if len(sk) != 1 {
+		t.Errorf(`Expected 1 got %d`, len(sk))
+	}
 	for _, v := range sk {
 		t.Logf("Query count %#v\n", v.SortK)
+		if v.SortK != "m" {
+			t.Errorf(`Expected "m" got %q`, v.SortK)
+		}
 	}
 
 }
@@ -203,11 +209,11 @@ func TestQueryTypesStruct(t *testing.T) {
 
 	if err != nil {
 		if err.Error() != "Bind variable in Select() must be slice for a query database operation" {
-			t.Errorf("Error: %s", err)
+			t.Errorf("Expected error: %s", err)
 		}
 	} else {
 
-		t.Logf("Query struct  %s\n", sk.SortK)
+		t.Logf("Expected error: Bind variable in Select() must be slice for a query database operation")
 	}
 
 }
@@ -237,10 +243,79 @@ func TestQueryTypesPtrSliceSQL(t *testing.T) {
 		t.Logf("Error: %s", err)
 	}
 
+	if len(sk) != 28 {
+		t.Errorf("Expected len(sk) to be 28, got %d", len(sk))
+	}
+
 	t.Logf("Query count %d\n", len(sk))
 	for _, v := range sk {
 		t.Log(v.Test, v.Logdt, v.Status, v.Nodes)
 	}
+}
+
+func TestQueryThreeBindvars(t *testing.T) {
+
+	type Testlog struct {
+		Test   string
+		Logdt  string
+		Status string
+		Nodes  int
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	//select test,logdt,status,nodes from Log$GoTest;
+	var (
+		sk  []Testlog
+		sk2 []Testlog
+		sk3 []Testlog
+	)
+
+	txg := NewQuery("LogTest", "Log$GoTest").DB("mysql-GoGraph")
+	txg.Select(&sk, &sk2, &sk3).Key("test", "TestMoviex")
+	err := txg.Execute()
+
+	if err != nil {
+		if err.Error() != `no more than two bind variables are allowed.` {
+			t.Errorf(`Expected Error: "no more than two bind variables are allowed." got %q`, err)
+		}
+	} else {
+		t.Errorf(`Expected Error: "no more than two bind variables are allowed."`)
+	}
+
+}
+
+func TestQueryZeroBindvars(t *testing.T) {
+
+	type Testlog struct {
+		Test   string
+		Logdt  string
+		Status string
+		Nodes  int
+	}
+
+	// context is passed to all underlying mysql methods which will release db resources on main termination
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	//select test,logdt,status,nodes from Log$GoTest;
+
+	txg := NewQuery("LogTest", "Log$GoTest").DB("mysql-GoGraph")
+	txg.Select().Key("test", "TestMoviex")
+	err := txg.Execute()
+
+	if err != nil {
+		if err.Error() != `requires upto two bind variables` {
+			t.Errorf(`Expected Error: "requires upto two bind variables" got %q`, err)
+		}
+	} else {
+		t.Errorf(`Expected Error: "requires upto two bind variables"`)
+	}
+
 }
 
 func TestQueryTypesPtrSlicePtrSQL(t *testing.T) {

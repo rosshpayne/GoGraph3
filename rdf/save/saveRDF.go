@@ -45,7 +45,7 @@ func syslog(s string) {
 	slog.Log(logid, s)
 }
 
-//TODO: this routine requires an error log service. Code below  writes errors to the screen in some cases but not most. Errors are returned but calling routines is a goroutine so thqt get lost.
+// TODO: this routine requires an error log service. Code below  writes errors to the screen in some cases but not most. Errors are returned but calling routines is a goroutine so thqt get lost.
 // sname : node id, short name  aka blank-node-id
 // uuid  : user supplied node id (uuid.UIDb64 converted to uuid.UID)
 // nv_ : node attribute data
@@ -205,7 +205,7 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 				if param.DB == param.Dynamodb {
 					n = mut.NewInsert(tbl.Block).AddMember("PKey", UID)
 					// all type attributes should have vlaue  <graphName>|<ShortTypeName>
-					n.AddMember("Graph", types.GraphSN()).AddMember("Ty", types.GraphSN()+"|"+s).AddMember("IsNode", "Y").AddMember("IX", "X")
+					n.AddMember("Graph", types.GraphSN()).AddMember("Ty", types.GraphSN()+"|"+s).AddMember("IsNode", "Y") //AddMember("IX", "X") removed 4/1/22
 					// database specific code - TODO: try and eliminate this
 					n.AddMember("SortK", "A#A#T")
 					// hasGSI: Ty,IX
