@@ -220,12 +220,12 @@ func (n *NodeCache) SetStale() {
 
 // ====================================== init =====================================================
 
-// func init() {
-// 	// cache of nodes
-// 	graphC = GraphCache{cache: make(map[uuid.UIDb64]*entry)}
-// 	//
-// 	//FacetC = make(map[types.TyAttr][]FacetTy)
-// }
+//	func init() {
+//		// cache of nodes
+//		graphC = GraphCache{cache: make(map[uuid.UIDb64]*entry)}
+//		//
+//		//FacetC = make(map[types.TyAttr][]FacetTy)
+//	}
 func init() {
 	NewCache()
 }
@@ -398,7 +398,6 @@ func (nc *NodeCache) UnmarshalCache(nv ds.ClientNV) error {
 // ty_ should be the type of the item resulting from the root query which will necessarily match the type from the item cache.
 // If ty_ is not passed then the type is sourced from the cache, at the potental cost of a read, so its better to pass the type if known
 // which should always be the case.
-//
 func (nc *NodeCache) UnmarshalNodeCache(nv ds.ClientNV, ty_ ...string) error {
 	if nc == nil {
 		return ErrCacheEmpty
@@ -1110,7 +1109,7 @@ func (d *NodeCache) UnmarshalMap(i interface{}) error {
 
 }
 
-//GetType returns the node's long type name
+// GetType returns the node's long type name
 func (d *NodeCache) GetType() (tyN string, ok bool) {
 	var di *blk.DataItem
 
@@ -1129,7 +1128,7 @@ func (d *NodeCache) GetType() (tyN string, ok bool) {
 					return "", false
 				}
 
-				slog.LogAlert("GetType", fmt.Sprintf("Found in cache: [%t]  LongNm: [%s]", di.GetTy(), ty))
+				slog.Log("GetType", fmt.Sprintf("Found in cache: [%t]  LongNm: [%s]", di.GetTy(), ty))
 				return ty, true
 			}
 
@@ -1196,7 +1195,9 @@ func NewMutation(tab tbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *mut.Muta
 //
 // Overflow blocks are used to distribute what may be a large amount of data across a number of
 // UUIDs (i.e. overflow blocks), which can then be processed in parallel if necessary without causing serious contention.
-//  This routine will create the database transaction DML meta data to create the Overflow blocks (UIDs) and Overflow Batch items.
+//
+//	This routine will create the database transaction DML meta data to create the Overflow blocks (UIDs) and Overflow Batch items.
+//
 // Note: Adding Child UID mutation is not processed here to keep isolated from txh transaction. See AttachNode()
 func (pn *NodeCache) PropagationTarget(txh *tx.Handle, cpy *blk.ChPayload, sortK string, pUID, cUID uuid.UID) {
 	var (

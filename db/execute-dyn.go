@@ -5,6 +5,7 @@ package db
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	//"net/http"
@@ -1213,6 +1214,7 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 
 	default:
 
+		// must be a paginated query as ExecteByChannel() or ExecuteByFunc() is used.
 		// all q.Func() will have been configured with 1 worker if no Worker specified.
 
 		if bindvars < 2 {
@@ -1221,11 +1223,11 @@ func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, 
 
 		// create wrks number of bind vars (double buf)
 		// q.bind == *[]rec
-		r := reflect.ValueOf(q.Bind()).Elem()
+		r := reflect.ValueOf(q.GetBind()).Elem()
 
 		// create channel
 		chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
-		ch := reflect.MakeChan(chT, bindvars)            // always unbuffered so we known when receiver has consumed a page/buffer.
+		ch := reflect.MakeChan(chT, 0)                   // always unbuffered so we known when receiver has consumed a page/buffer.
 		q.SetChannel(ch.Interface())
 
 		// start worker scan service
@@ -1254,6 +1256,10 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 
 	for !q.EOD() {
 
+		if q.IsRestart() {
+			first = false
+		}
+
 		err = exQueryStd(ctx, client, q, e, proj)
 
 		if err != nil {
@@ -1271,7 +1277,7 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 		default:
 		}
 
-		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
+		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.GetWriteBufIdx()).Elem().Elem())
 
 		// unblocked, receiver has consumed a page, save state (ignore on first loop)
 		if q.Paginated() && !first {
@@ -1516,6 +1522,13 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	}
 	if lk := q.PgStateValI(); lk != nil {
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
+		if q.GetTag() == "dpQuery" {
+			slog.LogAlert("exQueryStd", fmt.Sprintf("Set ExclusiveStartKey to %#v", stringifyPgState(input.ExclusiveStartKey)))
+		}
+	} else {
+		if q.GetTag() == "dpQuery" {
+			slog.LogAlert("exQueryStd", fmt.Sprintf("Set ExclusiveStartKey is NIL"))
+		}
 	}
 
 	input.ScanIndexForward = aws.Bool(q.IsScanForwardSet())
@@ -1526,11 +1539,13 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	if err != nil {
 		return newDBSysErr("exQueryStd", "Query", err)
 	}
-
+	if q.GetTag() == "dpQuery" {
+		slog.LogAlert("exQueryStd", fmt.Sprintf("Executed QUERY.............[%d] %s", result.Count, q.GetTag()))
+	}
 	// pagination cont....
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
-		//EOD
+		// LastEvaluatedKey is definitive EOD - not zero rows returned in paginated query as a filter can eliminate all items.
 		if q.PaginatedQuery() {
 			q.AddPgStateValS("")
 			q.SetPgStateValI(nil)
@@ -1548,6 +1563,9 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 		// if not a paginated query - throw error
 		if q.PaginatedQuery() {
 			q.AddPgStateValS(stringifyPgState(result.LastEvaluatedKey))
+			if q.GetTag() == "dpQuery" {
+				slog.LogAlert("exQueryStd", fmt.Sprintf("LastEvaluatedKey : %#v", stringifyPgState(result.LastEvaluatedKey)))
+			}
 			q.SetPgStateValI(result.LastEvaluatedKey)
 		} else {
 			err := errors.New("Query results continue, need to add Paginate() to query specification and use ExecuteByChannel() or ExecuteByFunc().")
@@ -1563,8 +1581,13 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	}
 	//
 	if result.Count == 0 {
-		q.SetEOD()
-		return query.NoDataFoundErr
+		if !q.PaginatedQuery() {
+			q.SetEOD()
+			return query.NoDataFoundErr
+		} else {
+			stats.SaveQueryStat(stats.Query, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
+			return nil
+		}
 	}
 
 	err = attributevalue.UnmarshalListOfMaps(result.Items, q.GetBind())
@@ -1594,7 +1617,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
 			}
 			// ExecuteByChannel()
-			r := reflect.ValueOf(q.Bind()).Elem() // *[]unprocBuf
+			r := reflect.ValueOf(q.GetBind()).Elem() // *[]unprocBuf
 			// fmt.Println("q.Bind() : ", reflect.ValueOf(q.Bind()).Elem().Kind())
 			// fmt.Println("Make chan of ", r.Type().Kind(), reflect.TypeOf(r.Interface()).Kind())
 			ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), bindvars-2)
@@ -1624,7 +1647,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 			// create wrks number of bind vars (double buf)
 			// q.bind == *[]rec
-			r := reflect.ValueOf(q.Bind()).Elem()
+			r := reflect.ValueOf(q.GetBind()).Elem()
 
 			// create slice of channels
 			chT := reflect.ChanOf(reflect.BothDir, r.Type()) // Type
@@ -1639,7 +1662,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				cq := q.Clone()
 
 				//ch := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, r.Type()), 1)
-				ch := reflect.MakeChan(chT, bindvars-2)
+				ch := reflect.MakeChan(chT, 0)
 				cq.SetChannel(ch.Interface())
 				ichs = reflect.Append(ichs, ch)
 				// set bind vars
@@ -1733,7 +1756,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 		default:
 		}
 		// block when all buffers are used - wait for receiver to read one
-		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.Result()).Elem().Elem())
+		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.GetWriteBufIdx()).Elem().Elem())
 
 		// unblocked, receiver has consumed a page, save state (ignore on first loop)
 		if q.Paginated() && len(q.PgStateValS()) > 0 {
@@ -2104,7 +2127,11 @@ func stringifyPgState(d map[string]types.AttributeValue) string {
 		if b, ok := v.(*types.AttributeValueMemberB); ok {
 			lek.WriteString("{ B : ")
 			lek.WriteByte('"')
-			lek.WriteString(uuid.UID(b.Value).String())
+			if len(b.Value) == 16 {
+				lek.WriteString(uuid.UID(b.Value).String())
+			} else {
+				lek.WriteString(base64.StdEncoding.EncodeToString(b.Value))
+			}
 			lek.WriteString(`" }`)
 		} else {
 			switch x := v.(type) {
@@ -2196,6 +2223,7 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 	var (
 		attr string
 		tok  string
+		err  error
 	)
 
 	mm := make(map[string]types.AttributeValue)
@@ -2238,8 +2266,17 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 			av = &types.AttributeValueMemberS{Value: s}
 		case "B":
 			//
+			var uid []byte
+
 			u := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes
-			uid := uuid.FromString(u)
+			if len(u) == 36 {
+				uid = uuid.FromString(u)
+			} else {
+				uid, err = base64.StdEncoding.DecodeString(u)
+				if err != nil {
+					panic(err)
+				}
+			}
 			av = &types.AttributeValueMemberB{Value: []byte(uid)}
 		case "N":
 			n := s.TokenText()[1 : len(s.TokenText())-1] // remove surrounding double quotes

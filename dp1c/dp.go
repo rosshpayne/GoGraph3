@@ -94,7 +94,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, pUID uuid.UID, ty stri
 		}
 		found = true
 		psortk := concat(types.GraphSN(), "|A#G#:", v.C)
-		slog.LogAlert("Propagate", fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
+		//	slog.LogAlert("Propagate", fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 
 		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {

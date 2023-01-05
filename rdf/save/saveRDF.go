@@ -205,7 +205,7 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 				if param.DB == param.Dynamodb {
 					n = mut.NewInsert(tbl.Block).AddMember("PKey", UID)
 					// all type attributes should have vlaue  <graphName>|<ShortTypeName>
-					n.AddMember("Graph", types.GraphSN()).AddMember("Ty", types.GraphSN()+"|"+s).AddMember("IsNode", "Y") //AddMember("IX", "X") removed 4/1/22
+					n.AddMember("Graph", types.GraphSN()).AddMember("Ty", types.GraphSN()+"|"+s).AddMember("IsNode", "Y").AddMember("IX", UID[:8]) //AddMember("IX", "X") removed 4/1/22
 					// database specific code - TODO: try and eliminate this
 					n.AddMember("SortK", "A#A#T")
 					// hasGSI: Ty,IX

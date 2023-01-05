@@ -335,28 +335,17 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		return
 	}
 
-	etx := tx.New("IXFlag")
+	// nolonger remove IX attribute for each successful propagation. Good for non-indempotent mutations and recovery size of 0.
+	// Use Limit to determine recovery work/size. Indempotent mutation so safe.
 	if err != nil {
 		elog.Add(logid, err)
 		// update IX to E (errored) TODO: could create a Remove API
+		etx := tx.New("IXFlag")
 		etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", "E")
-
-	} else {
-		//Remove index entry of processed item by removing the IX attribute
-		//In Spanner set attribute to NULL, in DYnamodb  delete attribute from item ie. update expression: REMOVE "<attr>"
-		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-		// mut.IsKey is now redundant as GoGraph is aware of the table keys now.  TODO: test this works.
-		//  developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
-		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID, mut.IsKey).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-		// developer specified keys - not checked if GetTableKeys() not implemented, otherwise checked
-		etx.NewUpdate(tbl.Block).Key("PKey", pUID).Key("SortK", "A#A#T").Remove("IX")
-
-		//  no keys specified, must have implemented  GetTableKeys()
-		//etx.NewUpdate(tbl.Block).AddMember("PKey", pUID).AddMember("SortK", "A#A#T", mut.IsKey).AddMember("IX", nil, mut.Remove)
-	}
-	err = etx.Execute()
-	if err != nil {
-		elog.Add(logid, err)
+		err = etx.Execute()
+		if err != nil {
+			elog.Add(logid, err)
+		}
 	}
 
 }

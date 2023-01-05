@@ -513,13 +513,10 @@ func DP(ctx context.Context, ty string, id uuid.UID, restart bool, has11 map[str
 
 	var buf1, buf2 []UnprocRec
 
-	slog.Log(logid, fmt.Sprintf("started. paginate id: %s. restart: %v, grmgr-parallel: %d ", id.Base64(), restart, *parallel))
-
-	//bufs := [2][]UnprocRec{buf1, buf2}
+	slog.LogAlert(logid, fmt.Sprintf("started. paginate id: %s. restart: %v, grmgr-parallel: %d ", id.Base64(), restart, *parallel))
 
 	ptx := tx.NewQueryContext(ctx, "dpQuery", tbl.Block, "TyIX")
-	//	ptx.Select(&bufs[0], &bufs[1]).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X")
-	ptx.Select(&buf1, &buf2).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X")
+	ptx.Select(&buf1, &buf2).Key("Ty", types.GraphSN()+"|"+ty)
 	ptx.Limit(param.DPbatch).Paginate(id, restart) // not a scan so no worker possible
 
 	limiterDP := grmgr.New("dp", *parallel)
@@ -530,22 +527,23 @@ func DP(ctx context.Context, ty string, id uuid.UID, restart bool, has11 map[str
 		ch := ch_.(chan []UnprocRec)
 
 		for qs := range ch {
+			slog.LogAlert(logid, fmt.Sprintf("Buf received on channel size: %d", len(qs)))
 			// page (aka buffer) of UnprocRec{}
-			for _, u := range qs {
+			for i, u := range qs {
 
+				slog.LogAlert(logid, fmt.Sprintf("loop idx: %d   %s ", i, u.PKey.Base64()))
 				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
 
-				// limit concurrent Propagates...
+				//limit concurrent Propagates...
 				limiterDP.Ask()
 				<-limiterDP.RespCh()
 
 				go Propagate(ctx, limiterDP, u.PKey, ty, has11)
 
 				if elog.Errors() {
-					return fmt.Errorf("Error in an asynchronous routine - see system log")
+					panic(fmt.Errorf("Error in an asynchronous routine - see system log"))
 				}
 			}
-
 		}
 		return nil
 	})
