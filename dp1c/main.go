@@ -521,17 +521,17 @@ func DP(ctx context.Context, ty string, id uuid.UID, restart bool, has11 map[str
 
 	limiterDP := grmgr.New("dp", *parallel)
 
-	// blocking call...retrun when operation is completed
+	// blocking call..
 	err := ptx.ExecuteByFunc(func(ch_ interface{}) error {
 
 		ch := ch_.(chan []UnprocRec)
 
 		for qs := range ch {
-			slog.LogAlert(logid, fmt.Sprintf("Buf received on channel size: %d", len(qs)))
-			// page (aka buffer) of UnprocRec{}
-			for i, u := range qs {
 
-				slog.LogAlert(logid, fmt.Sprintf("loop idx: %d   %s ", i, u.PKey.Base64()))
+			// page (aka buffer) of UnprocRec{}
+			for _, u := range qs {
+
+				//slog.LogAlert(logid, fmt.Sprintf("loop idx: %d   %s ", i, u.PKey.Base64()))
 				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
 
 				//limit concurrent Propagates...

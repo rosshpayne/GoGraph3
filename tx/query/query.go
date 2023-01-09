@@ -152,8 +152,8 @@ type QueryHandle struct {
 	//first bool ??
 	//
 	//eodlc int           // eod loop counter - used to determine first EOD execution which drives switch logic
-	abuf int           // active buffer - index into bufs. See EOD()
-	bufs []interface{} // buffers : variadic arg of bind variables passed in Select()  : type []*[]unprocBuf. Used in switchBuf to select active buffer and set to bind.
+	wbuf  int           // index of current write buffer in binds . See EOD()
+	binds []interface{} // variadic arg of bind variables passed in Select()  : type []*[]unprocBuf. Used in switchBuf to select active buffer and set to bind.
 	//
 	scan bool // NewScan specified
 	//
@@ -166,15 +166,15 @@ type QueryHandle struct {
 	accessTy AccessTy // TODO: remove
 	// select() handlers
 	//	bind    interface{}   //  First Select() argument. Database loads into bind. switchBuf will change bind to active buffer (bufs) when multiple binds (bufs)  used in paginate.
-	select_ bool          // indicates Select() has been executed. Catches cases when Select() specified more than once.
-	binds   []interface{} // populated by Split() with address of all struct fields in bind type, which can included embedded struct. Used in SQL.Scan()
+	select_   bool          // indicates Select() has been executed. Catches cases when Select() specified more than once.
+	spltbinds []interface{} // populated by Split() with address of all struct fields in bind type, which can included embedded struct. Used in SQL.Scan()
 	// is query restarted. Paginated queries only.
 	restart bool
 	// pagination state
 	paginate    bool        // is query paginated.
 	pgStateId   uuid.UID    // id in pgState table
 	pgStateValI interface{} // last evaluated key value - used as start key value in next execute of query
-	pgStateValS []string    // FIFO stack of last evaluated key value (string version). Queue size equal to number of bind vars (len(bufs))
+	pgStateValS []string    // FIFO stack of last evaluated key value (string version). Queue size equal to number of bind vars (len(binds))
 	// other runtime state data
 	eod bool // end-of-data returned from query execute
 	// varM map[string]interface{}
@@ -490,7 +490,7 @@ func (q *QueryHandle) Access() AccessTy {
 
 // SetBindValue uses reflect to set the internal value of a bind.
 func (q *QueryHandle) SetBindValue(v reflect.Value) {
-	syslogAlert(fmt.Sprintf("SetBindVar: Active Write Buffer idx: %d", q.abuf))
+	syslogAlert(fmt.Sprintf("SetBindVar: Active Write Buffer idx: %d", q.wbuf))
 	reflect.ValueOf(q.GetBind()).Elem().Set(v)
 }
 
@@ -541,7 +541,6 @@ func (q *QueryHandle) SetEOD() {
 // should accept int arg for worker id (segmet id)???
 func (q *QueryHandle) EOD() bool {
 
-	syslogAlert(fmt.Sprintf("Enter EOD ===============  Active Write Buffer idx : %d ", q.abuf))
 	if q.eod {
 		return q.eod
 	}
@@ -555,55 +554,35 @@ func (q *QueryHandle) EOD() bool {
 
 	// check if multiple select bind vars (bv) used and switch appropriate
 	// to support non-blocking db reads need two bv per table segment (workers). Five workers requires 10 bv (2 per worker)
-	if len(q.bufs) > 0 {
+	if len(q.binds) > 0 {
 		q.switchBuf()
-		// if q.eodlc > 0 {
-		// 	// ignore first execution of EOD to switch buffer
-		// 	q.switchBuf()
-		// }
-		//	q.eodlc++ // TODO: stop counter when 1
 	}
-	syslogAlert(fmt.Sprintf("EOD Active Write Buffer idx : %d ", q.abuf))
+	syslogAlert(fmt.Sprintf("EOD Write Buffer idx : %d ", q.wbuf))
 	return q.eod
 }
 
 // switchBuf, assign the query bind variable the database will populate to the active buffer
 func (q *QueryHandle) switchBuf() {
 
-	q.abuf++
-	if q.abuf > len(q.bufs)-1 {
-		q.abuf = 0
+	q.wbuf++
+	if q.wbuf > len(q.binds)-1 {
+		q.wbuf = 0
 	}
-	// new write bind var
-	//	q.bind = q.bufs[q.abuf]
-	syslogAlert(fmt.Sprintf("switch Active Write Buffer idx now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
+	syslog(fmt.Sprintf("switch Write Buffer idx now : %d of %d", q.wbuf, len(q.binds))) //reflect.ValueOf(q.wbuf).Elem().Len()))
 }
 
-// func (q *QueryHandle) OutBuf() int {
-// 	return q.Result()
-// }
-
 func (q *QueryHandle) GetWriteBufIdx() int {
-	abuf := q.abuf
-	syslogAlert(fmt.Sprintf("GetWriteBufIdx: Active Write Buffer idx: %d", abuf))
-	return abuf
+	syslog(fmt.Sprintf("GetWriteBufIdx: Active Write Buffer idx: %d", q.wbuf))
+	return q.wbuf
+}
+
+func (q *QueryHandle) GetWriteBuf() interface{} {
+	return q.GetBind()
 }
 
 // GetBind return bind variable slice
 func (q *QueryHandle) GetBind() interface{} {
-	if q.GetTag() == "dpQuery" {
-		syslogAlert(fmt.Sprintf("GetBind: Active Write Buffer idx: %d", q.abuf))
-	}
-	return q.bufs[q.abuf]
-	//return q.bind
-}
-
-// func (q *QueryHandle) Bind() interface{} {
-// 	return q.bind
-// }
-
-func (q *QueryHandle) SavePgState() {
-	syslogAlert(fmt.Sprintf("switch Buffer now : %d of %d", q.abuf, len(q.bufs))) //reflect.ValueOf(q.abuf).Elem().Len()))
+	return q.binds[q.wbuf]
 }
 
 func (q *QueryHandle) FilterSpecified() bool {
@@ -938,12 +917,12 @@ func (q *QueryHandle) OrderByString() string {
 
 }
 
-func (q *QueryHandle) Bufs() []interface{} {
-	return q.bufs
+func (q *QueryHandle) Binds() []interface{} {
+	return q.binds
 }
 
 func (q *QueryHandle) GetSelect() []interface{} {
-	return q.bufs
+	return q.binds
 }
 
 // Select allocates attributes in []Attr{}. Used to write attributes in Select clause of SQL statement.
@@ -1001,27 +980,14 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 
 	a := a_[0]
 
-	q.abuf = 0
-	q.bufs = a_ // []interface{} []*[]unprocBuf
-
-	// commented out to allow Select in for loop - usually would be Prepared() but may incorrectly not be.
-	// if q.select_ && !q.prepare {
-	// 	panic(fmt.Errorf("Select already specified. Only one Select permitted."))
-	// }
-
-	// q.select_ = true
+	q.wbuf = 0
+	q.binds = a_ // []interface{} []*[]unprocBuf
 
 	t := reflect.TypeOf(a)
 	if t.Kind() != reflect.Ptr {
 		panic(fmt.Errorf("Fetch argument: expected a pointer, got a %s", t.Kind()))
 	}
 	//save addressable component of interface argument
-
-	// if q.bind != nil {
-	// 	q.bind = a
-	// 	return q
-	// }
-	// q.bind = a
 
 	st := t.Elem() // what a points to
 
@@ -1067,14 +1033,16 @@ func (q *QueryHandle) Select(a_ ...interface{}) *QueryHandle {
 
 			} else {
 
-				if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
-					if name = f.Tag.Get("mdb"); len(name) == 0 {
-						name = f.Name
+				name = f.Name
+				if tgname := f.Tag.Get("dynamodbav"); len(tgname) == 0 {
+					if tgname = f.Tag.Get("mdb"); len(tgname) > 0 {
+						name = tgname
 					}
 				} else {
-					i := strings.Index(name, ",")
+					name = tgname
+					i := strings.Index(tgname, ",")
 					if i > 0 {
-						name = name[:i]
+						name = tgname[:i]
 					}
 				}
 
@@ -1131,14 +1099,15 @@ func (q *QueryHandle) rSelect(nm string, st reflect.Type) {
 			if f.Anonymous {
 				name = nm
 			}
-			if name = f.Tag.Get("dynamodbav"); len(name) == 0 {
-				if name = f.Tag.Get("mdb"); len(name) == 0 {
-					name = f.Name
+			if tgname := f.Tag.Get("dynamodbav"); len(tgname) == 0 {
+				if tgname = f.Tag.Get("mdb"); len(tgname) > 0 {
+					name = tgname
 				}
 			} else {
-				i := strings.Index(name, ",")
+				name = tgname
+				i := strings.Index(tgname, ",")
 				if i > 0 {
-					name = name[:i]
+					name = tgname[:i]
 				}
 			}
 
@@ -1193,7 +1162,7 @@ func (q *QueryHandle) IsBindVarASlice() bool {
 
 func (q *QueryHandle) Split() []interface{} { // )
 
-	q.binds = nil
+	q.spltbinds = nil
 
 	v := reflect.ValueOf(q.GetBind()).Elem() // q.bind ([]interface{}) is dynamically built with results from query one row at a time.
 	vt := v.Type()
@@ -1244,7 +1213,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 	}
 	var name string
 
-	// for new slice entry, struct or scalar, add pointer value to q.binds which will be passed to db.Scan()
+	// for new slice entry, struct or scalar, add pointer value to q.spltbinds which will be passed to db.Scan()
 	if v.Kind() == reflect.Struct {
 
 		for i := 0; i < v.NumField(); i++ {
@@ -1271,7 +1240,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 				}
 				if name != "-" {
 					// scalar types
-					q.binds = append(q.binds, e.Addr().Interface())
+					q.spltbinds = append(q.spltbinds, e.Addr().Interface())
 				}
 			}
 		}
@@ -1279,7 +1248,7 @@ func (q *QueryHandle) Split() []interface{} { // )
 		panic(fmt.Errorf("Split(). Expected struct got %s", v.Kind()))
 	}
 
-	return q.binds
+	return q.spltbinds
 }
 
 func (q *QueryHandle) rBinds(v reflect.Value) { // v is a reflect.struct
@@ -1311,11 +1280,11 @@ func (q *QueryHandle) rBinds(v reflect.Value) { // v is a reflect.struct
 			}
 			if name != "-" {
 				// scalar types
-				q.binds = append(q.binds, e.Addr().Interface())
+				q.spltbinds = append(q.spltbinds, e.Addr().Interface())
 			}
 
 			// scalar types
-			//	q.binds = append(q.binds, e.Addr().Interface())
+			//	q.spltbinds = append(q.spltbinds, e.Addr().Interface())
 		}
 	}
 

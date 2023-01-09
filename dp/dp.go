@@ -355,7 +355,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 	}
 	err = etx.Execute()
 	if err != nil {
-		elog.Add(logid, err)
+		panic(err)
 	}
 
 }

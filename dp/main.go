@@ -545,7 +545,8 @@ func queryForDP(ctx context.Context, ty string) ([]Unprocessed, error) {
 	if err != nil {
 		return nil, err
 	}
-	stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch)
+	// stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Key("IX", "X").Limit(param.DPbatch)
+	stx.Select(&rec).Key("Ty", types.GraphSN()+"|"+ty).Limit(param.DPbatch)
 
 	err = stx.Execute()
 	if err != nil {
@@ -554,6 +555,7 @@ func queryForDP(ctx context.Context, ty string) ([]Unprocessed, error) {
 		}
 		return nil, err
 	}
+	slog.LogAlert(logid, fmt.Sprintf("queryForDP for type %q finished recs: %d", len(rec)))
 
 	return rec, nil
 

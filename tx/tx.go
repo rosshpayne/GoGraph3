@@ -293,15 +293,15 @@ func (h *TxHandle) Add(m ...dbs.Mutation) {
 // add a new mutation to active batch. Note the client will/can modify the mutation (i.e. AddMember) after it is added.
 // if number of mutations in active batch exceeds permitted maximum it will be added it to batch-of-batches and
 // a new active batch created
-func (h *TxHandle) add(m dbs.Mutation) {
+func (h *TxHandle) add(m dbs.Mutation) error {
 	if m == nil {
-		return
+		return nil
 	}
 
 	// check if m already added
 	for _, v := range *h.m {
 		if v == m {
-			return
+			return nil
 		}
 	}
 
@@ -311,6 +311,8 @@ func (h *TxHandle) add(m dbs.Mutation) {
 	}
 	// add mutation to active batch
 	*h.m = append(*h.m, m)
+
+	return nil
 }
 
 // add active batch to batch-of-batches and create new active batch.
@@ -376,13 +378,14 @@ func (h *TxHandle) NewMutation2(table tbl.Name, pk uuid.UID, sk string, opr mut.
 
 func (h *TxHandle) NewInsert(table tbl.Name) *mut.Mutation {
 	m := mut.NewInsert(table)
+	//TODO: h should be checked - it might be a standard API but this mutation might be a second mutation so its not allowed.
 	h.add(m)
 	return m
 }
 
 func (h *TxHandle) NewUpdate(table tbl.Name) *mut.Mutation {
 	if h.api == db.BatchAPI {
-		panic(fmt.Errorf("Cannot have an Update operation included in a batch"))
+		panic(fmt.Errorf("Cannot have an Update operation included in a batch")) // TODO: this is for dynamodb only - make  generic
 	}
 
 	// validate merge keys with actual table keys
@@ -394,6 +397,7 @@ func (h *TxHandle) NewUpdate(table tbl.Name) *mut.Mutation {
 
 	m := mut.NewUpdate(table)
 	m.AddTableKeys(tableKeys)
+	//TODO: h should be checked - it might be a standard API but this mutation might be a second mutation so its not allowed.
 	h.add(m)
 	return m
 }

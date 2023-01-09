@@ -592,6 +592,14 @@ func (im *Mutation) GetConfig(s string) interface{} {
 // 	return im.AddMember(attr, value, IsFilter)
 // }
 
+func (im *Mutation) Increment(attr string) *Mutation {
+	return im.AddMember(attr, 1, Add)
+}
+
+func (im *Mutation) Decrement(attr string) *Mutation {
+	return im.AddMember(attr, 1, Subtract)
+}
+
 func (im *Mutation) Add(attr string, value interface{}) *Mutation {
 	return im.AddMember(attr, value, Add)
 }

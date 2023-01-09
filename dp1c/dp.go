@@ -63,11 +63,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, pUID uuid.UID, ty stri
 		return s.String()
 	}
 
-	mergeMutation := func(h *tx.Handle, tbl txtbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
-		keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
-		return h.MergeMutation(tbl, opr, keys)
-	}
-
 	var (
 		nc          *cache.NodeCache
 		err         error
@@ -94,12 +89,12 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, pUID uuid.UID, ty stri
 		}
 		found = true
 		psortk := concat(types.GraphSN(), "|A#G#:", v.C)
-		//	slog.LogAlert("Propagate", fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
+		slog.LogAlert("Propagate", fmt.Sprintf("Propagate top loop : pUID %s ,   Ty %s ,  psortk %s ", pUID.Base64(), v.Ty, psortk))
 
 		nc, err = gc.FetchForUpdateContext(ctx, pUID, psortk)
 		if err != nil {
 			if errors.Is(err, NoDataFound) {
-				syslog(fmt.Sprintf("No items found for pUID:  %s, sortk: %s ", pUID.Base64(), psortk))
+				slog.LogAlert("Propagate", fmt.Sprintf("No items found for pUID:  %s, sortk: %s ", pUID.Base64(), psortk))
 				err = nil
 				break
 			}
@@ -156,11 +151,15 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, pUID uuid.UID, ty stri
 						defer wgd.Done()
 
 						var (
-							nd [][]byte
-							//	xf []int64
-							//xf     []int64
+							nd     [][]byte
 							mutdml mut.StdMut
 						)
+
+						mergeMutation := func(h *tx.Handle, tbl txtbl.Name, pk uuid.UID, sk string, opr mut.StdMut) *tx.Handle {
+							keys := []key.Key{key.Key{"PKey", pk}, key.Key{"SortK", sk}}
+							return h.MergeMutation(tbl, opr, keys)
+						}
+
 						if blimiter != nil {
 							defer blimiter.EndR()
 						}
@@ -346,5 +345,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, pUID uuid.UID, ty stri
 			elog.Add(logid, err)
 		}
 	}
+	//slog.LogAlert("Propagate", fmt.Sprintf("Propagate Finished : pUID %s  ", pUID.Base64()))
 
 }

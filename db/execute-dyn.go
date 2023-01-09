@@ -1200,7 +1200,7 @@ func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle
 func exQuery(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, e *qryEntry, proj *expression.ProjectionBuilder) error {
 	var err error
 
-	bindvars := len(q.Bufs()) // bind vars in Select()
+	bindvars := len(q.Binds()) // bind vars in Select()
 
 	switch x := q.ExecMode(); x {
 
@@ -1263,8 +1263,8 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 		err = exQueryStd(ctx, client, q, e, proj)
 
 		if err != nil {
-			if errors.Is(query.NoDataFoundErr, err) {
-				slog.LogAlert("scanChannelSrv", "NO data found..")
+			if errors.Is(query.NoDataFoundErr, err) { //TODO: this is never returned for paginated query???
+				slog.LogAlert("queryChannelSrv", "no data found..")
 				q.SetEOD()
 				continue
 			}
@@ -1277,7 +1277,8 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 		default:
 		}
 
-		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.GetWriteBufIdx()).Elem().Elem())
+		//chv.Send(reflect.ValueOf(q.Binds()).Index(q.GetWriteBufIdx()).Elem().Elem())
+		chv.Send(reflect.ValueOf(q.GetBind()).Elem())
 
 		// unblocked, receiver has consumed a page, save state (ignore on first loop)
 		if q.Paginated() && !first {
@@ -1522,13 +1523,6 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	}
 	if lk := q.PgStateValI(); lk != nil {
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
-		if q.GetTag() == "dpQuery" {
-			slog.LogAlert("exQueryStd", fmt.Sprintf("Set ExclusiveStartKey to %#v", stringifyPgState(input.ExclusiveStartKey)))
-		}
-	} else {
-		if q.GetTag() == "dpQuery" {
-			slog.LogAlert("exQueryStd", fmt.Sprintf("Set ExclusiveStartKey is NIL"))
-		}
 	}
 
 	input.ScanIndexForward = aws.Bool(q.IsScanForwardSet())
@@ -1538,9 +1532,6 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	t1 := time.Now()
 	if err != nil {
 		return newDBSysErr("exQueryStd", "Query", err)
-	}
-	if q.GetTag() == "dpQuery" {
-		slog.LogAlert("exQueryStd", fmt.Sprintf("Executed QUERY.............[%d] %s", result.Count, q.GetTag()))
 	}
 	// pagination cont....
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
@@ -1563,14 +1554,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 		// if not a paginated query - throw error
 		if q.PaginatedQuery() {
 			q.AddPgStateValS(stringifyPgState(result.LastEvaluatedKey))
-			if q.GetTag() == "dpQuery" {
-				slog.LogAlert("exQueryStd", fmt.Sprintf("LastEvaluatedKey : %#v", stringifyPgState(result.LastEvaluatedKey)))
-			}
 			q.SetPgStateValI(result.LastEvaluatedKey)
-		} else {
-			err := errors.New("Query results continue, need to add Paginate() to query specification and use ExecuteByChannel() or ExecuteByFunc().")
-			elog.Add("exQueryStd", err)
-			return err
 		}
 	}
 
@@ -1582,9 +1566,19 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	//
 	if result.Count == 0 {
 		if !q.PaginatedQuery() {
-			q.SetEOD()
+			//	q.SetEOD() // TODO: could this be removed, as non-paginated query does not use EOD, it uses query.NoDataFoundErr
 			return query.NoDataFoundErr
 		} else {
+			// TODO: should bind be emptied??
+			if reflect.ValueOf(q.GetBind()).Elem().Kind() == reflect.Slice {
+
+				if reflect.ValueOf(q.GetBind()).Elem().Len() > 0 {
+					slog.LogAlert("exStdQuery", fmt.Sprintf(" Zero out bind variable "))
+					t := reflect.ValueOf(q.GetBind()).Type().Elem()
+					n := reflect.New(t) // *slice to empty slice
+					q.SetBindValue(n.Elem())
+				}
+			}
 			stats.SaveQueryStat(stats.Query, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
 			return nil
 		}
@@ -1612,7 +1606,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		case q.Channel():
 
-			bindvars := len(q.Bufs()) // GetSelect()
+			bindvars := len(q.Binds()) // GetSelect()
 			if bindvars < 2 {
 				panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
 			}
@@ -1639,7 +1633,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		if x := q.ExecMode(); x == q.Channel() || x == q.Func() {
 
-			bindvars := len(q.Bufs()) // GetSelect()
+			bindvars := len(q.Binds()) // GetSelect()
 
 			if bindvars < 2 {
 				panic(fmt.Errorf("Using channels, please specifiy multiple bind variables in Select()"))
@@ -1671,12 +1665,12 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 				// assign existing or create new bind vars and assign to cloned QueryHandle
 				if i == 0 {
 					// use bind vars from query method Select() for first clone
-					cq.Select(q.Bufs()...)
+					cq.Select(q.Binds()...)
 
 				} else {
 
 					// create bind vars using New() for all other clones except first - based on
-					for n := 0; n < len(q.Bufs()); n++ {
+					for n := 0; n < len(q.Binds()); n++ {
 						bv := reflect.New(r.Type())
 						sel = append(sel, bv.Interface())
 					}
@@ -1721,7 +1715,9 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 // exWorker, a blocking call to scan worker function
 func exWorker(wg *sync.WaitGroup, q *query.QueryHandle, ch interface{}) {
 	err := q.GetFunc()(ch)
-	elog.Add("workerFunc", err)
+	if err != nil {
+		elog.Add("workerFunc", err)
+	}
 	wg.Done()
 }
 
@@ -1756,7 +1752,8 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 		default:
 		}
 		// block when all buffers are used - wait for receiver to read one
-		chv.Send(reflect.ValueOf(q.Bufs()).Index(q.GetWriteBufIdx()).Elem().Elem())
+		//chv.Send(reflect.ValueOf(q.Binds()).Index(q.GetWriteBufIdx()).Elem().Elem())
+		chv.Send(reflect.ValueOf(q.GetBind()).Elem())
 
 		// unblocked, receiver has consumed a page, save state (ignore on first loop)
 		if q.Paginated() && len(q.PgStateValS()) > 0 {
@@ -2082,7 +2079,7 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 		slog.LogAlert(logid, fmt.Sprintf("exScanWorker:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
 	}
 	//
-	slog.LogAlert(logid, fmt.Sprintf("thread: %d  esult.Count  %d", q.Worker(), result.Count))
+	slog.LogAlert(logid, fmt.Sprintf("thread: %d  result.Count  %d", q.Worker(), result.Count))
 
 	//save query statistics
 	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
@@ -2109,7 +2106,7 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 			panic(fmt.Errorf("Expected a slice for scan output variable."))
 		}
 
-		slog.Log(logid, "return NoDataFoundErr")
+		slog.LogAlert(logid, "return NoDataFoundErr")
 
 		return query.NoDataFoundErr
 	}
