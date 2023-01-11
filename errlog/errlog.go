@@ -111,14 +111,13 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		case pld = <-addCh:
 
 			var errmsg strings.Builder
-			fmt.Println("addCh pld ", pld.Id)
 			errmsg.WriteString(pld.Id)
-			errmsg.WriteString(" ")
+			errmsg.WriteString(" Error: ")
 			errmsg.WriteString(pld.Err.Error())
 			// log to log file or CW logs
-			slog.LogErr(pld.Id, errmsg.String())
+			slog.LogAlert(pld.Id, errmsg.String())
 
-			errCnt[pld.Id] += 1
+			errCnt[pld.Id]++
 			errors = append(errors, pld)
 
 			if len(errors) > errLimit {

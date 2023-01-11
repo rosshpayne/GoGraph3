@@ -34,8 +34,8 @@ type DynamodbHandle struct {
 }
 
 var (
-	awsConfig aws.Config
-	dbSrv     *dynamodb.Client
+	//awsConfig aws.Config // TODO: caused race condition
+	dbSrv *dynamodb.Client
 	// mu        sync.Mutex
 	// // zero entry in dbRegistry is for default db.
 	// // non-default db's use Register()
@@ -87,7 +87,7 @@ func Register(ctx_ context.Context, label string, ctxEnd *sync.WaitGroup, opt ..
 		}
 	}
 
-	dbSrv, awsConfig = newService(ctx_, opt...)
+	dbSrv, awsConfig := newService(ctx_, opt...)
 	if dbSrv == nil {
 		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}

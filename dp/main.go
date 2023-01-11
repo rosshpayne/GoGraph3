@@ -380,7 +380,7 @@ func main() {
 				// check for errors based on logid
 			}
 			wgc.Wait()
-			time.Sleep(500 * time.Millisecond) // wait for all dynamodb distributed writes to complete. Required for index scan (no fullconsistency)
+			time.Sleep(500 * time.Millisecond) // wait for all dynamodb distributed writes to complete for remove IX in dp. Required for index scan (no fullconsistency)
 		}
 		if err != nil {
 			if !errors.Is(query.NoDataFoundErr, err) {

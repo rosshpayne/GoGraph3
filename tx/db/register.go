@@ -32,7 +32,7 @@ type DBHandle interface {
 	CloseTx([]*mut.Mutations)
 	Ctx() context.Context
 	String() string
-	RetryOp(err error) bool
+	RetryOp(error) bool
 	//
 	GetTableKeys(context.Context, string) ([]key.TableKey, error)
 }

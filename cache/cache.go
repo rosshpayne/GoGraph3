@@ -897,7 +897,7 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 		// read overflow blocks concurrently
 		go func() {
 
-			//  parent node's UID-PRED attribute
+			//  parent node's UID-PRED attribute // will block wait for channel 0 to be read in dp for loop :for py := range rch { // channel
 			bChs[0] <- BatchPy{Bid: 0, Puid: nc.Uid, DI: v}
 			close(bChs[0])
 
@@ -911,7 +911,6 @@ func (nc *NodeCache) MakeChannels(sortk string) (BatchChs, error) {
 
 				// go routine for each overflow block. Responsible for sending uid in each overflow batch to the associated channel
 				go nc.gc.FetchOvflBatch(ouid, i+1, id[i], &wg, sortk, bChs[i+1])
-
 			}
 			wg.Wait()
 			//

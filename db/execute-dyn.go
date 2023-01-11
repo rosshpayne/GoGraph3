@@ -99,8 +99,6 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 		err error
 	)
 
-	awsConfig = cfg
-
 	switch api {
 
 	case db.TransactionAPI:
@@ -118,7 +116,7 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 
 	case db.BatchAPI:
 
-		err = execBatch(ctx, client, bs, tag)
+		err = execBatch(ctx, client, bs, tag, cfg)
 
 	// case ScanAPI: - NA, scan should be a derived quantity based on query methods employeed e.g. lack of Key() method would force a scan
 
@@ -126,7 +124,7 @@ func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, 
 
 	case db.OptimAPI:
 
-		err = execOptim(ctx, client, bs, tag)
+		err = execOptim(ctx, client, bs, tag, cfg)
 
 	}
 	return err
@@ -185,10 +183,15 @@ func errorAction(err error) []action { // (bool, action string) {
 	return []action{fail}
 }
 
-func retryOp(err error) bool {
+func retryOp(err error, cf ...aws.Config) bool {
+
+	var cfg aws.Config
+	if len(cf) > 0 {
+		cfg = cf[0]
+	}
 
 	//  github.com/aws/aws-sdk-go-v2/aws/Retryer
-	retryer := awsConfig.Retryer
+	retryer := cfg.Retryer
 
 	alertlog(fmt.Sprintf("RetryOp: [%T] %s", err, err))
 
@@ -206,7 +209,7 @@ func retryOp(err error) bool {
 		}
 		alertlog(fmt.Sprintf("RetryOp: max attempts: %d", retryer().MaxAttempts()))
 	} else {
-		alertlog(fmt.Sprintf("RetryOp: no Retryer defined. aws.Config max attempts: %d", awsConfig.RetryMaxAttempts))
+		alertlog(fmt.Sprintf("RetryOp: no Retryer defined. aws.Config max attempts: %d", cfg.RetryMaxAttempts))
 	}
 
 	for _, action := range errorAction(err) {
@@ -490,7 +493,7 @@ func crTx(m *mut.Mutation, opr mut.StdMut) ([]types.TransactWriteItem, error) {
 // execBatchMutations: note, all other mutations in this transaction must be either bulkinsert or bulkdelete.
 // cannot mix with non-bulk requests ie. insert/update/delete/merge/remove
 // NB: batch cannot make use of condition expressions
-func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mutations, tag string) error {
+func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mutations, tag string, cfg aws.Config) error {
 
 	//type BatchWriteItemInput struct {
 	//             RequestItems map[string][]*types.WriteRequest
@@ -581,7 +584,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 			if err != nil {
 
-				if !retryOp(err) {
+				if !retryOp(err, cfg) {
 					return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation or max retries exceeded", NonRetryOperErr, err)
 				}
 				// wait 1 seconds before processing again...
@@ -623,7 +626,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 				if err != nil {
 					retryErr = err
-					if !retryOp(err) {
+					if !retryOp(err, cfg) {
 						return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation.", NonRetryOperErr, err)
 					}
 					// wait n seconds before reprocessing...
@@ -657,7 +660,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 	return nil
 }
 
-func execBatch(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string) error {
+func execBatch(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, cfg aws.Config) error {
 	// merge transaction
 
 	// generate statements for each mutation
@@ -670,7 +673,7 @@ func execBatch(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations
 			}
 		}
 
-		err := execBatchMutations(ctx, client, *b, tag)
+		err := execBatchMutations(ctx, client, *b, tag, cfg)
 		if err != nil {
 			return err
 		}
@@ -679,7 +682,7 @@ func execBatch(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations
 }
 
 // execOptim - bit silly. Runs Inserts as a batch and updates as transactional. Maybe illogical. Worth more of a think.
-func execOptim(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string) error {
+func execOptim(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, cfg aws.Config) error {
 
 	var (
 		in  mut.Mutations
@@ -706,7 +709,7 @@ func execOptim(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations
 
 	// processes inserts
 	for _, v := range ins {
-		err := execBatchMutations(ctx, client, v, tag)
+		err := execBatchMutations(ctx, client, v, tag, cfg)
 		if err != nil {
 			return err
 		}
@@ -1731,6 +1734,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 
 	for !q.EOD() {
 
+		fmt.Println("BD EOD...")
 		switch scan {
 		case nonParallel:
 			err = exNonParallelScan(ctx, client, q, proj)
@@ -1752,8 +1756,10 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 		default:
 		}
 		// block when all buffers are used - wait for receiver to read one
-		//chv.Send(reflect.ValueOf(q.Binds()).Index(q.GetWriteBufIdx()).Elem().Elem())
-		chv.Send(reflect.ValueOf(q.GetBind()).Elem())
+		bidx := q.GetWriteBufIdx()
+		fmt.Println("bidx: ", bidx)
+		chv.Send(reflect.ValueOf(q.Binds()).Index(bidx).Elem().Elem())
+		//chv.Send(reflect.ValueOf(q.GetBind()).Elem())
 
 		// unblocked, receiver has consumed a page, save state (ignore on first loop)
 		if q.Paginated() && len(q.PgStateValS()) > 0 {

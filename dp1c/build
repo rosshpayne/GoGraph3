@@ -1,2 +1,0 @@
-go build   -tags "dynamodb filelog"
-mv dp1c dp

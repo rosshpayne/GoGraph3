@@ -525,28 +525,33 @@ func DP(ctx context.Context, ty string, id uuid.UID, restart bool, has11 map[str
 	err := ptx.ExecuteByFunc(func(ch_ interface{}) error {
 
 		ch := ch_.(chan []UnprocRec)
+		var dpWg sync.WaitGroup
 
 		for qs := range ch {
-
 			// page (aka buffer) of UnprocRec{}
+
 			for _, u := range qs {
 
-				//slog.LogAlert(logid, fmt.Sprintf("loop idx: %d   %s ", i, u.PKey.Base64()))
 				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
-
+				dpWg.Add(1)
 				//limit concurrent Propagates...
 				limiterDP.Ask()
 				<-limiterDP.RespCh()
 
-				go Propagate(ctx, limiterDP, u.PKey, ty, has11)
+				go Propagate(ctx, limiterDP, &dpWg, u.PKey, ty, has11)
 
 				if elog.Errors() {
 					panic(fmt.Errorf("Error in an asynchronous routine - see system log"))
 				}
 			}
+			// wait for dp ascyn routines to finish
+			// alternate solution, extend to three bind variables. Requires MethodDB change.
+			dpWg.Wait()
 		}
 		return nil
 	})
+
+	limiterDP.Unregister()
 
 	return err
 

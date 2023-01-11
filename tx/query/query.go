@@ -541,23 +541,25 @@ func (q *QueryHandle) SetEOD() {
 // should accept int arg for worker id (segmet id)???
 func (q *QueryHandle) EOD() bool {
 
+	syslogAlert(fmt.Sprintf("BUFFER EOD At start: Active Write Buffer idx: %d  len(binds) %d", q.wbuf, len(q.binds)))
 	if q.eod {
 		return q.eod
 	}
 
 	if !q.paginate {
 		// query has not configured paginate
-		q.err = fmt.Errorf("Query [tag: %s] has not configured paginate. EOD is therefore not available", q.Tag)
+		q.err = fmt.Errorf("BUFFER Query [tag: %s] has not configured paginate. EOD is therefore not available", q.Tag)
 		elog.Add(q.Tag, q.err)
 		return false
 	}
 
 	// check if multiple select bind vars (bv) used and switch appropriate
 	// to support non-blocking db reads need two bv per table segment (workers). Five workers requires 10 bv (2 per worker)
-	if len(q.binds) > 0 {
+	if len(q.binds) > 1 {
 		q.switchBuf()
 	}
-	syslogAlert(fmt.Sprintf("EOD Write Buffer idx : %d ", q.wbuf))
+	syslogAlert(fmt.Sprintf("BUFFER EOD Write Buffer idx : %d ", q.wbuf))
+	fmt.Printf("BUFFER EOD Write Buffer idx : %d \n", q.wbuf)
 	return q.eod
 }
 
@@ -568,20 +570,27 @@ func (q *QueryHandle) switchBuf() {
 	if q.wbuf > len(q.binds)-1 {
 		q.wbuf = 0
 	}
-	syslog(fmt.Sprintf("switch Write Buffer idx now : %d of %d", q.wbuf, len(q.binds))) //reflect.ValueOf(q.wbuf).Elem().Len()))
+	syslogAlert(fmt.Sprintf("BUFFER switch Write Buffer idx now : %d of %d", q.wbuf, len(q.binds))) //reflect.ValueOf(q.wbuf).Elem().Len()))
+	fmt.Printf("BUFFER switch Write Buffer idx now : %d \n", q.wbuf)
 }
 
 func (q *QueryHandle) GetWriteBufIdx() int {
-	syslog(fmt.Sprintf("GetWriteBufIdx: Active Write Buffer idx: %d", q.wbuf))
+	fmt.Printf("BUFFER GetWriteBufIdx: Active Write Buffer idx: %d\n", q.wbuf)
+	syslogAlert(fmt.Sprintf("BUFFER GetWriteBufIdx: Active Write Buffer idx: %d", q.wbuf))
 	return q.wbuf
 }
 
 func (q *QueryHandle) GetWriteBuf() interface{} {
+	fmt.Printf("BUFFER GetWriteBuf() Active Write Buffer idx: %d of %d\n", q.wbuf, len(q.binds))
 	return q.GetBind()
 }
 
 // GetBind return bind variable slice
 func (q *QueryHandle) GetBind() interface{} {
+	if len(q.binds) > 1 {
+		syslogAlert(fmt.Sprintf("BUFFER GetBind() Active Write Buffer idx: %d of %d\n", q.wbuf, len(q.binds)))
+		fmt.Printf("BUFFER GetBind() Active Write Buffer idx: %d\n", q.wbuf)
+	}
 	return q.binds[q.wbuf]
 }
 
