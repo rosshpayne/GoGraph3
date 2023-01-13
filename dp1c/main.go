@@ -534,7 +534,7 @@ func DP(ctx context.Context, ty string, id uuid.UID, restart bool, has11 map[str
 
 				ty := u.Ty[strings.Index(u.Ty, "|")+1:]
 				dpWg.Add(1)
-				//limit concurrent Propagates...
+
 				limiterDP.Ask()
 				<-limiterDP.RespCh()
 

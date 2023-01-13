@@ -541,14 +541,12 @@ func (q *QueryHandle) SetEOD() {
 // should accept int arg for worker id (segmet id)???
 func (q *QueryHandle) EOD() bool {
 
-	syslogAlert(fmt.Sprintf("BUFFER EOD At start: Active Write Buffer idx: %d  len(binds) %d", q.wbuf, len(q.binds)))
 	if q.eod {
 		return q.eod
 	}
 
 	if !q.paginate {
 		// query has not configured paginate
-		q.err = fmt.Errorf("BUFFER Query [tag: %s] has not configured paginate. EOD is therefore not available", q.Tag)
 		elog.Add(q.Tag, q.err)
 		return false
 	}
@@ -558,8 +556,6 @@ func (q *QueryHandle) EOD() bool {
 	if len(q.binds) > 1 {
 		q.switchBuf()
 	}
-	syslogAlert(fmt.Sprintf("BUFFER EOD Write Buffer idx : %d ", q.wbuf))
-	fmt.Printf("BUFFER EOD Write Buffer idx : %d \n", q.wbuf)
 	return q.eod
 }
 
@@ -570,27 +566,18 @@ func (q *QueryHandle) switchBuf() {
 	if q.wbuf > len(q.binds)-1 {
 		q.wbuf = 0
 	}
-	syslogAlert(fmt.Sprintf("BUFFER switch Write Buffer idx now : %d of %d", q.wbuf, len(q.binds))) //reflect.ValueOf(q.wbuf).Elem().Len()))
-	fmt.Printf("BUFFER switch Write Buffer idx now : %d \n", q.wbuf)
 }
 
 func (q *QueryHandle) GetWriteBufIdx() int {
-	fmt.Printf("BUFFER GetWriteBufIdx: Active Write Buffer idx: %d\n", q.wbuf)
-	syslogAlert(fmt.Sprintf("BUFFER GetWriteBufIdx: Active Write Buffer idx: %d", q.wbuf))
 	return q.wbuf
 }
 
 func (q *QueryHandle) GetWriteBuf() interface{} {
-	fmt.Printf("BUFFER GetWriteBuf() Active Write Buffer idx: %d of %d\n", q.wbuf, len(q.binds))
 	return q.GetBind()
 }
 
 // GetBind return bind variable slice
 func (q *QueryHandle) GetBind() interface{} {
-	if len(q.binds) > 1 {
-		syslogAlert(fmt.Sprintf("BUFFER GetBind() Active Write Buffer idx: %d of %d\n", q.wbuf, len(q.binds)))
-		fmt.Printf("BUFFER GetBind() Active Write Buffer idx: %d\n", q.wbuf)
-	}
 	return q.binds[q.wbuf]
 }
 

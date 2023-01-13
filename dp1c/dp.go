@@ -141,7 +141,7 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 					blimiter = nil // embedded cuids
 				} else {
 					// handle  overflow batches in parallel
-					blimiter = grmgr.New(string(pUID.Base64())[:8], 2) // TODO: create parameter for degree of concurrentcy. # of overflow batches read concurrently
+					blimiter = grmgr.New(string(pUID.Base64())[:7+oid], 2) // TODO: create parameter for degree of concurrentcy. # of overflow batches read concurrently
 				}
 				var wgd sync.WaitGroup
 
@@ -317,16 +317,16 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		wgc.Wait()
 
 		// not all Performances edges are connected - e.g. Person Director has no Actor(Performance) edges
-		// if !ptx.HasMutations() {
-		// 	panic(fmt.Errorf("Propagate: for %s %s", pUID, ty))
-		// }
-		// err = ptx.Execute()
-		// if err != nil {
-		// 	panic(err)
-		// 	if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
-		// 		elog.Add(logid, err)
-		// 	}
-		// }
+		if !ptx.HasMutations() {
+			panic(fmt.Errorf("Propagate: for %s %s", pUID, ty))
+		}
+		err = ptx.Execute()
+		if err != nil {
+			panic(err)
+			if !strings.HasPrefix(err.Error(), "No mutations in transaction") {
+				elog.Add(logid, err)
+			}
+		}
 	}
 	if !found {
 		elog.Add(logid, fmt.Errorf("DP -  1:1 attribute not found for type %q in node %q ", ty, pUID))
