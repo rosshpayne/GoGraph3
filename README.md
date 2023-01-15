@@ -6,4 +6,4 @@ State data, for restartability during loads of bulk data, is stored in a MySQL i
 
 A useful development from GoGraph3 is an object-database-mapping product that supports Dynamodb, MySQL and Spanner. Eliminates all boilerplate code and makes development condsiderably faster and more flexible. Early days but maybe something useful will come out it.
 
-
+MethodDB now in its own repo
