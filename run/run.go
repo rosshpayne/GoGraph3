@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	param "github.com/GoGraph/dygparam"
+	param "github.com/GoGraph/syslog/param"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 const logid = "run"

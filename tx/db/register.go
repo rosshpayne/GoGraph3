@@ -11,6 +11,7 @@ import (
 	"github.com/GoGraph/tx/query"
 )
 
+// db defines interfaces to be implemented by dynamodb spanner mysql etc
 type Handle = DBHandle
 
 type Option struct {
@@ -35,12 +36,14 @@ type DBHandle interface {
 	RetryOp(error) bool
 	//
 	GetTableKeys(context.Context, string) ([]key.TableKey, error)
+	//
 }
 
 type RegistryT struct {
-	Name    string
-	Default bool
-	Handle  DBHandle
+	Name       string
+	Default    bool
+	InstanceOf string // Dynamodb, MySQL, Postgres, Spanner
+	Handle     DBHandle
 }
 
 // const (
@@ -51,15 +54,15 @@ var (
 	mu sync.Mutex
 	// zero entry in dbRegistry is for default db.
 	// non-default db's use Register()
-	dbRegistry []RegistryT = []RegistryT{RegistryT{Name: "dynamodb", Default: true}}
+	dbRegistry []RegistryT = []RegistryT{RegistryT{InstanceOf: "dynamodb", Default: true}}
 )
 
 // Register is used by non-default database services e.g. mysql
-func Register(label string, handle DBHandle) {
+func Register(label string, inst string, handle DBHandle) {
 
 	mu.Lock()
 
-	d := RegistryT{Name: strings.ToLower(label), Handle: handle}
+	d := RegistryT{Name: strings.ToLower(label), InstanceOf: inst, Handle: handle}
 
 	if strings.ToLower(label) == "default" {
 		dbRegistry[0] = d

@@ -12,8 +12,8 @@ import (
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/ggdb"
 	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 )
 
 const (
@@ -407,7 +407,7 @@ func (nc *NodeCache) dbFetchItem(sortk string) error {
 	return nc.dbFetchItemContext(context.TODO(), sortk)
 }
 
-//dbFetchItem loads sortk attribute from database and enters into cache
+// dbFetchItem loads sortk attribute from database and enters into cache
 func (nc *NodeCache) dbFetchItemContext(ctx context.Context, sortk string) error {
 
 	slog.Log("dbFetchItem", fmt.Sprintf("dbFetchItem for %q UID: [%s] \n", sortk, nc.Uid.EncodeBase64()))
@@ -423,7 +423,7 @@ func (nc *NodeCache) dbFetchSortK(sortk string) error {
 	return nc.dbFetchSortKContext(context.TODO(), sortk)
 }
 
-//dbFetchSortK loads sortk attribute from database and enters into cache
+// dbFetchSortK loads sortk attribute from database and enters into cache
 func (nc *NodeCache) dbFetchSortKContext(ctx context.Context, sortk string) error {
 
 	nb, err := ggdb.FetchNodeContext(ctx, nc.Uid, sortk)
@@ -611,9 +611,9 @@ func (n *NodeCache) ClearNodeCache() {
 	n.gc.ClearNodeCache(n.Uid)
 }
 
-// func (n *NodeCache) ClearNodeCache(sortk ...string) {
-// 	n.gc.ClearNodeCache(n.Uid)
-// }
+//	func (n *NodeCache) ClearNodeCache(sortk ...string) {
+//		n.gc.ClearNodeCache(n.Uid)
+//	}
 func (g *GraphCache) ClearNodeCache(uid uuid.UID) {
 
 	uidb64 := uid.EncodeBase64()

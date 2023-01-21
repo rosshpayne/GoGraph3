@@ -25,8 +25,8 @@ import (
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/query"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/util"
 )
 
 type scanStatus int

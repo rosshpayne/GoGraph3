@@ -1,4 +1,4 @@
-package mysql
+package sql
 
 import (
 	"context"
@@ -8,11 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	//"github.com/GoGraph/db"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/query"
-	//_ "github.com/go-sql-driver/mysql"
 )
 
 var noDataFoundErr = errors.New("no rows in result set")
@@ -57,7 +55,7 @@ func crProjection(q *query.QueryHandle) *strings.Builder {
 
 }
 
-func closePrepStmt(client *sql.DB, q *query.QueryHandle) (err error) {
+func ClosePrepStmt(client *sql.DB, q *query.QueryHandle) (err error) {
 
 	if q.PrepStmt() != nil {
 		ps := q.PrepStmt().(*sql.Stmt)
@@ -66,7 +64,7 @@ func closePrepStmt(client *sql.DB, q *query.QueryHandle) (err error) {
 			logerr(fmt.Errorf("Failed to close prepared stmt %s, %w", q.Tag, err))
 			return err
 		}
-		syslog(fmt.Sprintf("closed prepared stmt %s", q.Tag))
+		log.LogDebug(fmt.Sprintf("closed prepared stmt %s", q.Tag))
 	}
 	return nil
 }
@@ -94,7 +92,7 @@ func sqlOpr(o string) string {
 
 // executeQuery handles one stmt per tx.NewQuery*()
 // the idea of multiple queries to a tx needs to be considered so tx has []QueryHandle
-func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt ...db.Option) error {
+func ExecuteQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt ...db.Option) error {
 
 	var (
 		// options
@@ -280,7 +278,7 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	// fmt.Printf("generated sql: [%s]", s.String())
 	if q.Prepare() {
 
-		slog.Log("executeQuery", fmt.Sprintf("Prepared query"))
+		log.LogDebug("executeQuery : Prepared query")
 
 		if q.PrepStmt() == nil {
 
@@ -316,7 +314,7 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 	} else {
 
 		// non-prepared
-		slog.Log("executeQuery", fmt.Sprintf("Non-prepared query"))
+		log.LogDebug("executeQuery Non-prepared query")
 		if oSingleRow {
 			if ctx != nil {
 				row = client.QueryRowContext(ctx, s.String(), whereVals...)
@@ -335,7 +333,6 @@ func executeQuery(ctx context.Context, client *sql.DB, q *query.QueryHandle, opt
 		return err
 	}
 
-	fmt.Println("ExecuteQUery: ")
 	if oSingleRow {
 		if err = row.Scan(q.Split()...); err != nil {
 

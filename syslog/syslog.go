@@ -8,8 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	param "github.com/GoGraph/dygparam"
+	mparam "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/syslog/internal/wrt"
+	"github.com/GoGraph/syslog/param"
 )
 
 const (
@@ -20,38 +21,38 @@ const (
 	idFile  = "log.id"
 )
 
+type logEntry struct {
+	logr  *log.Logger
+	ready chan struct{}
+}
+
 // global logger - accessible from any routine
 var (
 	//logr *log.Logger
 	iow io.Writer
 	//
-	logrMap map[string]*log.Logger
-	logWRm  sync.RWMutex
-
-	logrAlertMap map[string]*log.Logger
-	alertWRm     sync.RWMutex
-
-	logrErrMap map[string]*log.Logger
-	errWRm     sync.RWMutex
+	logrMap map[string]*logEntry
+	logLck  sync.Mutex
 )
 
 func init() {
 
-	logrMap = make(map[string]*log.Logger)
-	logrAlertMap = make(map[string]*log.Logger)
-	logrErrMap = make(map[string]*log.Logger)
+	logrMap = make(map[string]*logEntry)
 
 }
 
 // Start called from main after runid is created.
 func Start() error {
-	logrMap = make(map[string]*log.Logger)
+	prefix := "main"
 
 	// create a logger to be used to support the main logger (osfile or CWLogs)
 	if param.FileLogr == nil {
-		fileLogr := log.New(NewBaseErrFile(), "main", logrFlags)
+		fileLogr := log.New(NewBaseErrFile(), prefix, logrFlags)
 		fileLogr.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 		param.FileLogr = fileLogr
+		e := &logEntry{logr: fileLogr, ready: make(chan struct{})}
+		close(e.ready)
+		logrMap[prefix] = e
 	}
 
 	// assign either a file io.Writer or CloudWatchLogs io.Writer - determined by build tags (TODO: consider determining via parameter)
@@ -65,15 +66,15 @@ func Stop() {
 	wrt.Stop()
 }
 
-func newLogr(prefix string, logType string) *log.Logger {
+func NewLogr(prefix string) *log.Logger {
+	return getLogr(prefix)
+}
 
-	fmt.Printf("*** create new logr for prefix: [%s]\n", prefix)
+func newLogr(prefix string) *log.Logger {
 
 	var s strings.Builder
 	s.WriteString(prefix)
-	s.WriteByte(':')
-	s.WriteString(logType)
-	s.WriteByte(':')
+	s.WriteByte('|')
 
 	if iow == nil {
 		panic(fmt.Errorf("execute syslog.Start() before using syslog"))
@@ -82,17 +83,46 @@ func newLogr(prefix string, logType string) *log.Logger {
 	logr := log.New(iow, s.String(), logrFlags)
 	logr.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
+	logr.Printf("create new logr for prefix: %q", prefix)
+
 	return logr
 }
 
+func getLogr(prefix string) *log.Logger {
+
+	var ok bool
+
+	// get a logger from the map for the particular prefix -
+	// implement using non-blocking shared cache (map)
+	logLck.Lock()
+	e, ok := logrMap[prefix]
+	if !ok {
+		// create new logger entry and save to map
+		e = &logEntry{logr: newLogr(prefix), ready: make(chan struct{})}
+		logrMap[prefix] = e
+		logLck.Unlock()
+		close(e.ready)
+	} else {
+
+		logLck.Unlock()
+		<-e.ready
+	}
+	return e.logr
+
+}
+
+func LogDebug(prefix string, s string) {
+	Log(prefix, s)
+}
+
 // Log is the main function for logging text to the underlying storage system either an os file or AWS Cloudwatch logs. TODO: implement Google equivalent
-func Log(prefix string, s string, panic ...bool) {
+func Log(prefix string, s string) {
 
 	prefix = strings.TrimRight(prefix, " :")
 	// check if prefix is on the must log services. These will be logged even if parameter logging is false.
 	var logit bool
-	if !param.DebugOn {
-		for _, s := range param.LogServices {
+	if !mparam.DebugOn {
+		for _, s := range mparam.LogServices {
 			//         HasPrefix(dest (logid),source (parameter) - dest has prefix s
 			if strings.HasPrefix(prefix, s) {
 				logit = true
@@ -101,7 +131,7 @@ func Log(prefix string, s string, panic ...bool) {
 		}
 	}
 	// abandon logging if both of these conditions are false
-	if !logit && !param.DebugOn {
+	if !logit && !mparam.DebugOn {
 		return
 	}
 	//
@@ -121,74 +151,53 @@ func Log(prefix string, s string, panic ...bool) {
 	// 	fileLogr.Printf(s)
 	// 	return
 	// }
-	var ok bool
 	// get a logger from the map for the particular prefix
 
-	logWRm.RLock()
-	logr, ok := logrMap[prefix]
-	logWRm.RUnlock()
-
-	if !ok {
-		// create new logger and save to map
-		logr = newLogr(prefix, "info")
-		if logr == nil {
-			fmt.Println("logr is nil")
-		}
-		logWRm.Lock()
-		logrMap[prefix] = logr
-		logWRm.Unlock()
-	}
-	if len(panic) > 0 && panic[0] {
-		logr.Panic(s)
-		return
-	}
+	logr := getLogr(prefix)
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
 	// which is either a os.File or Cloudwatch Logs.
-
-	logr.Print(s)
+	var out strings.Builder
+	out.WriteString("|info|")
+	out.WriteString(s)
+	logr.Print(out.String())
+	fmt.Println("leave Log(")
 }
 
-func LogAlert(prefix string, s string, panic ...bool) {
+func LogAlert(prefix string, s string) {
 
-	var ok bool
-
-	// get a logger from the map for the particular prefix
-	alertWRm.RLock()
-	logr, ok := logrAlertMap[prefix]
-	alertWRm.RUnlock()
-	if !ok {
-		fmt.Println("create new alert logr for prefix: ", prefix)
-		// create new logger and save to map
-		logr = newLogr(prefix, "alert")
-		alertWRm.Lock()
-		logrAlertMap[prefix] = logr
-		alertWRm.Unlock()
-	}
+	logr := getLogr(prefix)
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
 	// which is either a os.File or Cloudwatch Logs.
-	logr.Print(s)
+	var out strings.Builder
+	out.WriteString("|alert|")
+	out.WriteString(s)
+	logr.Print(out.String())
 
 }
-func LogErr(prefix string, s string, panic ...bool) {
 
-	var ok bool
+func LogErr(prefix string, e error) {
 
-	// get a logger from the map for the particular prefix
-	errWRm.RLock()
-	logr, ok := logrErrMap[prefix]
-	errWRm.RUnlock()
-	if !ok {
-		fmt.Println("create new critical logr for prefix: ", prefix)
-		// create new logger and save to map
-		logr = newLogr(prefix, "critical")
-		errWRm.Lock()
-		logrErrMap[prefix] = logr
-		errWRm.Unlock()
-	}
+	logr := getLogr(prefix)
 	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
 	// which is either a os.File or Cloudwatch Logs.
-	logr.Print(s)
+	var out strings.Builder
+	out.WriteString("|error|")
+	out.WriteString(e.Error())
 
+	logr.Print(out.String())
+
+}
+
+func LogFail(prefix string, s error) {
+
+	logr := getLogr(prefix)
+	// note: as a result of read mutex loggers can be called concurrently. All loggers use the same io.Writer
+	// which is either a os.File or Cloudwatch Logs.
+	var out strings.Builder
+	out.WriteString("|fatal|")
+	out.WriteString(s.Error())
+
+	logr.Fatal(out.String())
 }
 
 // func Logf(prefix string, format string, v ...interface{}) {
@@ -231,6 +240,7 @@ func LogErr(prefix string, s string, panic ...bool) {
 // 	prefixMutex.Unlock()
 // }
 
+// NewBaseErrFile creates a log file based on name GoGraph.[a..z].log. Current  a..z value stored in log.id file in directory LOGDIR (envion variable)
 func NewBaseErrFile() io.Writer {
 	//
 	// open log id file (contains: a..z) used to generate log files with naming convention <logDIr><logName>.<a..z>.log

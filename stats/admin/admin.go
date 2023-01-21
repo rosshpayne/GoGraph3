@@ -16,8 +16,8 @@ import (
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/run"
 	"github.com/GoGraph/stats"
+	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/tbl"
 )
 
 var execCnt int

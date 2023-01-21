@@ -52,7 +52,7 @@ var (
 func logerr(e error, panic_ ...bool) {
 
 	if len(panic_) > 0 && panic_[0] {
-		slog.Log(logid, e.Error(), true)
+		slog.LogFail(logid, e)
 		panic(e)
 	}
 	slog.Log(logid, e.Error())

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
 	//"github.com/GoGraph/run" removed as it caused import cycle error
 	slog "github.com/GoGraph/syslog"
 )
@@ -39,6 +38,7 @@ func CheckLimit(lc chan bool) bool {
 	return c
 }
 
+// Add multiple errors (atleast one err) grouped under a logid to add channel
 func Add(logid string, err ...error) {
 
 	if len(err) == 0 {
@@ -115,7 +115,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 			errmsg.WriteString(" Error: ")
 			errmsg.WriteString(pld.Err.Error())
 			// log to log file or CW logs
-			slog.LogAlert(pld.Id, errmsg.String())
+			slog.LogErr(pld.Id, pld.Err)
 
 			errCnt[pld.Id]++
 			errors = append(errors, pld)

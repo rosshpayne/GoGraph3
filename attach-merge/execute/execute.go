@@ -26,7 +26,7 @@ import (
 	"github.com/GoGraph/types"
 	//	"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type action byte
@@ -40,7 +40,7 @@ const (
 func logerr(e error, panic_ ...bool) {
 
 	if len(panic_) > 0 && panic_[0] {
-		slog.Log("Client: ", e.Error(), true)
+		slog.LogFail("Client: ", e)
 		panic(e)
 	}
 	slog.Log("Attach-merge: ", e.Error())
@@ -95,7 +95,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 	defer func() func() {
 		// ideally op state should be part of edge join commit, but as its in a different database it must be a separate tx.
 		// Two tx are compensated by having the join process check on existence of edge before creating - only for the batch at restart though.
-		oTx := tx.New("op state").DB("mysql-GoGraph")
+		oTx := tx.New("op state").DB("mysql-goGraph")
 		return func() {
 			//	et := eAN.NewTask("op-StateChange") // EV$task
 			// Persist state
@@ -244,7 +244,7 @@ func AttachNodeEdges(ctx context.Context, edges []*atds.Edge, wg_ *sync.WaitGrou
 			if errors.Is(err, edgeExistsErr) {
 				// database must be Spanner in checkMode. Abort attach process for this parent node.
 				// cancel edgeExistsErr and return
-				slog.LogErr("AttachEdges: ", fmt.Sprintf("Abort attach process for pUID %s as an edge exists - %s", e.Puid, err))
+				slog.LogErr("AttachEdges: ", fmt.Errorf("Abort attach process for pUID %s as an edge exists - %w", e.Puid, err))
 				return
 			}
 			errlog.Add(logid, err)

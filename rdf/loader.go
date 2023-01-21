@@ -13,9 +13,11 @@ import (
 	"time"
 
 	blk "github.com/GoGraph/block"
-	dyn "github.com/GoGraph/db"
-	dbadmin "github.com/GoGraph/db/admin"
+	//dyn "github.com/GoGraph/db"
+	//dbadmin "github.com/GoGraph/db/admin"
 	"github.com/GoGraph/stats/admin"
+	dyn "github.com/GoGraph/tx/dynamodb"
+	dbadmin "github.com/GoGraph/tx/dynamodb/admin"
 	//"github.com/GoGraph/client"
 	//"github.com/GoGraph/db"
 	param "github.com/GoGraph/dygparam"
@@ -26,18 +28,18 @@ import (
 	//"github.com/GoGraph/rdf/dp"
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
-	"github.com/GoGraph/mysql"
 	"github.com/GoGraph/rdf/ds"
 	"github.com/GoGraph/rdf/edge"
 	"github.com/GoGraph/rdf/reader"
 	"github.com/GoGraph/rdf/save"
+	"github.com/GoGraph/tx/mysql"
 	//"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/db"
 	//"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 )
 
 const (
@@ -61,21 +63,16 @@ const (
 	//SBl = "SBl"
 )
 
-//
 type savePayload struct {
 	sname        string   // node ID aka ShortName or blank-node-id
 	suppliedUUID uuid.UID // user supplied UUID
 	attributes   []ds.NV
 }
 
-//
 // channels
-//
 var verifyCh chan verifyNd
 var saveCh chan savePayload //[]ds.NV // TODO: consider using a struct {SName, UUID, []ds.NV}
 
-//
-//
 var errNodes ds.ErrNodes
 
 type verifyNd struct {
@@ -178,13 +175,12 @@ func main() { //(f io.Reader) error { // S P O
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
-	//
-	// if *showsql {
-	// 	param.ShowSQL = true
-	// }
-	// if *debug {
-	// 	param.DebugOn = true
-	// }
+	logrmDB := slog.NewLogr("mdb")
+	logrmGr := slog.NewLogr("grmgr")
+
+	tx.SetLogger(logrmDB) //, tx.Alert)
+	grmgr.SetLogger(logrmGr)
+
 	param.ReducedLog = false
 	if *reduceLog == 1 {
 		param.ReducedLog = true
@@ -271,16 +267,24 @@ func main() { //(f io.Reader) error { // S P O
 	//
 	// services
 	ctxEnd.Add(5)
-	go uuid.PowerOn(ctx, &wpStart, &ctxEnd)         // generate and store UUIDs service
-	go grmgr.PowerOn(ctx, &wpStart, &ctxEnd, runid) // concurrent goroutine manager service
-	go elog.PowerOn(ctx, &wpStart, &ctxEnd)         // error logging service
-	go monitor.PowerOn(ctx, &wpStart, &ctxEnd)      // repository of system statistics service
+	go uuid.PowerOn(ctx, &wpStart, &ctxEnd) // generate and store UUIDs service
+	grCfg := grmgr.Config{"runid": runid}
+	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, grCfg)
+	//go grmgr.PowerOn(ctx, &wpStart, &ctxEnd, runid) // concurrent goroutine manager service
+	go elog.PowerOn(ctx, &wpStart, &ctxEnd)    // error logging service
+	go monitor.PowerOn(ctx, &wpStart, &ctxEnd) // repository of system statistics service
 	go edge.PowerOn(ctx, &wpStart, &ctxEnd)
 
 	// wait for services to start
 	syslog(fmt.Sprintf("waiting on services to start...."))
 	wpStart.Wait()
 	syslog(fmt.Sprintf("all load services started "))
+
+	logerr := func(id string, e error) {
+		elog.Add("mdb", e)
+	}
+	tx.SetErrLogger(logerr)
+	grmgr.SetErrLogger(logerr)
 
 	// set Graph and load types into memory - dependency on syslog
 	err = types.SetGraph(*graph)
@@ -431,7 +435,7 @@ func verify(ctx context.Context, wpStart *sync.WaitGroup, wpEnd *sync.WaitGroup)
 	limitUnmarshaler.Unregister()
 }
 
-//unmarshalRDF merges the rdf lines for an individual node (identical subject value) to create NV entries
+// unmarshalRDF merges the rdf lines for an individual node (identical subject value) to create NV entries
 // for the type of the node.
 func unmarshalRDF(ctx context.Context, node *ds.Node, ty blk.TyAttrBlock, wg *sync.WaitGroup, lmtr *grmgr.Limiter) {
 	defer wg.Done()

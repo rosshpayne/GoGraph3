@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type DynaGType uint8
@@ -114,9 +114,7 @@ type DataItem struct {
 }
 type NodeBlock []*DataItem
 
-//
 // channel payload used in client.AttachNode()
-//
 type ChPayload struct {
 	TUID    uuid.UID // target UID for scalar propagation
 	CUID    uuid.UID
@@ -132,9 +130,7 @@ type ChPayload struct {
 	Random bool
 }
 
-//
 // keys
-//
 func (dgv *DataItem) GetPkey() []byte {
 	return dgv.Pkey
 }
@@ -142,9 +138,7 @@ func (dgv *DataItem) GetSortK() string {
 	return dgv.Sortk
 }
 
-//
 // Scalars - scalar data has no associated XBl null inidcator. Absense of item/predicate means it is null.
-//
 func (dgv *DataItem) GetS() string {
 	return dgv.S
 }
@@ -203,14 +197,12 @@ func (dgv *DataItem) GetBl() bool {
 // 	return dgv.BS
 // }
 
-//
 // Lists - embedded in item
-//
 func (dgv *DataItem) GetLS() []string {
 	return dgv.LS
 }
 
-//TODO - should this be []int??
+// TODO - should this be []int??
 func (dgv *DataItem) GetLI() []int64 {
 	return dgv.LI
 }
@@ -226,14 +218,12 @@ func (dgv *DataItem) GetLBl() []bool {
 	return dgv.LBl
 }
 
-//
 // Lists - only used for containing propagated values
-//
 func (dgv *DataItem) GetULS() ([]string, []bool) {
 	return dgv.LS, dgv.XBl
 }
 
-//TODO - should this be []int??
+// TODO - should this be []int??
 func (dgv *DataItem) GetULI() ([]int64, []bool) {
 	// is := make([]int64, len(dgv.LN), len(dgv.LN))
 	// for i, _ := range dgv.LN {
@@ -263,29 +253,32 @@ func (dgv *DataItem) GetXF() []int64 {
 	return dgv.XF[:]
 }
 
-//
 // Propagated Scalars - all List based (UID-pred stuff)
 //
-// func (dgv *DataItem) GetULS() ([]string, []bool) {
-// 	return dgv.LS, dgv.XBl
-// }
-// func (dgv *DataItem) GetULI() ([]int64, []bool) {
-// 	is := make([]int64, len(dgv.LN), len(dgv.LN))
-// 	for i, _ := range dgv.LN {
-// 		is[i] = int64(dgv.LN[i])
-// 	}
-// 	//dgv.LN = nil // free
-// 	return is
-// }
-// func (dgv *DataItem) GetULF() ([]float64, []bool) {
-// 	return dgv.LN
-// }
-// func (dgv *DataItem) GetULB() ([][]byte, []bool) {
-// 	return dgv.LB
-// }
-// func (dgv *DataItem) GetULBl() ([]bool, []bool) {
-// 	return dgv.LBl
-// }
+//	func (dgv *DataItem) GetULS() ([]string, []bool) {
+//		return dgv.LS, dgv.XBl
+//	}
+//
+//	func (dgv *DataItem) GetULI() ([]int64, []bool) {
+//		is := make([]int64, len(dgv.LN), len(dgv.LN))
+//		for i, _ := range dgv.LN {
+//			is[i] = int64(dgv.LN[i])
+//		}
+//		//dgv.LN = nil // free
+//		return is
+//	}
+//
+//	func (dgv *DataItem) GetULF() ([]float64, []bool) {
+//		return dgv.LN
+//	}
+//
+//	func (dgv *DataItem) GetULB() ([][]byte, []bool) {
+//		return dgv.LB
+//	}
+//
+//	func (dgv *DataItem) GetULBl() ([]bool, []bool) {
+//		return dgv.LBl
+//	}
 func (dgv *DataItem) GetNd() (nd [][]byte, xf []int64, ovfl [][]byte) {
 
 	// nd_ := dgv.Nd[1:]
@@ -306,9 +299,9 @@ func (dgv *DataItem) GetNd() (nd [][]byte, xf []int64, ovfl [][]byte) {
 	return
 }
 
-//GetOfNd() takes a copy of the data cache result and returns the copy
-//The data cache should be protected by a read lock when the copy is taken
-//After the cache is read it should be unlocked. The copy can be accessed after
+// GetOfNd() takes a copy of the data cache result and returns the copy
+// The data cache should be protected by a read lock when the copy is taken
+// After the cache is read it should be unlocked. The copy can be accessed after
 // the lock is released as its a different memory object.
 func (dgv *DataItem) GetOfNd() ([][]byte, []int64) {
 
@@ -387,9 +380,7 @@ type IndexBlock []*Index
 // 	return nv.N
 // }
 
-//
 // type dictionary
-//
 type TyItem struct {
 	Nm   string   `dynamodbav:"PKey"`  // type name
 	Atr  string   `dynamodbav:"SortK"` // attribute name

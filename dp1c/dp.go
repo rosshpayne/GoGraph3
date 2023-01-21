@@ -19,8 +19,8 @@ import (
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	txtbl "github.com/GoGraph/tx/tbl"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 )
 
 var (
@@ -347,6 +347,6 @@ func Propagate(ctx context.Context, limit *grmgr.Limiter, wg *sync.WaitGroup, pU
 		slog.LogAlert("Propagate", fmt.Sprintf("Propagate Errored : pUID %s  %s", pUID.Base64(), err.Error()))
 		panic(err)
 	}
-	slog.LogAlert("Propagate", fmt.Sprintf("Finished loop : pUID %s ,   Ty %s", pUID.Base64(), ty))
+	//slog.LogAlert("Propagate", fmt.Sprintf("Finished loop : pUID %s ,   Ty %s", pUID.Base64(), ty))
 
 }

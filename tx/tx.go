@@ -3,34 +3,52 @@ package tx
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
-	//"github.com/GoGraph/db"
-	"github.com/GoGraph/dbs"
-	param "github.com/GoGraph/dygparam"
-	//elog "github.com/GoGraph/errlog"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/dbs"
 	"github.com/GoGraph/tx/key"
+	mdblog "github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/param"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
-const logid = "Tx"
+type LogLvl int
 
-func syslog(s string) {
-	slog.Log(logid, s)
+const (
+	Alert LogLvl = iota
+	Debug
+	NoLog
+)
+
+func SetLogger(lg *log.Logger, level ...LogLvl) {
+	var lvl mdblog.LogLvl
+	if len(level) > 1 {
+		panic(fmt.Errorf("SetLogger: not maore than one level can be specified"))
+	}
+	if len(level) == 1 {
+		switch level[0] {
+		case Alert:
+			lvl = mdblog.Alert
+		case Debug:
+			lvl = mdblog.Debug
+		case NoLog:
+			lvl = mdblog.NoLog
+		}
+	} else {
+		// default level
+		lvl = mdblog.Alert
+	}
+	mdblog.SetLogger(lg, lvl)
 }
 
-func logAlert(s string) {
-	slog.LogAlert(logid, s)
-}
-
-func logErr(s string) {
-	slog.LogErr(logid, s)
+func SetErrLogger(el func(l string, e error)) {
+	mdblog.SetErrLogger(el)
 }
 
 // Handle represents a transaction composed of 1 to many mutations.
@@ -134,7 +152,7 @@ func NewTx(tag string, m ...*mut.Mutation) *TxHandle {
 func NewTxContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 
 	if ctx == nil {
-		syslog("NewTxContext() Error : ctx argument is nil")
+		mdblog.LogErr(fmt.Errorf("NewTxContext() Error : ctx argument is nil"))
 	}
 	tx := &TxHandle{Tag: tag, ctx: ctx, m: new(mut.Mutations), api: db.TransactionAPI, maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
@@ -168,6 +186,9 @@ func NewSingleContext(ctx context.Context, tag string) *TxHandle {
 // New - default mutation represents standard api
 func New(tag string, m ...*mut.Mutation) *TxHandle {
 
+	// mdblog.LogAlert("ABout to test add err logger ")
+	// mdblog.TestErrLogger()
+
 	tx := &TxHandle{Tag: tag, api: db.StdAPI, ctx: context.TODO(), m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
 
 	if tag == param.StatsSystemTag {
@@ -187,7 +208,8 @@ func New(tag string, m ...*mut.Mutation) *TxHandle {
 func NewContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 
 	if ctx == nil {
-		syslog("NewContext() Error : ctx argument is nil")
+		mdblog.LogErr(fmt.Errorf("NewContext() ctx argument is nil"))
+		return nil
 	}
 
 	tx := &TxHandle{Tag: tag, ctx: ctx, api: db.StdAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
@@ -214,7 +236,8 @@ func NewBatch(tag string, m ...*mut.Mutation) *TxHandle {
 func NewBatchContext(ctx context.Context, tag string, m ...*mut.Mutation) *TxHandle {
 
 	if ctx == nil {
-		syslog("NewBatchContext() Error : ctx argument is nil")
+		mdblog.LogErr(fmt.Errorf("NewBatchContext() ctx argument is nil"))
+		return nil
 	}
 
 	tx := &TxHandle{Tag: tag, ctx: ctx, api: db.BatchAPI, m: new(mut.Mutations), maxMuts: param.MaxMutations, dbHdl: db.GetDefaultDBHdl()}
@@ -509,7 +532,7 @@ func (h *TxHandle) HasMutations() bool {
 }
 
 func (h *TxHandle) AddErr(e error) {
-	logErr(e.Error())
+	mdblog.LogErr(e)
 	h.err = append(h.err, e)
 }
 
@@ -554,8 +577,9 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 	}
 
 	if h.done {
-		syslog(fmt.Sprintf("Error: transaction %q has already been executed", h.Tag))
-		return fmt.Errorf("Transaction has already been executed.")
+		err := fmt.Errorf("Execute() transaction %q has already been executed", h.Tag)
+		mdblog.LogErr(err)
+		return err
 	}
 	// append passed in mutation(s) to transaction
 	if len(m) > 0 {
@@ -565,7 +589,8 @@ func (h *TxHandle) Execute(m ...*mut.Mutation) error {
 	}
 	// are there active mutations?
 	if h.b == 0 && len(*h.m) == 0 {
-		syslog(fmt.Sprintf("No mutations in transaction %q to execute", h.Tag))
+		//	err := fmt.Errorf("No mutations in transaction %q to execute", h.Tag)
+		mdblog.LogDebug(fmt.Sprintf("No mutations in transaction %q to execute", h.Tag))
 		return nil
 	}
 
@@ -722,7 +747,7 @@ func (h *TxHandle) GetMergedMutation(table tbl.Name, keys []key.Key) (*mut.Mutat
 	if err != nil {
 		return nil, fmt.Errorf("Error in finding table keys for table %q: %w", table, err)
 	}
-	syslog(fmt.Sprintf("tableKeys: %v", tableKeys))
+	mdblog.LogDebug(fmt.Sprintf("GetMergedMutation: tableKeys: %v", tableKeys))
 	// check tableKeys match merge keys - we need to match all keys to find source mutation
 	if len(keys) != len(tableKeys) {
 		return nil, fmt.Errorf("Error in Tx tag %q. Number of keys supplied (%d) do not match number of keys on table (%d)", h.Tag, len(keys), len(tableKeys))
@@ -812,6 +837,7 @@ func (h *TxHandle) AddMember(attr string, value interface{}, mod_ ...mut.Modifie
 
 	// no source mutation exists ie. no mergeMutation specified
 	if h.sm == nil {
+		// TODO: check this code - why am? this paths used when tx handle calls AddMember() after NewInsert, NewUpdate,...
 		if h.am == nil {
 			h.addErr(fmt.Errorf("AddMember error: h.am is nil"))
 			return h
@@ -1062,7 +1088,7 @@ func (h *TxHandle) AddMember(attr string, value interface{}, mod_ ...mut.Modifie
 
 		if !found {
 			// no attr exists in the source mutation - lets create one
-			syslog(fmt.Sprintf("create member %s as it does not exist in source mutation.", attr))
+			mdblog.LogAlert(fmt.Sprintf("create member %s as it does not exist in source mutation.", attr))
 			h.sm.AddMember(attr, value)
 		}
 	}

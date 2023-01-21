@@ -15,22 +15,22 @@ import (
 	"github.com/GoGraph/attach-merge/ds"
 	"github.com/GoGraph/attach-merge/execute"
 	"github.com/GoGraph/cache"
-	dyn "github.com/GoGraph/db"
-	dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	"github.com/GoGraph/monitor"
-	"github.com/GoGraph/mysql"
 	"github.com/GoGraph/run"
 	"github.com/GoGraph/state"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/db"
+	dyn "github.com/GoGraph/tx/dynamodb"
+	dbadmin "github.com/GoGraph/tx/dynamodb/admin"
+	"github.com/GoGraph/tx/mysql"
 	"github.com/GoGraph/tx/query"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 )
 
 type scanStatus int
@@ -129,6 +129,13 @@ func main() {
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
+	logrmDB := slog.NewLogr("mdb")
+	logrmGr := slog.NewLogr("grmgr")
+
+	tx.SetLogger(logrmDB) //, tx.Alert)
+	grmgr.SetLogger(logrmGr)
+	//tx.SetLogger(logrmDB, tx.NoLog)
+
 	tstart = time.Now()
 
 	param.ReducedLog = false
@@ -212,7 +219,8 @@ func main() {
 	//
 	wpEnd.Add(3)
 	wpStart.Add(3)
-	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, runid) // concurrent goroutine manager service
+	grCfg := grmgr.Config{"runid": runid}
+	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, grCfg) // concurrent goroutine manager service
 	go elog.PowerOn(ctx, &wpStart, &wpEnd)         // error logging service
 	go monitor.PowerOn(ctx, &wpStart, &wpEnd)      // repository of system statistics service
 	//	go cache.PowerOn(ctx, &wpStart, &wpEnd)        //in development
@@ -220,6 +228,12 @@ func main() {
 	//
 	// setup db related services (e.g. stats snapshot save)
 	dbadmin.Setup()
+
+	logerr := func(id string, e error) {
+		elog.Add("mdb", e)
+	}
+	tx.SetErrLogger(logerr)
+	grmgr.SetErrLogger(logerr)
 	//
 	// main
 	//

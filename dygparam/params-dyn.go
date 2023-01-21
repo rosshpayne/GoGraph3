@@ -3,25 +3,23 @@
 
 package param
 
-import (
-	"io"
-	"log"
-)
-
 var (
 	ReducedLog = true // reduced logging. So far only for DB:
 	// rdf file: can be modified by rdf.loader "i" argument
 	//GraphTable = "DyGraphOD2"
 	// sql logging: can be modified by showsql argument
-	ShowSQL    bool
-	DebugOn    = false
-	Environ    string
-	FileLogr   *log.Logger
-	FileWriter io.Writer
-	LogFile    string
-	RunId      string
+	ShowSQL bool
+	DebugOn = false // true when -debug="All"
+	Environ string
+	RunId   string
 	// statistics monitor
 	StatsSystem bool
+
+	// statistics - sample Durations and Sample set size
+	SampleDurDB    = "500ms"
+	SampleDurWaits = "500ms"
+	MaxSampleSet   = 10000 // maximum number of samples to keep for analysis
+
 	// double propagation Limits
 	DPbatch = 20
 	// Default DB
@@ -40,6 +38,8 @@ const (
 	// Time
 	TimeNanoFormat = "2006-01-02 15:04:05.999999"
 
+	StatsSystemTag string = "__system"
+	StatsSaveTag   string = "__save"
 	// Logging
 	Logid = "main"
 
@@ -54,33 +54,12 @@ const (
 	// number of log entries before updating log table
 	//ESlogCommit = 20
 
-	// statistics monitor
-	StatsSystemTag string = "__system"
-	StatsSaveTag   string = "__save"
-
 	// TimeZone
 	TZ = "Australia/Sydney"
 
 	// CloudWatch Log limits
 	LogChBufSize  = 50
 	CWLogLoadSize = 200
-
-	// Transaction Size
-	// Dynamodb supports upto 25 db operations to a transaction. This imposes a limit on GoGraph when using Dynamodb.
-	// For example, there is an imposed limit on scalar propagation of upto 23 attributes. Spanner has no such limitation.
-	MaxMutations = 25
-	MaxTxBatches = 4
-	DBbulkInsert = MaxMutations
-	// statistics - sample Durations and Sample set size
-	SampleDurDB    = "500ms"
-	SampleDurWaits = "500ms"
-	MaxSampleSet   = 10000 // maximum number of samples to keep for analysis
-
-	// Dynamodb Batch insert/delete retries
-	// unprocessed batch items retries
-	MaxUnprocRetries = 10
-	// operation error retries
-	MaxOperRetries = 5
 
 	// goroutine concurrency - multipler to apply to number of saveRDF goroutines to determine number of ES load goroutines
 	ESgrMultipler = 1

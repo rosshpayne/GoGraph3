@@ -6,10 +6,11 @@ import (
 	"reflect"
 	"strings"
 
-	elog "github.com/GoGraph/errlog"
-	slog "github.com/GoGraph/syslog"
+	//elog "github.com/GoGraph/errlog"
+	//slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type ScanOrder int8
@@ -63,13 +64,6 @@ const (
 	IsFilter
 	IsFetch // projection fields
 )
-
-func syslog(s string) {
-	slog.Log("query", s)
-}
-func syslogAlert(s string) {
-	slog.LogAlert("query", s)
-}
 
 type Attr struct {
 	name    string
@@ -490,7 +484,7 @@ func (q *QueryHandle) Access() AccessTy {
 
 // SetBindValue uses reflect to set the internal value of a bind.
 func (q *QueryHandle) SetBindValue(v reflect.Value) {
-	syslogAlert(fmt.Sprintf("SetBindVar: Active Write Buffer idx: %d", q.wbuf))
+	log.LogAlert(fmt.Sprintf("query %q SetBindVar: Active Write Buffer idx: %d", q.GetTag(), q.wbuf))
 	reflect.ValueOf(q.GetBind()).Elem().Set(v)
 }
 
@@ -547,7 +541,8 @@ func (q *QueryHandle) EOD() bool {
 
 	if !q.paginate {
 		// query has not configured paginate
-		elog.Add(q.Tag, q.err)
+		//addErr(q.Tag, q.err)
+		log.LogErr(q.err)
 		return false
 	}
 
@@ -604,7 +599,7 @@ func (q *QueryHandle) PgStateId() uuid.UID {
 }
 
 func (q *QueryHandle) AddPgStateValS(val string) {
-	slog.LogAlert("AddPgStateValS", fmt.Sprintf("PgStateValS: %q", val))
+	log.LogAlert(fmt.Sprintf("AddPgStateValS %q PgStateValS: %q", q.GetTag(), val))
 	q.pgStateValS = append(q.pgStateValS, val)
 }
 
@@ -618,9 +613,9 @@ func (q *QueryHandle) PopPgStateValS() string {
 		v = q.pgStateValS[0]
 		q.pgStateValS = q.pgStateValS[1:]
 	} else {
-		panic(fmt.Errorf("PopPgStateValS: Nothing to pop..."))
+		log.LogFail(fmt.Errorf("PopPgStateValS: Nothing to pop..."))
 	}
-	slog.LogAlert("PopPgStateValS", fmt.Sprintf("PgStateValS: %q   len: %d", v, len(q.pgStateValS)))
+	log.LogAlert(fmt.Sprintf("PopPgStateValS %q PgStateValS: %q   len: %d", q.GetTag(), q.pgStateValS, len(q.pgStateValS)))
 	return v
 }
 
@@ -819,7 +814,7 @@ func (q *QueryHandle) Filter(a string, v interface{}, e ...string) *QueryHandle 
 	if found {
 		q.AndFilter(a, v, e...)
 		// err := errors.New("A filter condition has already been specified. Use either AndFilter or OrFilter")
-		// elog.Add("parseQuery", err)
+		// addErr("parseQuery", err)
 		// q.err = err
 		return q
 		//
@@ -847,7 +842,8 @@ func (q *QueryHandle) appendBoolFilter(a string, v interface{}, bcd BoolCd, e ..
 
 	if !found {
 		err := errors.New(fmt.Sprintf(`Query Tag: %s, no "Filter" condition specified`, q.Tag))
-		elog.Add("query", err)
+		//addErr("query", err)
+		log.LogErr(err)
 		q.err = err
 		return q
 		//

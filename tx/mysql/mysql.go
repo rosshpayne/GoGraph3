@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 
-	//"github.com/GoGraph/db"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx/db"
+	mdbsql "github.com/GoGraph/tx/internal/sql"
 	"github.com/GoGraph/tx/key"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 	"github.com/GoGraph/tx/tbl"
@@ -31,18 +31,18 @@ type MySQL struct {
 func logerr(e error, panic_ ...bool) {
 
 	if len(panic_) > 0 && panic_[0] {
-		slog.LogErr(logid, e.Error(), true)
+		log.LogFail(fmt.Errorf("%s %w", logid, e))
 		panic(e)
 	}
-	slog.LogErr(logid, e.Error())
+	log.LogErr(fmt.Errorf("%s %w", logid, e))
 }
 
 func syslog(s string) {
-	slog.Log(logid, s)
+	log.LogDebug(fmt.Sprintf("%s %s", logid, s))
 }
 
 func alertlog(s string) {
-	slog.LogAlert(logid, s)
+	log.LogAlert(fmt.Sprintf("%s %s", logid, s))
 }
 
 func Register(ctx context.Context, label string, path string) {
@@ -52,7 +52,7 @@ func Register(ctx context.Context, label string, path string) {
 		logerr(err)
 	} else {
 		m := MySQL{DB: client, ctx: ctx}
-		db.Register(label, m)
+		db.Register(label, "mysql", m)
 	}
 }
 
@@ -114,7 +114,7 @@ func (h MySQL) Execute(ctx context.Context, bs []*mut.Mutations, tag string, api
 		panic(fmt.Errorf("MySQL Execute(): no api specified"))
 	}
 
-	err = execute(ctx, h.DB, bs, tag, cTx, prepare, opt...)
+	err = mdbsql.Execute(ctx, h.DB, bs, tag, cTx, prepare, opt...)
 
 	return err
 
@@ -137,13 +137,13 @@ func (h MySQL) ExecuteQuery(ctx context.Context, q *query.QueryHandle, o ...db.O
 	if ctx == nil {
 		ctx = h.ctx
 	}
-	return executeQuery(ctx, h.DB, q, o...)
+	return mdbsql.ExecuteQuery(ctx, h.DB, q, o...)
 
 }
 
 func (h MySQL) Close(q *query.QueryHandle) error {
 
-	return closePrepStmt(h.DB, q)
+	return mdbsql.ClosePrepStmt(h.DB, q)
 
 }
 

@@ -9,7 +9,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx/query"
 
-	_ "github.com/GoGraph/mysql"
+	_ "github.com/GoGraph/tx/mysql"
 )
 
 var bid int

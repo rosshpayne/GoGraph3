@@ -15,8 +15,8 @@ import (
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 )
 
 // PropagationTarget determines if target is embedded array or array in overflow block

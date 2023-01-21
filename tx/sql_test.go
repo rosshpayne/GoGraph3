@@ -5,8 +5,8 @@ import (
 	//	"fmt"
 	"testing"
 
-	"github.com/GoGraph/mysql"
 	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/mysql"
 	"github.com/GoGraph/tx/tbl"
 )
 

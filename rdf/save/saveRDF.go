@@ -7,15 +7,15 @@ import (
 	"time"
 
 	param "github.com/GoGraph/dygparam"
-	"github.com/GoGraph/errlog"
+	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/grmgr"
 	"github.com/GoGraph/rdf/ds"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 )
 
 const (
@@ -35,10 +35,9 @@ var (
 func logerr(e error, panic_ ...bool) {
 
 	if len(panic_) > 0 && panic_[0] {
-		slog.Log(logid, e.Error(), true)
-		panic(e)
+		slog.LogFail(logid, e)
 	}
-	slog.Log(logid, e.Error())
+	elog.Add("saveRDF", e)
 }
 
 func syslog(s string) {
@@ -389,7 +388,7 @@ func SaveRDFNode(sname string, suppliedUUID uuid.UID, nv_ []ds.NV, wg *sync.Wait
 	err = txh.Execute()
 
 	if err != nil {
-		errlog.Add("saveRDF", fmt.Errorf("Failed to save: PKey: %s  SortK: %s : %s", UID.Base64(), sortk, err))
+		elog.Add("saveRDF", fmt.Errorf("Failed to save: PKey: %s  SortK: %s : %s", UID.Base64(), sortk, err))
 	}
 	//
 	// expand Set and List types into individual S# entries to be indexed// TODO: what about SN, LN

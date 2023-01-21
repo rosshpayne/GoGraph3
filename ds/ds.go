@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	blk "github.com/GoGraph/block"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 // NV (Name-Value) links the graph query to the graph data.
@@ -22,12 +22,12 @@ import (
 // (representing the child node data).
 //
 // Usual process when executing a graph query
-// 1. generate NVs e.g. Name is populated from graph query but Value is nil
-//    Age
-//    Name
-//    Siblings:
-//    Siblings:Name
-//    Siblings:Age
+//  1. generate NVs e.g. Name is populated from graph query but Value is nil
+//     Age
+//     Name
+//     Siblings:
+//     Siblings:Name
+//     Siblings:Age
 //
 // Note the above data matches the database data for a node which contains both the scalar and propagated data (child scalar data) for an inidividual node.
 // So generateing an NV will only go as far as the scalar attribute of the child nodes.
@@ -41,7 +41,6 @@ import (
 // data format in the database which contains the node scalar data and all the children scalar data (propagated data)
 // Scalar data is always queried from the propagated data of the parent node, never at the child node level.
 // Similarly the node contains the scalar data of the embedded UID-PREDs of the node.
-//
 type NV struct {
 	Name     string      // predicate from graphQL stmt (no type required as its based on contents in cache) Name (S), Age (N), Siblings: (Nds), Siblings:Name (list), Friends: (nds), Friends:Name (list)
 	Value    interface{} // its value from cache

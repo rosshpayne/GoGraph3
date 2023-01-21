@@ -92,7 +92,7 @@ func Register(ctx_ context.Context, label string, ctxEnd *sync.WaitGroup, opt ..
 		panic(fmt.Errorf("dbSrv for dynamodb is nil"))
 	}
 
-	db.Register(label, &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig})
+	db.Register(label, "dynamodb", &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig})
 	//dbRegistry[DefaultDB].Handle = &DynamodbHandle{Client: dbSrv, ctx: ctx_, opt: opt, cfg: awsConfig}
 
 	//
@@ -145,7 +145,7 @@ func (h *DynamodbHandle) String() string {
 }
 
 func (h *DynamodbHandle) RetryOp(e error) bool {
-	return retryOp(e)
+	return retryOp(e, "db")
 }
 
 func (h *DynamodbHandle) GetTableKeys(ctx context.Context, table string) ([]key.TableKey, error) {
@@ -177,3 +177,79 @@ func (h *DynamodbHandle) GetTableKeys(ctx context.Context, table string) ([]key.
 	return tabKey, nil
 
 }
+
+// var (
+// 	logr    log.Logger
+// 	logLvl  mdblog.LogLvl // Alert, Debug, NoLog
+// 	errlogr func(e error)
+// )
+
+// func logDebug(s string) {
+// 	if logLvl == db.Debug {
+// 		var out strings.Builder
+
+// 		out.WriteString(":debug:")
+// 		out.WriteString(p)
+// 		out.WriteByte(' ')
+// 		out.WriteString(s)
+// 		logr.Print(out.String())
+// 	}
+// }
+
+// func logAlert(p string, s string) {
+// 	if logLvl <= db.Debug {
+// 		var out strings.Builder
+
+// 		out.WriteString(":alert:")
+// 		out.WriteByte(' ')
+// 		out.WriteString(p)
+// 		out.WriteByte(' ')
+// 		out.WriteString(s)
+
+// 		logr.Print(out.String())
+// 	}
+// }
+
+// func logAlert(s string) {
+// 	if logLvl <= db.Debug {
+// 		var out strings.Builder
+
+// 		out.WriteString(":alert:")
+// 		out.WriteByte(' ')
+// 		out.WriteString(s)
+
+// 		logr.Print(out.String())
+// 	}
+// }
+
+// func logErr(e error) {
+// 	var out strings.Builder
+
+// 	out.WriteString(":error:")
+// 	out.WriteString(e.Error())
+
+// 	logr.Print(out.String())
+// 	errlogr(e)
+// }
+
+// func logFail(e error) {
+
+// 	errlogr(e)
+
+// 	var out strings.Builder
+
+// 	out.WriteString(":error:")
+// 	out.WriteString(e.Error())
+
+// 	logr.Fail(out.String())
+
+// }
+
+// func (h *DynamodbHandle) SetLogger(lg log.Logger, level mdblog.LogLvl) {
+// 	logr = lg
+// 	loglvl = level
+// }
+
+// func (h *DynamodbHandle) SetErrLogger(el func(l string, e error)) {
+// 	errlogr = el
+// }

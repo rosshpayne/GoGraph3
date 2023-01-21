@@ -1,21 +1,25 @@
+//go:build withdb
+// +build withdb
+
 package grmgr
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
-	param "github.com/GoGraph/dygparam"
-	elog "github.com/GoGraph/errlog"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
-const logid = "grmgr"
+const (
+	// statistics monitor
+	statsSystemTag string = "__grmgr"
+)
 
 type Routine = string
 
@@ -24,11 +28,11 @@ type Ceiling = int
 type throttle_ byte
 
 func (t throttle_) Up() {
-	throttleUpCh <- struct{}{}
+	throttleUpCh <- Routine("__all")
 }
 
 func (t throttle_) Down() {
-	throttleDownCh <- struct{}{}
+	throttleDownCh <- Routine("__all")
 }
 
 func (t throttle_) Stop() {}
@@ -55,11 +59,12 @@ var rWait rWaitMap
 // Channels
 var (
 	EndCh          = make(chan Routine, 1)
-	throttleDownCh = make(chan struct{})
-	throttleUpCh   = make(chan struct{})
+	throttleDownCh = make(chan Routine)
+	throttleUpCh   = make(chan Routine)
 	//
 	rAskCh     = make(chan Routine)
 	rExpirehCh = make(chan Routine)
+	//
 )
 
 // Limiter
@@ -103,6 +108,14 @@ func (l Limiter) RespCh() respCh {
 }
 func (l Limiter) Routine() Routine {
 	return l.r
+}
+
+func (l Limiter) Up() {
+	throttleUpCh <- l.r
+}
+
+func (l Limiter) Down() {
+	throttleDownCh <- l.r
 }
 
 type rLimiterMap map[Routine]*Limiter
@@ -159,20 +172,8 @@ var (
 
 //   func_ Routine {
 
-//   }
-
-func syslog(s string) {
-	slog.Log(logid, s)
-}
-
-func alertlog(s string) {
-	slog.LogAlert(logid, s)
-}
-
-func errlog(s string) {
-	slog.LogErr(logid, s)
-}
-
+//	}
+//
 // New registers a new routine and its ceiling (max concurrency) combination.
 func New(r string, c Ceiling, min ...Ceiling) *Limiter {
 
@@ -196,7 +197,7 @@ func NewConfig(r string, c Ceiling, down int, up int, min Ceiling, h string) (*L
 
 	l := Limiter{c: c, maxc: c, minc: min, up: up, down: down, r: Routine(r), or: Routine(r), ch: make(chan struct{}), on: true, hold: hold}
 	registerCh <- &l
-	alertlog(fmt.Sprintf("New Routine %q  Ceiling: %d [min: %d, down: %d, up: %d, hold: %s]", r, c, min, down, up, h))
+	logAlert(fmt.Sprintf("New Routine %q  Ceiling: %d [min: %d, down: %d, up: %d, hold: %s]", r, c, min, down, up, h))
 	return &l, nil
 }
 
@@ -239,7 +240,9 @@ func init() {
 // "don't communicate by sharing memory, share memory by communicating"
 // grmgr runs as a single goroutine with sole access to the shared memory objects. Clients request or update data via channel requests.
 // TODO: keep adding entries to map. Determine when to purge entry from maps.
-func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup, runId uuid.UID) {
+type Config map[string]interface{}
+
+func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup, cfg ...Config) {
 
 	defer wgEnd.Done()
 
@@ -248,7 +251,44 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		l *Limiter
 		//snapshot reporting
 		s, rsnap int
+		ok       bool
+		dbname   string
+		reportOn bool
+		runId    uuid.UID
+		reptbl   string
 	)
+
+	if len(cfg) > 0 {
+		cfg := cfg[0]
+		for k, v := range cfg {
+			switch strings.ToLower(k) {
+			case "runid":
+				reportOn = true
+				runId, ok = v.(uuid.UID)
+				if !ok {
+					logErr(fmt.Errorf("runid should be a tx.uuid.UID"))
+				}
+			case "dbname":
+				reportOn = true
+				dbname = v.(string)
+			case "table":
+				reptbl = v.(string)
+			default:
+				logErr(fmt.Errorf("not a supported config key  %q", k))
+			}
+		}
+		if len(runId) == 0 {
+			logErr(fmt.Errorf("must supply a runid of uuid.UID type"))
+		}
+		if len(dbname) == 0 {
+			logAlert(`no database name specified in config. Will use "default"`)
+			dbname = "default"
+		}
+		if len(reptbl) == 0 {
+			logAlert(`no database name specified in config. Will use "runStats"`)
+			reptbl = "runStats"
+		}
+	}
 
 	rCnt = make(rCntMap)
 	rLimit = make(rLimiterMap)
@@ -267,31 +307,31 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	var wgStart sync.WaitGroup
 	wgStart.Add(1)
 	wgSnap.Add(1)
-	//
+
 	// start report-snapshot goroutine
-	//
-	go func() {
-		wgStart.Done()
-		defer wgSnap.Done()
-		// wait for grmgr to start for loop
-		wpStart.Wait()
-		alertlog("Report-snapshot Powering up...")
-		for {
-			select {
-			case t := <-time.After(time.Duration(snapInterval) * time.Second):
-				snapCh <- t
-			case <-ctxSnap.Done():
-				alertlog("Report-snapshot Shutdown.")
-				return
+	if reportOn {
+		go func() {
+			wgStart.Done()
+			defer wgSnap.Done()
+			// wait for grmgr to start for loop
+			wpStart.Wait()
+			logAlert("Report-snapshot Powering up...")
+			for {
+				select {
+				case t := <-time.After(time.Duration(snapInterval) * time.Second):
+					snapCh <- t
+				case <-ctxSnap.Done():
+					logAlert("Report-snapshot Shutdown.")
+					return
+				}
 			}
-		}
 
-	}()
-
-	alertlog("Waiting for gr monitor to power up...")
-	// wait for snap interrupter to start
-	wgStart.Wait()
-	alertlog("Started.")
+		}()
+		logAlert("Waiting for gr monitor to power up...")
+		// wait for snap interrupter to start
+		wgStart.Wait()
+	}
+	logAlert("Started.")
 	wpStart.Done()
 
 	for {
@@ -326,7 +366,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 		case r = <-EndCh:
 
 			rCnt[r] -= 1
-			//syslog(fmt.Sprintf("EndCh for %s. #concurrent count: %d", r, rCnt[r]))
+			//logDebug(fmt.Sprintf("EndCh for %s. #concurrent count: %d", r, rCnt[r]))
 
 			if b, ok := rWait[r]; ok {
 				if b > 0 && rCnt[r] < rLimit[r].c {
@@ -343,25 +383,31 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 				// has ASKed
 				rLimit[r].ch <- struct{}{} // proceed to run gr
 				rCnt[r] += 1
-				syslog(fmt.Sprintf("has ASKed. Under cnt limit. SEnt ACK on routine channel..for %s  cnt: %d Limit: %d", r, rCnt[r], rLimit[r].c))
+				logDebug(fmt.Sprintf("has ASKed. Under cnt limit. SEnt ACK on routine channel..for %s  cnt: %d Limit: %d", r, rCnt[r], rLimit[r].c))
 			} else {
-				syslog(fmt.Sprintf("has ASKed %s. Cnt [%d] is above limit [%d]. Mark %s as waiting", r, rCnt[r], rLimit[r].c))
+				logDebug(fmt.Sprintf("has ASKed %s. Cnt [%d] is above limit [%d]. Mark %s as waiting", r, rCnt[r], rLimit[r].c))
 				rWait[r] += 1 // log routine as waiting to proceed
 			}
 
-		case <-throttleDownCh:
+		case r = <-throttleDownCh:
 
+			allr := make(rLimiterMap)
+			if r == Routine("__all") {
+				allr = rLimit
+			} else {
+				allr[r] = rLimit[r]
+			}
 			t0 := time.Now()
 
 			for _, v := range rLimit {
 				//
 
 				if t0.Sub(throttleDownActioned) < v.hold {
-					alertlog("throttleDown: to soon to throttle down after last throttled action")
+					logAlert("throttleDown: to soon to throttle down after last throttled action")
 				} else {
 
 					if t0.Sub(throttleUpActioned) < v.hold {
-						alertlog("throttleDown: to soon to throttle down after last throttled action")
+						logAlert("throttleDown: to soon to throttle down after last throttled action")
 					} else {
 
 						// throttle down by 20%. Once changed cannot be modified for 2 minutes.
@@ -370,27 +416,33 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 						if v.c < v.minc {
 							v.c = v.minc
-							alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
+							logAlert(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
 						} else {
-							alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+							logAlert(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
 						}
 					}
 				}
 			}
 			throttleDownActioned = t0
 
-		case <-throttleUpCh:
+		case r = <-throttleUpCh:
 
+			allr := make(rLimiterMap)
+			if r == Routine("__all") {
+				allr = rLimit
+			} else {
+				allr[r] = rLimit[r]
+			}
 			t0 := time.Now()
 			for _, v := range rLimit {
 				//
 
 				if t0.Sub(throttleDownActioned) < v.hold {
-					alertlog("throttleDown: to soon to throttle down after last throttled action")
+					logAlert("throttleDown: to soon to throttle down after last throttled action")
 				} else {
 
 					if t0.Sub(throttleUpActioned) < v.hold {
-						alertlog("throttleDown: to soon to throttle down after last throttled action")
+						logAlert("throttleDown: to soon to throttle down after last throttled action")
 					} else {
 
 						// throttle down by 20%. Once changed cannot be modified for 2 minutes.
@@ -399,9 +451,9 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 
 						if v.c > v.maxc {
 							v.c = v.maxc
-							alertlog(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
+							logAlert(fmt.Sprintf("throttleDown: Throttling has reached minimum allowed [%d], for %s", v.c, v.minc))
 						} else {
-							alertlog(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
+							logAlert(fmt.Sprintf("throttleDown: %s throttled down to %d [minimum: %d]", v.or, v.c, v.minc))
 						}
 					}
 				}
@@ -431,8 +483,8 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 						csnap_[k] = append(csnap_[k], vv)
 					}
 				}
-				report(csnap_, runId, snapInterval, snapReportInterval)
-				syslog("gr dump report to table completed...")
+				report(dbname, reptbl, csnap_, runId, snapInterval, snapReportInterval)
+				logDebug("gr dump report to table completed...")
 				rsnap, s = 0, 0
 
 			}
@@ -443,26 +495,26 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 			delete(rCnt, r)
 			delete(rWait, r)
 			delete(csnap, r)
-			alertlog(fmt.Sprintf("Unregister %s", r))
+			logAlert(fmt.Sprintf("Unregister %s", r))
 
 		case <-ctx.Done():
 			cancelSnap()
-			alertlog("Waiting for internal snap service to shutdown...")
+			logAlert("Waiting for internal snap service to shutdown...")
 			wgSnap.Wait()
-			alertlog("Internal snap service shutdown")
-			alertlog(fmt.Sprintf("Number of map entries not deleted: %d %d %d ", len(rLimit), len(rCnt), len(rWait)))
+			logAlert("Internal snap service shutdown")
+			logAlert(fmt.Sprintf("Number of map entries not deleted: %d %d %d ", len(rLimit), len(rCnt), len(rWait)))
 			for k, _ := range rLimit {
-				alertlog(fmt.Sprintf("rLimit Map Entry: %s", k))
+				logAlert(fmt.Sprintf("rLimit Map Entry: %s", k))
 			}
 			for k, _ := range rCnt {
-				alertlog(fmt.Sprintf("rCnt Map Entry: %s", k))
+				logAlert(fmt.Sprintf("rCnt Map Entry: %s", k))
 			}
 			for k, _ := range rWait {
-				alertlog(fmt.Sprintf("rWait Map Entry: %s", k))
+				logAlert(fmt.Sprintf("rWait Map Entry: %s", k))
 			}
 			// TODO: Done should be in a separate select. If a request and Done occur simultaneously then go will randomly pick one.
 			// separating them means we have control. Is that the solution. Ideally we should control outside of uuid func().
-			alertlog("Shutdown.")
+			logAlert("Shutdown.")
 			return
 
 		}
@@ -470,7 +522,7 @@ func PowerOn(ctx context.Context, wpStart *sync.WaitGroup, wgEnd *sync.WaitGroup
 	}
 }
 
-func report(snap map[string][]int, runid uuid.UID, snapInterval, snapReportInterval int) {
+func report(dbname string, reptbl string, snap map[string][]int, runid uuid.UID, snapInterval, snapReportInterval int) {
 
 	// report average cnt for each interval for each grmgr limiter (throttler)
 	reportAvg := make(map[string]map[int]float64, len(snap))
@@ -511,51 +563,31 @@ func report(snap map[string][]int, runid uuid.UID, snapInterval, snapReportInter
 			}
 			// drop expired entries ie. > 2hrs
 			if ii == ns[len(ns)-1] {
-				syslog("drop expired snap entries..")
+				logDebug("drop expired snap entries..")
 				snap[k] = v[1:]
 			}
 
 		}
 	}
-	syslog("About to dump report to table...")
+	logDebug("About to dump report to table...")
 	// table columns in mon_gr containing averages
 	col := []string{"s10", "s20", "s40", "m1", "m2", "m3", "m5", "m10", "m20", "m40", "h1", "h2"}
 	// update database - this should be a merge opeation based on what key?
-	if param.DB == param.Dynamodb {
 
-		mtx := tx.NewBatch(param.StatsSystemTag)
+	for k, v := range reportAvg {
 
-		// perform a merge tx. - for Dynamodb use Put (which effectively does a merge). Choose Transactional (NewMerge) or  Non-transacational, i.e. bulkInsert (NewBulkMerge)
-		//					 	for SQL use manual merge ie. update then insert if error. This cannot be done as a batch operation. Use NewSingle() instead.
-		for k, v := range reportAvg {
+		mtx := tx.New(statsSystemTag).DB(dbname)
 
-			m := mtx.NewInsert(tbl.RunStat).AddMember("run", runid, mut.IsKey).AddMember("sortk", "gr#"+k, mut.IsKey)
-			for i, c := range col {
-				m.AddMember(c, v[ns[i]])
-			}
+		m := mtx.NewMerge(tbl.Name(reptbl)).AddMember("run", runid, mut.IsKey).AddMember("sortk", "gr#"+k, mut.IsKey)
+		for i, c := range col {
+			m.AddMember(c, v[ns[i]])
 		}
-
 		err := mtx.Execute()
 		if err != nil {
-			elog.Add("grmgrRep", err)
+			logErr(err)
 		}
-
-	} else {
-
-		for k, v := range reportAvg {
-
-			mtx := tx.NewSingle(param.StatsSystemTag)
-
-			m := mtx.NewMerge(tbl.RunStat).AddMember("run", runid, mut.IsKey).AddMember("sortk", "gr#"+k, mut.IsKey)
-			for i, c := range col {
-				m.AddMember(c, v[ns[i]])
-			}
-			err := mtx.Execute()
-			if err != nil {
-				elog.Add("grmgrRep", err)
-			}
-		}
-
 	}
+
+	//	}
 
 }

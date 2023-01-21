@@ -11,7 +11,7 @@ import (
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 const logid = "EdgeLoad"
@@ -112,7 +112,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 					bi++
 					bc++
 					//
-					if bi == param.DBbulkInsert {
+					if bi == 100 {
 						// execute active batch of mutations now rather then keep adding to batch-of-batches to reduce memory requirements.
 						err = etx.Execute()
 						if err != nil {

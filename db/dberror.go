@@ -1,6 +1,6 @@
 // build+ dynamodb
 
-// db package defines common and generic database errors. Each occurrance is written to the syslog.
+// db package defines common and generic database errors.
 // Errors are not added to the errlog - this is left to the application. The aplication can also add any relevent data values
 // to identify the data impacted by the error.
 package db
@@ -9,9 +9,8 @@ import (
 	"errors"
 	"fmt"
 
-	//"github.com/GoGraph/errlog"
-	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/log"
+	"github.com/GoGraph/tx/uuid"
 )
 
 // var (
@@ -38,11 +37,10 @@ var logid = "DB"
 
 func logerr(e error, panic_ ...bool) {
 
+	log.LogErr(e)
 	if len(panic_) > 0 && panic_[0] {
-		slog.Log("DB: ", e.Error(), true)
 		panic(e)
 	}
-	slog.Log("DB: ", e.Error())
 }
 
 func (u UnprocessedErr) Error() string {
@@ -101,7 +99,7 @@ func (e *DBSysErr) Error() string {
 func newDBSysErr(rt string, api string, err error) error {
 
 	syserr := &DBSysErr{routine: rt, api: api, err: err}
-	slog.LogErr("DBExecute: ", syserr.Error())
+	log.LogErr(syserr)
 	//errlog.Add("DBExecute", syserr)
 
 	return syserr
@@ -135,7 +133,6 @@ func newDBSysErr2(rt string, tag string, reason string, code string, err error) 
 
 	syserr := &DBSysErr2{routine: rt, tag: tag, reason: reason, code: code, err: err}
 
-	slog.LogErr("DBExecute: ", syserr.Error())
 	//errlog.Add("DBExecute", syserr)
 
 	return syserr
@@ -173,7 +170,7 @@ func NewDBNoItemFound(rt string, pk uuid.UIDb64, sk string, api string) error {
 
 	e := &DBNoItemFound{routine: rt, pkey: pk, sortk: sk, api: api}
 	e.err = NoDataFound
-	slog.LogErr("DBExecute: ", e.Error())
+	//	slog.LogErr("DBExecute: ", e.Error())
 	//errlog.Add("DBExecute", e)
 
 	return e
@@ -197,7 +194,7 @@ type DBMarshalingErr struct {
 
 func newDBMarshalingErr(rt string, pk uuid.UIDb64, sk string, api string, err error) error {
 	e := &DBMarshalingErr{routine: rt, pkey: pk, sortk: sk, api: api, err: err}
-	slog.LogErr("DBExecute: ", fmt.Sprintf("Error: %s", e.Error()))
+	//	slog.LogErr("DBExecute: ", fmt.Sprintf("Error: %s", e.Error()))
 	//	errlog.Add("DBExecute", e)
 	return e
 }
@@ -223,7 +220,7 @@ type DBUnmarshalErr struct {
 
 func newDBUnmarshalErr(rt string, pk uuid.UIDb64, sk string, api string, err error) error {
 	e := &DBUnmarshalErr{routine: rt, pkey: pk, sortk: sk, api: api, err: err}
-	slog.LogErr("DBExecute: ", e.Error())
+	//slog.LogErr("DBExecute: ", e.Error())
 	//errlog.Add("DBExecute", e)
 	return e
 }

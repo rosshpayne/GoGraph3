@@ -1,4 +1,4 @@
-package mysql
+package sql
 
 import (
 	"context"
@@ -7,13 +7,33 @@ import (
 	"fmt"
 	"strings"
 
-	//"github.com/GoGraph/db"
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/uuid"
-
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/GoGraph/tx/uuid"
+	//_ "github.com/go-sql-driver/mysql"
 )
+
+const (
+	logid = "sql"
+)
+
+func logerr(e error, panic_ ...bool) {
+
+	if len(panic_) > 0 && panic_[0] {
+		log.LogFail(fmt.Errorf("%s %w", logid, e))
+		panic(e)
+	}
+	log.LogErr(fmt.Errorf("%s %w", logid, e))
+}
+
+func syslog(s string) {
+	log.LogDebug(fmt.Sprintf("%s %s", logid, s))
+}
+
+func alertlog(s string) {
+	log.LogAlert(fmt.Sprintf("%s %s", logid, s))
+}
 
 type sqlStmt struct {
 	//i      []int //  index in tx package []*mut.Mutations
@@ -23,7 +43,7 @@ type sqlStmt struct {
 
 // execute handles DML only (see ExecuteQuery).
 // if prepare() specified in tx, all unique statements (mutations) are prepared once executed multiple times
-func execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag string, cTx *sql.Tx, prepare bool, opt ...db.Option) error {
+func Execute(ctx context.Context, client *sql.DB, bs []*mut.Mutations, tag string, cTx *sql.Tx, prepare bool, opt ...db.Option) error {
 
 	// type (
 	// 	tblMT  map[string][]*prepT // table name - may have multiple Prep stmts if sql insert/update/delete varies in columns reference say.

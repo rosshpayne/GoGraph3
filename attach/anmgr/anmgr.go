@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/GoGraph/attach/ds"
-	slog "github.com/GoGraph/syslog"
+	"github.com/rosshpayne/GoGraph/attach/ds"
+	slog "github.com/rosshpayne/GoGraph/syslog"
 )
 
 const (
@@ -21,7 +21,7 @@ type edgeKey struct {
 type attachRunningMap map[edgeKey]struct{} // set of running attachNodes
 var attachRunning attachRunningMap
 
-//type attachDoneMap map[EdgeSn]bool // set of completed attachNodes
+// type attachDoneMap map[EdgeSn]bool // set of completed attachNodes
 var (
 	attachDone   int //attachDoneMapA
 	attachDoneCh chan *ds.Edge

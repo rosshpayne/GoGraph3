@@ -1,7 +1,7 @@
 package ds
 
 import (
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type NdShortNm = string

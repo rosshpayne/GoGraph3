@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/GoGraph/dbs"
 	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/dbs"
 	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type StdMut byte

@@ -11,7 +11,7 @@ import (
 
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	// "github.com/aws/aws-sdk-go/aws"

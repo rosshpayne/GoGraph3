@@ -13,7 +13,7 @@ import (
 	"github.com/GoGraph/tx"
 	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type ASZErr struct {

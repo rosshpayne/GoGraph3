@@ -16,8 +16,8 @@ import (
 	//"github.com/GoGraph/attach/anmgr"
 	//"github.com/GoGraph/block"
 	"github.com/GoGraph/cache"
-	dyn "github.com/GoGraph/db"
-	dbadmin "github.com/GoGraph/db/admin"
+	//	dyn "github.com/GoGraph/db"
+	// dbadmin "github.com/GoGraph/db/admin"
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/errlog"
 	elog "github.com/GoGraph/errlog"
@@ -26,14 +26,18 @@ import (
 	"github.com/GoGraph/run"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	tx "github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/db"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/query"
-	"github.com/GoGraph/types"
-	"github.com/GoGraph/uuid"
 
-	"github.com/GoGraph/mysql"
+	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/db"
+	dyn "github.com/GoGraph/tx/dynamodb"
+	dbadmin "github.com/GoGraph/tx/dynamodb/admin"
+	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/mysql"
+	"github.com/GoGraph/tx/query"
+	"github.com/GoGraph/tx/uuid"
+
+	//"github.com/GoGraph/mysql"
+	"github.com/GoGraph/types"
 )
 
 const (
@@ -69,9 +73,9 @@ func alertlog(s string) {
 	slog.LogAlert(logid, s)
 }
 
-// func errlog(s string) {
-// 	slog.LogErr(logid, s)
-// }
+func logerr(id string, e error) {
+	elog.Add(logid, e)
+}
 
 func main() {
 	// determine types which reference types that have a cardinality of 1:1
@@ -102,6 +106,7 @@ func main() {
 
 	//start syslog services (if any)
 	err = slog.Start()
+	syslog(fmt.Sprintf("Argument: table: %s", *table))
 	if err != nil {
 		panic(fmt.Errorf("Error starting syslog services: %w", err))
 	}
@@ -138,18 +143,16 @@ func main() {
 		}
 	}()
 
-	// register default database client
-	// db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}, db.Option{Name: "Region", Val: "us-east-1"}...)
-	// mysql.Init(ctx)
+	// register  databases
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "scan", Val: db.Enabled}, db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 
-	//	tbl.Register("pgState", "Id", "Name")
-	// following tables are in MySQL - should not need to be registered as its a dynamodb requirement.
-	// TODO: use introspection in dynmaodb so tables do not need to be registered
-	// tbl.Register("Run$Operation", "Graph")
-	// tbl.Register("Run$Run", "RunId")
-	// tbl.Register("Run$State", "RunId")
+	logrmDB := slog.NewLogr("mdb")
+	logrmGr := slog.NewLogr("grmgr")
+
+	tx.SetLogger(logrmDB) //, tx.Alert)
+	grmgr.SetLogger(logrmGr)
+	//tx.SetLogger(logrmDB, tx.NoLog)
 
 	param.ReducedLog = false
 	if *reduceLog == 1 {
@@ -198,6 +201,24 @@ func main() {
 		fmt.Println(fmt.Sprintf("Error in  MakeRunId() : %s", err))
 		return
 	}
+	//
+	// start services
+	//
+	wpEnd.Add(3)
+	wpStart.Add(3)
+	//grCfg := grmgr.Config{"dbname": "default", "table": "runstats", "runid": runid}
+	grCfg := grmgr.Config{"runid": runid}
+	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, grCfg) // concurrent goroutine manager service
+	go errlog.PowerOn(ctx, &wpStart, &wpEnd)       // error logging service
+	//go anmgr.PowerOn(ctx, &wpStart, &wpEnd)        // attach node service
+	go monitor.PowerOn(ctx, &wpStart, &wpEnd) // repository of system statistics service
+	wpStart.Wait()
+
+	logerr := func(id string, e error) {
+		elog.Add("mdb", e)
+	}
+	tx.SetErrLogger(logerr)
+	grmgr.SetErrLogger(logerr)
 
 	// set graph and type data
 	err = types.SetGraph(*graph)
@@ -251,7 +272,7 @@ func main() {
 		}
 		err = addRun(ctx, stateId, runid)
 		if err != nil {
-			elog.Add(fmt.Sprintf("Error in addRun(): %s", err))
+			elog.Add("addRun()", err)
 			return
 		}
 	}
@@ -280,16 +301,6 @@ func main() {
 	// 	// Regstier index
 	// 	tbl.RegisterIndex(tbl.IdxName("TyIX"), tbl.Name("GoGraph"), "Ty", "IX") // Ty prepended with GraphSN()
 	// }
-	//
-	// start services
-	//
-	wpEnd.Add(3)
-	wpStart.Add(3)
-	go grmgr.PowerOn(ctx, &wpStart, &wpEnd, runid) // concurrent goroutine manager service
-	go errlog.PowerOn(ctx, &wpStart, &wpEnd)       // error logging service
-	//go anmgr.PowerOn(ctx, &wpStart, &wpEnd)        // attach node service
-	go monitor.PowerOn(ctx, &wpStart, &wpEnd) // repository of system statistics service
-	wpStart.Wait()
 
 	// setup db related services (e.g. stats snapshot save)
 	dbadmin.Setup()

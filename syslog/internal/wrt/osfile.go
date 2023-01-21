@@ -7,11 +7,11 @@ import (
 	"io"
 	"log"
 
-	param "github.com/GoGraph/dygparam"
+	param "github.com/GoGraph/syslog/param"
 )
 
 func New() io.Writer {
-	return param.FileWriter
+	return param.FileLogr.Writer()
 }
 func Start(f *log.Logger) error {
 	return nil

@@ -7,7 +7,7 @@ import (
 	blk "github.com/GoGraph/block"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 var logid string = "ggdb"

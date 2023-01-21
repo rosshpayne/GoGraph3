@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GoGraph/dbs"
 	"github.com/GoGraph/tbl"
+	"github.com/GoGraph/tx/dbs"
 	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/uuid"
+	"github.com/GoGraph/tx/uuid"
 )
 
 type AttachOp struct {

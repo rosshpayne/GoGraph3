@@ -18,15 +18,14 @@ import (
 
 	throttle "github.com/GoGraph/db/internal/throttleSrv"
 	"github.com/GoGraph/db/stats"
-	"github.com/GoGraph/dbs"
-	elog "github.com/GoGraph/errlog"
-	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/uuid"
-	//"github.com/GoGraph/tbl"
-	param "github.com/GoGraph/dygparam"
+
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/dbs"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/param"
 	"github.com/GoGraph/tx/query"
+	"github.com/GoGraph/tx/uuid"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -83,14 +82,6 @@ func (c ComparOpr) String() string {
 		return " !"
 	}
 	return "NA"
-}
-
-func syslog(s string) {
-	slog.Log(logid, s)
-}
-
-func alertlog(s string) {
-	slog.LogAlert(logid, s)
 }
 
 func execute(ctx context.Context, client *dynamodb.Client, bs []*mut.Mutations, tag string, api db.API, cfg aws.Config, opt ...db.Option) error {
@@ -166,7 +157,7 @@ func errorAction(err error) []action { // (bool, action string) {
 			if strings.Index(errString, "api error throttlingexception") > 0 {
 				if strings.Index(errString, "try again shortly") > 0 {
 					// // lets wait 30 seconds....
-					// slog.LogError("throttlingexception", "About to wait 30 seconds before proceeding...")
+					// log.LogError("throttlingexception", "About to wait 30 seconds before proceeding...")
 					// time.Sleep(30 * time.Second)
 					return []action{shortDelay, retry}
 				} else {
@@ -183,7 +174,7 @@ func errorAction(err error) []action { // (bool, action string) {
 	return []action{fail}
 }
 
-func retryOp(err error, cf ...aws.Config) bool {
+func retryOp(err error, tag string, cf ...aws.Config) bool {
 
 	var cfg aws.Config
 	if len(cf) > 0 {
@@ -193,11 +184,11 @@ func retryOp(err error, cf ...aws.Config) bool {
 	//  github.com/aws/aws-sdk-go-v2/aws/Retryer
 	retryer := cfg.Retryer
 
-	alertlog(fmt.Sprintf("RetryOp: [%T] %s", err, err))
+	log.LogAlert(fmt.Sprintf("RetryOp for %s: [%T] %s", tag, err, err))
 
 	if retryer != nil {
 		if retryer().IsErrorRetryable(err) {
-			alertlog("RetryOp: error is retryable...")
+			log.LogAlert("RetryOp: error is retryable...")
 			for _, v := range []int{1, 2, 3} {
 				d, err := retryer().RetryDelay(v, err)
 				if err != nil {
@@ -205,35 +196,35 @@ func retryOp(err error, cf ...aws.Config) bool {
 				}
 			}
 		} else {
-			alertlog("RetryOp: error is NOT retryable...")
+			log.LogAlert("RetryOp: error is NOT retryable...")
 		}
-		alertlog(fmt.Sprintf("RetryOp: max attempts: %d", retryer().MaxAttempts()))
+		log.LogAlert(fmt.Sprintf("RetryOp: max attempts: %d", retryer().MaxAttempts()))
 	} else {
-		alertlog(fmt.Sprintf("RetryOp: no Retryer defined. aws.Config max attempts: %d", cfg.RetryMaxAttempts))
+		log.LogAlert(fmt.Sprintf("RetryOp: no Retryer defined. aws.Config max attempts: %d", cfg.RetryMaxAttempts))
 	}
 
 	for _, action := range errorAction(err) {
 
 		switch action {
 		case shortDelay:
-			alertlog("RetryOp: short delay...")
+			log.LogAlert("RetryOp: short delay...")
 			time.Sleep(20 * time.Second)
 		case longDelay:
-			alertlog("RetryOp: long delay...")
+			log.LogAlert("RetryOp: long delay...")
 			time.Sleep(60 * time.Second)
 		case retry:
-			alertlog("RetryOp: retry...")
+			log.LogAlert("RetryOp: retry...")
 			return true
 		// case fail:
 		// 	return false
 		case throttle_:
-			alertlog("RetryOp: throttle...")
+			log.LogAlert("RetryOp: throttle...")
 			// call throttle down api
 			throttle.Down()
 
 		}
 	}
-	alertlog("RetryOp: no retry...")
+	log.LogAlert("RetryOp: no retry...")
 	return false
 }
 
@@ -584,7 +575,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 			if err != nil {
 
-				if !retryOp(err, cfg) {
+				if !retryOp(err, tag, cfg) {
 					return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation or max retries exceeded", NonRetryOperErr, err)
 				}
 				// wait 1 seconds before processing again...
@@ -608,7 +599,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 			// execute unprocessed items, checking for no-execution errors or unprocessed items in batch
 			for {
 
-				slog.Log("dbExecute: ", fmt.Sprintf("BatchWriteItem: %s, tag: %s: Elapsed: %s Unprocessed: %d of %d [retry: %d]", api, tag, t1.Sub(t0).String(), unProc, curUnProc, unProcRetryCnt+1))
+				log.LogDebug(fmt.Sprintf("BatchWriteItem: %s, tag: %s: Elapsed: %s Unprocessed: %d of %d [retry: %d]", api, tag, t1.Sub(t0).String(), unProc, curUnProc, unProcRetryCnt+1))
 
 				if unProcRetryCnt == param.MaxUnprocRetries {
 					nerr := UnprocessedErr{Remaining: muts(out.UnprocessedItems), Total: curUnProc, Retries: unProcRetryCnt}
@@ -626,7 +617,7 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 
 				if err != nil {
 					retryErr = err
-					if !retryOp(err, cfg) {
+					if !retryOp(err, tag, cfg) {
 						return newDBSysErr2("BatchWriteItem", tag, "Error type prevents retry of operation.", NonRetryOperErr, err)
 					}
 					// wait n seconds before reprocessing...
@@ -648,13 +639,13 @@ func execBatchMutations(ctx context.Context, client *dynamodb.Client, bi mut.Mut
 				delay *= 2
 			}
 		}
-		slog.Log("dbExecute:", fmt.Sprintf("%s : Batch processed all items [tag: %s]. Mutations %d  Elapsed: %s", api, tag, len(bi), t1.Sub(t0).String()))
+		log.LogDebug(fmt.Sprintf("%s : Batch processed all items [tag: %s]. Mutations %d  Elapsed: %s", api, tag, len(bi), t1.Sub(t0).String()))
 	}
 
 	// log 30% of activity
 	dur := t1.Sub(t0).String()
 	if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54 || dur[dot+3] == 55) {
-		slog.Log("dbExecute:", fmt.Sprintf("Bulk Insert [tag: %s]: mutations %d  Unprocessed Retries: %d  Elapsed: %s", tag, len(bi), unProcRetryCnt, dur))
+		log.LogDebug(fmt.Sprintf("Bulk Insert [tag: %s]: mutations %d  Unprocessed Retries: %d  Elapsed: %s", tag, len(bi), unProcRetryCnt, dur))
 	}
 
 	return nil
@@ -860,7 +851,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 							// return nil
 							dur := t1.Sub(t0).String()
 							if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54) { //|| dur[dot+3] == 55) {
-								slog.Log("dbExecute: ", fmt.Sprintf("TransactionAPI (merge part2): mutations %d  Elapsed: %s ", len(tx.txwii[1].TransactItems), dur))
+								log.LogDebug(fmt.Sprintf("TransactionAPI (merge part2): mutations %d  Elapsed: %s ", len(tx.txwii[1].TransactItems), dur))
 							}
 
 						default:
@@ -872,7 +863,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 				} else {
 
-					syslog(fmt.Sprintf("Transaction error: %s. %#v\n", err, tx.txwii[0]))
+					log.LogDebug(fmt.Sprintf("Transaction error: %s. %#v\n", err, tx.txwii[0]))
 
 					return newDBSysErr2("TransactionAPI", tag, "Not a TransactionCanceledException error in TransactWriteItems", "", err)
 
@@ -884,7 +875,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 
 				dur := t1.Sub(t0).String()
 				if dot := strings.Index(dur, "."); dur[dot+2] == 57 && (dur[dot+3] == 54) { //|| dur[dot+3] == 55) {
-					slog.Log("dbExecute: ", fmt.Sprintf("TransactionAPI: mutations %d  Elapsed: %s ", len(tx.txwii[0].TransactItems), dur))
+					log.LogDebug(fmt.Sprintf("TransactionAPI: mutations %d  Elapsed: %s ", len(tx.txwii[0].TransactItems), dur))
 				}
 
 			}
@@ -979,7 +970,7 @@ func execTransaction(ctx context.Context, client *dynamodb.Client, bs []*mut.Mut
 								return newDBSysErr2("Execute std api", tag, "PutItem Error", "", err)
 							}
 						} else {
-							//syslog(fmt.Sprintf("Execute std api:consumed capacity for PutItem %s.  Duration: %s", uio.ConsumedCapacity, t1.Sub(t0)))
+							//log.LogDebug(fmt.Sprintf("Execute std api:consumed capacity for PutItem %s.  Duration: %s", uio.ConsumedCapacity, t1.Sub(t0)))
 							stats.SaveStdStat(stats.PutItem, tag, uio.ConsumedCapacity, t1.Sub(t0))
 						}
 					}
@@ -1162,7 +1153,7 @@ func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle
 		ConsistentRead:           aws.Bool(q.ConsistentMode()),
 	}
 	//
-	//syslog(fmt.Sprintf("GetItem: %#v\n", input))
+	//log.LogDebug(fmt.Sprintf("GetItem: %#v\n", input))
 	t0 := time.Now()
 	result, err := client.GetItem(ctx, input)
 	t1 := time.Now()
@@ -1172,7 +1163,7 @@ func exGetItem(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exGetItem:consumed capacity for GetItem  %s. Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), dur_))
+		log.LogDebug(fmt.Sprintf("exGetItem:consumed capacity for GetItem  %s. Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), dur_))
 	}
 	//
 	if len(result.Item) == 0 {
@@ -1255,7 +1246,7 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 	var err error
 	var first bool = true
 
-	slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+	log.LogAlert(fmt.Sprintf("queryChannelSrv exQuery, scanChannelSrv: Tag [%s]", q.Tag))
 
 	for !q.EOD() {
 
@@ -1267,11 +1258,11 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 
 		if err != nil {
 			if errors.Is(query.NoDataFoundErr, err) { //TODO: this is never returned for paginated query???
-				slog.LogAlert("queryChannelSrv", "no data found..")
+				log.LogAlert("queryChannelSrv no data found..")
 				q.SetEOD()
 				continue
 			}
-			elog.Add("scanChannelSrv", err)
+			log.LogErr(fmt.Errorf("queryChannelSrv: %w", err))
 		}
 		// check for ctrl-C
 		select {
@@ -1287,7 +1278,7 @@ func queryChannelSrv(ctx context.Context, q *query.QueryHandle, chv reflect.Valu
 		if q.Paginated() && !first {
 			err := savePgState(ctx, client, q.PgStateId(), q.PopPgStateValS())
 			if err != nil {
-				elog.Add("savePgState", err)
+				log.LogErr(fmt.Errorf("savePgState: %w", err))
 				q.SetEOD()
 				continue
 			}
@@ -1315,7 +1306,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 		exprFilter  *string
 	)
 
-	//slog.Log("exQueryStd", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+	//log.LogDebug("exQueryStd", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
 	exprNames = make(map[string]string)
 
 	// check bind variable is a slice
@@ -1327,7 +1318,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		slog.LogAlert("exQueryStd", "restart: retrieve pg state...")
+		log.LogAlert("exQueryStd restart: retrieve pg state...")
 		pg, err := getPgState(ctx, client, q.PgStateId())
 		if err != nil {
 			return err
@@ -1384,7 +1375,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	// filter defined
 	for i, n := range q.GetFilterAttrs() {
 
-		syslog(fmt.Sprintf("Filter : %#v\n", n.Name()))
+		log.LogDebug(fmt.Sprintf("exQueryStd Filter : %#v\n", n.Name()))
 
 		if q.GetOr() > 0 && q.GetAnd() > 0 {
 			panic(fmt.Errorf("Cannot mix OrFilter, AndFilter conditions. Use Where() & Values() instead"))
@@ -1519,7 +1510,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 
 	if q.IndexSpecified() {
 		input.IndexName = aws.String(string(q.GetIndex()))
-		//syslog(fmt.Sprintf("exQueryStd: index specified: %s", q.GetIndex()))
+		//log.LogDebug(fmt.Sprintf("exQueryStd: index specified: %s", q.GetIndex()))
 	}
 	if l := q.GetLimit(); l > 0 {
 		input.Limit = aws.Int32(int32(l))
@@ -1547,7 +1538,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 			if q.PgStateValI() != nil {
 				err := deletePgState(ctx, client, q.PgStateId())
 				if err != nil {
-					elog.Add(fmt.Sprintf("Error in deletePgState: %s", err))
+					log.LogErr(fmt.Errorf("deletePgState: %w", err))
 				}
 			}
 		}
@@ -1564,7 +1555,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		syslog(fmt.Sprintf("exQuery:consumed capacity for Query  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
+		log.LogDebug(fmt.Sprintf("exQueryStd:consumed capacity for Query  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
 	}
 	//
 	if result.Count == 0 {
@@ -1576,7 +1567,7 @@ func exQueryStd(ctx context.Context, client *DynamodbHandle, q *query.QueryHandl
 			if reflect.ValueOf(q.GetBind()).Elem().Kind() == reflect.Slice {
 
 				if reflect.ValueOf(q.GetBind()).Elem().Len() > 0 {
-					slog.LogAlert("exStdQuery", fmt.Sprintf(" Zero out bind variable "))
+					log.LogAlert(fmt.Sprintf("exStdQuery Zero out bind variable "))
 					t := reflect.ValueOf(q.GetBind()).Type().Elem()
 					n := reflect.New(t) // *slice to empty slice
 					q.SetBindValue(n.Elem())
@@ -1707,7 +1698,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 
 		} else {
 
-			elog.Add("exScan", fmt.Errorf("Not supported. Use ExecuteWithChannel() instead"))
+			log.LogErr(fmt.Errorf("exScan: Not supported. Use ExecuteWithChannel() instead"))
 		}
 
 	}
@@ -1719,7 +1710,7 @@ func exScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, p
 func exWorker(wg *sync.WaitGroup, q *query.QueryHandle, ch interface{}) {
 	err := q.GetFunc()(ch)
 	if err != nil {
-		elog.Add("workerFunc", err)
+		log.LogErr(fmt.Errorf("workerFunc: %w", err))
 	}
 	wg.Done()
 }
@@ -1730,7 +1721,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 
 	var err error
 
-	//slog.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
+	//log.LogAlert("scanChannelSrv", fmt.Sprintf("exQuery: Tag [%s]", q.Tag))
 
 	for !q.EOD() {
 
@@ -1747,7 +1738,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 				q.SetEOD()
 				continue
 			}
-			elog.Add("scanChannelSrv", err)
+			log.LogErr(fmt.Errorf("scanChannelSrv: %w", err))
 		}
 		// check for ctrl-C
 		select {
@@ -1765,7 +1756,7 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 		if q.Paginated() && len(q.PgStateValS()) > 0 {
 			err := savePgState(ctx, client, q.PgStateId(), q.PopPgStateValS(), q.Worker())
 			if err != nil {
-				elog.Add("savePgState", err)
+				log.LogErr(fmt.Errorf("savePgState: %w", err))
 				q.SetEOD()
 				continue
 			}
@@ -1779,12 +1770,12 @@ func scanChannelSrv(ctx context.Context, scan scanMode, q *query.QueryHandle, ch
 // exNonParallelScan - non-parallel scan. Scan of table or index.
 func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
-	slog.Log(logid, fmt.Sprintf("exNonParallelScan"))
+	log.LogDebug(fmt.Sprintf("exNonParallelScan"))
 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
 		// parse contents into map[string]types.AttributeValue
-		alertlog("exNonParallelScan: restart")
+		log.LogAlert("exNonParallelScan: restart")
 		pg, err := getPgState(ctx, client, q.PgStateId())
 		if err != nil {
 			return err
@@ -1856,11 +1847,11 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	if err != nil {
 		return newDBExprErr("exNonParallelScan", "", "", err)
 	}
-	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("ProjectionExpression  %s", *expr.Projection()))
-	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("ExpressionAttributeNames  %s", expr.Names()))
-	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("ExpressionAttributeValues  %s", expr.Values()))
-	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("Filter  %s", *expr.Filter()))
-	// slog.LogAlert("exNonParallelScan", fmt.Sprintf("TableName:  %s", q.GetTable()))
+	// log.LogAlert("exNonParallelScan", fmt.Sprintf("ProjectionExpression  %s", *expr.Projection()))
+	// log.LogAlert("exNonParallelScan", fmt.Sprintf("ExpressionAttributeNames  %s", expr.Names()))
+	// log.LogAlert("exNonParallelScan", fmt.Sprintf("ExpressionAttributeValues  %s", expr.Values()))
+	// log.LogAlert("exNonParallelScan", fmt.Sprintf("Filter  %s", *expr.Filter()))
+	// log.LogAlert("exNonParallelScan", fmt.Sprintf("TableName:  %s", q.GetTable()))
 	input := &dynamodb.ScanInput{
 		ProjectionExpression:      expr.Projection(),
 		ExpressionAttributeNames:  expr.Names(),
@@ -1884,7 +1875,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 
 	if lk := q.PgStateValI(); lk != nil {
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
-		//	syslog(fmt.Sprintf("exNonParallelScan: SetExclusiveStartKey %s", input.String()))
+		//	log.LogDebug(fmt.Sprintf("exNonParallelScan: SetExclusiveStartKey %s", input.String()))
 	}
 	//fmt.Print("input: ", input.String(), "\n")
 	//
@@ -1898,7 +1889,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	// save LastEvaluatedKey
 	if lek := result.LastEvaluatedKey; len(lek) == 0 {
 
-		slog.LogAlert("exNonParallelScan", " LastEvaluatedKey is nil, setEOD()")
+		log.LogAlert("exNonParallelScan LastEvaluatedKey is nil, setEOD()")
 		q.AddPgStateValS("")
 		q.SetPgStateValI(nil)
 		q.SetEOD()
@@ -1913,7 +1904,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
 		cc_ := ConsumedCapacity_{result.ConsumedCapacity}
-		slog.Log("exNonParallelScan", fmt.Sprintf("exNonParallelScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), result.Count, dur_))
+		log.LogDebug(fmt.Sprintf("exNonParallelScan:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", cc_.String(), result.Count, dur_))
 	}
 	//
 
@@ -1926,17 +1917,17 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 		if err != nil {
 			return newDBUnmarshalErr("exNonParallelScan", "", "", "UnmarshalListOfMaps", err)
 		}
-		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetBind()).Elem().Len()))
+		//log.LogDebug("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetBind()).Elem().Len()))
 
 	} else {
 
-		//slog.Log("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetBind()).Elem().Len()))
+		//log.LogDebug("exNonParallelScan", fmt.Sprintf(" result count  [items]  %d [%d] %d", result.Count, result.Count, reflect.ValueOf(q.GetBind()).Elem().Len()))
 
 		// zero out q.bind (client select variable) if populated
 		if reflect.ValueOf(q.GetBind()).Elem().Kind() == reflect.Slice {
 
 			if reflect.ValueOf(q.GetBind()).Elem().Len() > 0 {
-				slog.LogAlert("exNonParallelScan", fmt.Sprintf(" Zero out bind variable "))
+				log.LogAlert("exNonParallelScan Zero out bind variable ")
 				t := reflect.ValueOf(q.GetBind()).Type().Elem()
 				n := reflect.New(t) // *slice to empty slice
 				q.SetBindValue(n.Elem())
@@ -1947,7 +1938,7 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 			panic(fmt.Errorf("Expected a slice for scan output variable."))
 		}
 
-		slog.Log("exNonParallelScan", "return NoDataFoundErr")
+		log.LogDebug("exNonParallelScan: return NoDataFoundErr")
 
 		return query.NoDataFoundErr
 	}
@@ -1958,9 +1949,8 @@ func exNonParallelScan(ctx context.Context, client *DynamodbHandle, q *query.Que
 // exScanWorker used by parallel scan`
 func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHandle, proj *expression.ProjectionBuilder) error {
 
-	logid := "exScanWorker"
 	worker := fmt.Sprintf("exScanWorker: thread %d  totalSegments %d", q.Worker(), q.NumWorkers())
-	slog.LogAlert(logid, worker)
+	log.LogAlert(worker)
 
 	if q.IsRestart() {
 		// read StateVal from table using q.GetStartVal
@@ -2053,12 +2043,12 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	if lk := q.PgStateValI(); lk != nil {
 		//	q.bindState()
 		input.ExclusiveStartKey = lk.(map[string]types.AttributeValue)
-		//syslog(fmt.Sprintf("exScanWorker: SetExclusiveStartKey %s", input.String()))
+		//log.LogDebug(fmt.Sprintf("exScanWorker: SetExclusiveStartKey %s", input.String()))
 	}
 
 	input.Segment = aws.Int32(int32(q.Worker()))           //int64(q.Worker())
 	input.TotalSegments = aws.Int32(int32(q.NumWorkers())) //int64(q.NumWorkers())
-	//syslog(fmt.Sprintf("exScanWorker: thread %d  input: %s", q.Worker(), input.String()))
+	//log.LogDebug(fmt.Sprintf("exScanWorker: thread %d  input: %s", q.Worker(), input.String()))
 	//
 	t0 := time.Now()
 	result, err := client.Scan(ctx, input)
@@ -2082,10 +2072,10 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 	dur := t1.Sub(t0)
 	dur_ := dur.String()
 	if dot := strings.Index(dur_, "."); dur_[dot+2] == 57 {
-		slog.LogAlert(logid, fmt.Sprintf("exScanWorker:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
+		log.LogAlert(fmt.Sprintf("exScanWorker:consumed capacity for Scan  %s. ItemCount %d  Duration: %s", ConsumedCapacity_{result.ConsumedCapacity}.String(), result.Count, dur_))
 	}
 	//
-	slog.LogAlert(logid, fmt.Sprintf("thread: %d  result.Count  %d", q.Worker(), result.Count))
+	log.LogAlert(fmt.Sprintf("exScanWorker thread: %d  result.Count  %d", q.Worker(), result.Count))
 
 	//save query statistics
 	stats.SaveQueryStat(stats.Scan, q.Tag, result.ConsumedCapacity, result.Count, result.ScannedCount, dur)
@@ -2112,7 +2102,7 @@ func exScanWorker(ctx context.Context, client *DynamodbHandle, q *query.QueryHan
 			panic(fmt.Errorf("Expected a slice for scan output variable."))
 		}
 
-		slog.LogAlert(logid, "return NoDataFoundErr")
+		log.LogAlert("exScanWorker return NoDataFoundErr")
 
 		return query.NoDataFoundErr
 	}
@@ -2155,7 +2145,7 @@ func savePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, val s
 
 	var state string = "LastEvaluatedKey"
 
-	slog.LogAlert("savePgState", fmt.Sprintf("savePgState id: %s val: %q  worker: %d", id.Base64(), val, worker))
+	log.LogAlert(fmt.Sprintf("savePgState id: %s val: %q  worker: %d", id.Base64(), val, worker))
 
 	m := mut.NewInsert("pgState")
 	if len(worker) > 0 {
@@ -2175,7 +2165,7 @@ func deletePgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, wor
 
 	var state string = "LastEvaluatedKey"
 
-	syslog(fmt.Sprintf("deletePgState id: %s ", id.Base64()))
+	log.LogDebug(fmt.Sprintf("deletePgState id: %s ", id.Base64()))
 
 	m := mut.NewDelete("pgState")
 	if len(worker) > 0 {
@@ -2199,7 +2189,7 @@ func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker
 		state += "-w" + strconv.Itoa(worker[0])
 	}
 
-	slog.LogAlert("getPgState", fmt.Sprintf("getPgState id: %s ", id.String()))
+	log.LogAlert(fmt.Sprintf("getPgState id: %s ", id.String()))
 
 	type Val struct {
 		Value string
@@ -2211,10 +2201,10 @@ func getPgState(ctx context.Context, client *DynamodbHandle, id uuid.UID, worker
 
 	err := executeQuery(ctx, client, q)
 	if err != nil {
-		slog.LogAlert("getPgState", fmt.Sprintf("getPgState errored: %s ", err.Error()))
+		log.LogErr(fmt.Errorf("getPgState errored: %w ", err))
 		return "", err
 	}
-	slog.LogAlert("getPgState", fmt.Sprintf("getPgState value: %s ", val.Value))
+	log.LogAlert(fmt.Sprintf("getPgState value: %s ", val.Value))
 	return val.Value, nil
 
 }
@@ -2231,7 +2221,7 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 
 	mm := make(map[string]types.AttributeValue)
 
-	alertlog(fmt.Sprintf("unmarshalPgState: %s ", in))
+	log.LogAlert(fmt.Sprintf("unmarshalPgState: %s ", in))
 	// in:  4{IX : { S : "X" } }{PKey : { B : "a588f90b-7d07-4789-8d16-7cf01015c461" } }{Ty : { S : "m|P" } }{SortK : { S : "A#A#T" } }
 
 	var s scanner.Scanner
@@ -2298,7 +2288,7 @@ func unmarshalPgState(in string) map[string]types.AttributeValue {
 		}
 	}
 
-	syslog(fmt.Sprintf("unmarshalPgState  %s", stringifyPgState(mm)))
+	log.LogDebug(fmt.Sprintf("unmarshalPgState  %s", stringifyPgState(mm)))
 
 	return mm
 }

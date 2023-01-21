@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	dyn "github.com/GoGraph/db"
-	"github.com/GoGraph/mysql"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/mut"
+	"github.com/GoGraph/tx/mysql"
 )
 
 type Person struct {
@@ -672,18 +672,26 @@ func TestQueryPopUpdateKey(t *testing.T) {
 	}
 	var wpEnd sync.WaitGroup
 
+	err := slog.Start()
+	if err != nil {
+		t.Errorf("Error starting syslog services: %s", err)
+	}
+
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
+	logrmDB := slog.NewLogr("mdb")
+
+	SetLogger(logrmDB) //, tx.Alert)
 
 	var sk City
 
 	txg := NewQuery("pop", tbl)
 
 	txg.Select(&sk).Key("PKey", 1001).Key("SortK", "Sydney")
-	err := txg.Execute()
+	err = txg.Execute()
 
 	if err != nil {
 		t.Logf("Error: %s", err)

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/query"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -147,7 +147,7 @@ func (p *queryCacheT) fetchQuery(ctx context.Context, dh *DynamodbHandle, q *que
 
 // GetTableKeys returns table keys in pk,sk order
 
-//func GetKeys(ctx context.Context, table string) { // need dh
+// func GetKeys(ctx context.Context, table string) { // need dh
 func GetTableKeys(ctx context.Context, table string, dh *DynamodbHandle) (*tabEntry, error) {
 
 	var err error
@@ -212,10 +212,10 @@ func (pe *qryEntry) assignAccessMethod(q *query.QueryHandle, e *tabEntry) error 
 		idxFound bool
 	)
 
-	logid := "assignAccessMethod"
+	//	logid := "assignAccessMethod"
 
 	qkeys := q.GetKeys()
-	slog.Log(logid, fmt.Sprintf("tag: %q, qkeys %#v", q.Tag, qkeys))
+	log.LogDebug(fmt.Sprintf("assignAccessMethod: tag: %q, qkeys %#v", q.Tag, qkeys))
 
 	if len(qkeys) == 0 {
 		pe.access = cScan
@@ -243,7 +243,7 @@ func (pe *qryEntry) assignAccessMethod(q *query.QueryHandle, e *tabEntry) error 
 				}
 			}
 		}
-		slog.Log(logid, fmt.Sprintf("pk,sk: %s %q #Keys: %d compare %d", pe.pk, pe.sk, len(e.dto.Table.KeySchema), ComparOpr(q.GetKeyComparOpr(pe.sk))))
+		log.LogDebug(fmt.Sprintf("assignAccessMethod: case 0 pk,sk: %s %q #Keys: %d compare %d", pe.pk, pe.sk, len(e.dto.Table.KeySchema), ComparOpr(q.GetKeyComparOpr(pe.sk))))
 
 		switch len(e.dto.Table.KeySchema) {
 

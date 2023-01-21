@@ -30,9 +30,9 @@ const (
 	//
 	Type Name = "GoGraphSS"
 	//
-	Event  Name = "EV$event"
-	TaskEv Name = "EV$task"
-	//RunStat           Name = "runStats" internal to db
+	Event             Name = "EV$event"
+	TaskEv            Name = "EV$task"
+	RunStat           Name = "runStats" //internal to db
 	Monrun            Name = "runStats"
 	Eslog             Name = "esLog"
 	State             Name = "State"

@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoGraph/tx/param"
 	//	"github.com/GoGraph/histogram"
-	param "github.com/GoGraph/dygparam"
-	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/query"
 
 	hdr "github.com/HdrHistogram/hdrhistogram-go"
@@ -20,7 +20,7 @@ import (
 	//"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-//type StatId byte
+// type StatId byte
 type Source int
 
 const (
@@ -117,7 +117,10 @@ type Capacity struct {
 }
 
 func syslog(s string) {
-	slog.Log("stats: ", s)
+	var out strings.Builder
+	out.WriteString("stats ")
+	out.WriteString(s)
+	log.LogAlert(out.String())
 }
 
 // query statistics, GetItem, Query, Scan
