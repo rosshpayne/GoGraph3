@@ -8,10 +8,9 @@ import (
 	"sync"
 	"testing"
 
-	dyn "github.com/GoGraph/db"
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
 	"github.com/GoGraph/tx/db"
+	dyn "github.com/GoGraph/tx/dynamodb"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/mysql"
 )
@@ -36,6 +35,8 @@ type Address struct {
 	State               string
 	Cntry               Country
 }
+
+var err error
 
 func TestSelect(t *testing.T) {
 
@@ -672,19 +673,11 @@ func TestQueryPopUpdateKey(t *testing.T) {
 	}
 	var wpEnd sync.WaitGroup
 
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
-
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "Region", Val: "us-east-1"}}...)
-	logrmDB := slog.NewLogr("mdb")
-
-	SetLogger(logrmDB) //, tx.Alert)
 
 	var sk City
 
@@ -933,16 +926,6 @@ func TestQueryPopUpdateSetKeyWrong(t *testing.T) {
 
 func TestQueryPopUpdateError(t *testing.T) {
 	var err error
-	//start syslog services (if any)
-	// err := slog.Start()
-	// if err != nil {
-	// 	panic(fmt.Errorf("Error starting syslog services: %w", err))
-	// }
-
-	err = slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
 
 	var tbl tbl.Name = "GoUnitTest"
 	type City struct {
@@ -1109,11 +1092,6 @@ func TestQueryPopUpdateWhere23(t *testing.T) {
 	}
 	var wpEnd sync.WaitGroup
 
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
-
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1169,11 +1147,6 @@ func TestQueryPopUpdateWhere23a(t *testing.T) {
 		Pop int `dynamodbav:"Population"`
 	}
 	var wpEnd sync.WaitGroup
-
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
 
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1260,11 +1233,6 @@ func TestQueryPopUpdateWhere24(t *testing.T) {
 	}
 	var wpEnd sync.WaitGroup
 
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
-
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1331,11 +1299,6 @@ func TestQueryPopUpdateWhere25(t *testing.T) {
 		Pop int `dynamodbav:"Population"`
 	}
 	var wpEnd sync.WaitGroup
-
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
 
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1404,11 +1367,6 @@ func TestQueryPopUpdateWhere26(t *testing.T) {
 	}
 	var wpEnd sync.WaitGroup
 
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
-
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1476,11 +1434,6 @@ func TestQueryPopUpdateWhere28(t *testing.T) {
 		Pop int `dynamodbav:"Population"`
 	}
 	var wpEnd sync.WaitGroup
-
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
 
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1552,11 +1505,6 @@ func TestQueryPopUpdateWhere29(t *testing.T) {
 		Pop int `dynamodbav:"Population"`
 	}
 	var wpEnd sync.WaitGroup
-
-	err := slog.Start()
-	if err != nil {
-		t.Errorf("Error starting syslog services: %s", err)
-	}
 
 	// context is passed to all underlying mysql methods which will release db resources on main termination
 	ctx, cancel := context.WithCancel(context.Background())

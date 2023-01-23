@@ -5,7 +5,6 @@ import (
 	//	"fmt"
 	"testing"
 
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx/mysql"
 	"github.com/GoGraph/tx/tbl"
 )
@@ -30,13 +29,6 @@ func TestSQLUpdateStaff(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -88,13 +80,6 @@ func TestSQLUpdateStaffOr(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -147,13 +132,6 @@ func TestSQLUpdateStaffOrAnd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -209,13 +187,6 @@ func TestSQLUpdateStaffKeyWhere(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -267,13 +238,6 @@ func TestSQLUpdateStaffWhere(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -325,13 +289,6 @@ func TestSQLUpdateStaffWhereOr(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -386,13 +343,7 @@ func TestSQLUpdateStaffWhereOr2(t *testing.T) {
 	//a = 2
 	b = 30
 	c = 100000
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -451,11 +402,6 @@ func xfW(t *testing.T) {
 	//a = 2
 	b = 30
 	c = 100000
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
 
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
@@ -511,13 +457,6 @@ func TestSQLUpdateStaff9(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -570,13 +509,6 @@ func TestSQLUpdateStaff10(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
-
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -633,13 +565,7 @@ func TestSQLUpdateStaffWhereOr3(t *testing.T) {
 	//a = 2
 	b = 23
 	c = 100000
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -697,13 +623,7 @@ func TestSQLUpdateStaffWhereOr4(t *testing.T) {
 	//a = 2
 	b = 23
 	c = 100000
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -765,13 +685,7 @@ func TestSQLUpdateStaffWhere5(t *testing.T) {
 	//a = 2
 	b = 23
 	c = 100000
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -833,13 +747,7 @@ func TestSQLUpdateStaffFilter5(t *testing.T) {
 	//a = 2
 	b = 23
 	c = 100000
-	// err := slog.Start()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// defer slog.Stop()
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 
@@ -901,7 +809,6 @@ func TestSQLPaginate(t *testing.T) {
 	b := "AI"
 	c := 19
 
-	slog.Log("SQLUpdateStaff", "Here...")
 	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
 	//select test,logdt,status,nodes from Log$GoTest;
 

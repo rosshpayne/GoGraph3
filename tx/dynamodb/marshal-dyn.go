@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	param "github.com/GoGraph/dygparam"
+	"github.com/GoGraph/tx/dynamodb/internal/param"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/uuid"
 

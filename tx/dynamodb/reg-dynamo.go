@@ -10,10 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	//	"github.com/GoGraph/db/internal/throttleSrv"
-	"github.com/GoGraph/tx/key"
-	//thtle "github.com/GoGraph/throttle"
 	"github.com/GoGraph/tx/db"
+	"github.com/GoGraph/tx/key"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/query"
 

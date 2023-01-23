@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tx/dbs"
 	"github.com/GoGraph/tx/key"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/tbl"
 	"github.com/GoGraph/tx/uuid"
 )
@@ -58,11 +58,11 @@ const (
 )
 
 func syslog(s string) {
-	slog.Log("Mutation", s)
+	log.LogDebug("Mutation " + s)
 }
 
 func logAlert(s string) {
-	slog.LogAlert("Mutation", s)
+	log.LogAlert("Mutation " + s)
 }
 
 func (s StdMut) String() string {

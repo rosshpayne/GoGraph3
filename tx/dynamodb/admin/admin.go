@@ -17,12 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoGraph/db/stats"
-
-	"github.com/GoGraph/run"
 	"github.com/GoGraph/tx"
+	"github.com/GoGraph/tx/dynamodb/stats"
 	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/tbl"
+	"github.com/GoGraph/tx/uuid"
 )
 
 const (
@@ -57,13 +56,13 @@ var (
 	wgSnap    sync.WaitGroup
 )
 
-func Setup() {
+func Setup(runid uuid.UID) {
 
 	ctxSnap, c := context.WithCancel(context.Background())
 	ctxCancel = c
 	wgSnap.Add(1)
 
-	snapStats(ctxSnap, 15)
+	snapStats(ctxSnap, runid, 15)
 
 	return
 }
@@ -72,7 +71,7 @@ func Cancel() {
 	ctxCancel()
 }
 
-func Persist() {
+func Persist(runid uuid.UID) {
 	alertlog("About to persist dynamodb statistics")
 	// stop snapshot save
 	ctxCancel()
@@ -80,11 +79,11 @@ func Persist() {
 	wgSnap.Wait()
 	// print and save
 	PrintStats()
-	saveStats()
+	saveStats(runid)
 	alertlog("dynamodb statistics saved")
 }
 
-func snapStats(ctxSnap context.Context, snapInterval int) {
+func snapStats(ctxSnap context.Context, runid uuid.UID, snapInterval int) {
 
 	go func() {
 		defer wgSnap.Done()
@@ -94,7 +93,7 @@ func snapStats(ctxSnap context.Context, snapInterval int) {
 			select {
 
 			case <-time.After(time.Duration(snapInterval) * time.Second):
-				saveStats(false)
+				saveStats(runid, false)
 
 			case <-ctxSnap.Done():
 				alertlog("snapStats service shutdown.")
@@ -104,7 +103,7 @@ func snapStats(ctxSnap context.Context, snapInterval int) {
 	}()
 }
 
-func saveStats(final_ ...bool) {
+func saveStats(runid uuid.UID, final_ ...bool) {
 
 	// operation statistics
 	// Table: run_stats
@@ -134,7 +133,7 @@ func saveStats(final_ ...bool) {
 
 	ctx := context.Background()
 
-	runid := run.GetRunId()
+	//runid := run.GetRunId()
 	tblRunStat := tbl.Name("runStats")
 
 	stx = tx.NewBatchContext(ctx, StatsSaveTag)

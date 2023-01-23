@@ -9,8 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoGraph/db/internal/param"
-	//	"github.com/GoGraph/histogram"
+	"github.com/GoGraph/tx/dynamodb/internal/param"
 	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/query"
 

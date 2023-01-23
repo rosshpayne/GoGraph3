@@ -4,19 +4,13 @@ import (
 	"context"
 	"sync"
 
-	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/throttle"
 )
 
-const logid = "dbThrottle"
-
 func alertlog(s string) {
-	slog.LogAlert(logid, s)
+	log.LogAlert("dbThrottle " + s)
 }
-
-// func errlog(s string) {
-// 	slog.LogErr(logid, s)
-// }
 
 func Down() {
 	DownCh <- struct{}{}

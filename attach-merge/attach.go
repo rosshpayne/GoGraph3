@@ -227,7 +227,7 @@ func main() {
 	wpStart.Wait()
 	//
 	// setup db related services (e.g. stats snapshot save)
-	dbadmin.Setup()
+	dbadmin.Setup(runid)
 
 	logerr := func(id string, e error) {
 		elog.Add("mdb", e)
@@ -309,7 +309,7 @@ func main() {
 	slog.Stop()
 
 	// save db stats
-	dbadmin.Persist()
+	dbadmin.Persist(runid)
 
 	//
 	syslog(fmt.Sprintf("Attach operation finished. See log file for any errors. RunId: %q, Edges: %d  Duration: %s ", runid.Base64(), edges, tend.Sub(tstart)))

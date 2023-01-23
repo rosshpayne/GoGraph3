@@ -145,7 +145,7 @@ func main() {
 
 	// register  databases
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "scan", Val: db.Enabled}, db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	mysql.Register(ctx, "mysql-GoGraph", os.Getenv("MYSQL")+"/GoGraph")
 
 	logrmDB := slog.NewLogr("mdb")
 	logrmGr := slog.NewLogr("grmgr")
@@ -303,7 +303,7 @@ func main() {
 	// }
 
 	// setup db related services (e.g. stats snapshot save)
-	dbadmin.Setup()
+	dbadmin.Setup(runid)
 
 	syslog("All services started. Proceed with attach processing")
 
@@ -410,7 +410,7 @@ func main() {
 	// stop system logger services (if any)
 	slog.Stop()
 	// stop db admin services and save to db.
-	dbadmin.Persist()
+	dbadmin.Persist(runid)
 
 }
 

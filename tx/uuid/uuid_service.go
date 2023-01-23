@@ -4,8 +4,7 @@ import (
 	"context"
 	"sync"
 
-	param "github.com/GoGraph/dygparam"
-	slog "github.com/GoGraph/syslog"
+	"github.com/GoGraph/tx/log"
 )
 
 type ndAlias = string // rdf blank-node-id e.g. _:a subject entry in rdf file
@@ -50,7 +49,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 		uid UID
 	)
 
-	slog.Log(param.Logid, "uuid: Powering up...")
+	log.LogAlert("uuid: Powering up...")
 	wp.Done()
 
 	for {
@@ -84,7 +83,7 @@ func PowerOn(ctx context.Context, wp *sync.WaitGroup, wgEnd *sync.WaitGroup) {
 
 		case <-ctx.Done():
 
-			slog.Log(param.Logid, "uuid: Powering down...")
+			log.LogAlert("uuid: Powering down...")
 			return
 
 		}

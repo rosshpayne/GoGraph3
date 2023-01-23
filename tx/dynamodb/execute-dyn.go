@@ -16,11 +16,10 @@ import (
 	"text/scanner"
 	"time"
 
-	"github.com/GoGraph/db/stats"
-
 	"github.com/GoGraph/tx/db"
 	"github.com/GoGraph/tx/dbs"
 	throttle "github.com/GoGraph/tx/dynamodb/internal/throttleSrv"
+	"github.com/GoGraph/tx/dynamodb/stats"
 	"github.com/GoGraph/tx/log"
 	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/tx/param"

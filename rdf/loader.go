@@ -303,7 +303,7 @@ func main() { //(f io.Reader) error { // S P O
 	}
 
 	// setup db related services (e.g. stats snapshot save)
-	dbadmin.Setup()
+	dbadmin.Setup(runid)
 
 	// create rdf reader
 	rdr, _ := reader.New(f)
@@ -359,7 +359,7 @@ func main() { //(f io.Reader) error { // S P O
 	ctxEnd.Wait()
 
 	// persist database api stats
-	dbadmin.Persist()
+	dbadmin.Persist(runid)
 
 	// Complete run state for the program
 	run.Finish(err)
