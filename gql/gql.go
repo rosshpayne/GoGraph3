@@ -11,15 +11,16 @@ import (
 	param "github.com/GoGraph/dygparam"
 	"github.com/GoGraph/gql/ast"
 	"github.com/GoGraph/gql/parser"
-	"github.com/GoGraph/grmgr"
 	stat "github.com/GoGraph/monitor"
 	"github.com/GoGraph/run"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/mut"
 
-	_ "github.com/GoGraph/mysql"
+	"github.com/ros2hp/grmgr"
+
+	"github.com/ros2hp/method-db/mut"
+	_ "github.com/ros2hp/method-db/mysql"
+	"github.com/ros2hp/method-db/tx"
 )
 
 var (

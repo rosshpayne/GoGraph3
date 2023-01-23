@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 // var (

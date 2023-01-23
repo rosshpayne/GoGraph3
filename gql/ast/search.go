@@ -7,8 +7,8 @@ import (
 
 	"github.com/GoGraph/ds"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/query"
 	"github.com/GoGraph/types"
 )
 

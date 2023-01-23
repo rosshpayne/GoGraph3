@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx/dbs"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/dbs"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type AttachOp struct {

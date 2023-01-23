@@ -11,7 +11,7 @@ import (
 
 	"github.com/GoGraph/rdf/ds"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 // transition structs between RDF tuple and dynamodb.AttributeValue

@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/dynamodb/stats"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/dynamodb/stats"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/tbl"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 const (

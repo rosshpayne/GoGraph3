@@ -20,9 +20,9 @@ import (
 	"github.com/GoGraph/db/stats"
 
 	"github.com/GoGraph/run"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/tbl"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/tbl"
 )
 
 const (

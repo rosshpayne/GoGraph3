@@ -7,9 +7,9 @@ import (
 
 	"github.com/GoGraph/state"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/query"
 
-	_ "github.com/GoGraph/tx/mysql"
+	_ "github.com/ros2hp/method-db/mysql"
 )
 
 var bid int

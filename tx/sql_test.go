@@ -5,8 +5,8 @@ import (
 	//	"fmt"
 	"testing"
 
-	"github.com/GoGraph/tx/mysql"
-	"github.com/GoGraph/tx/tbl"
+	"github.com/ros2hp/method-db/mysql"
+	"github.com/ros2hp/method-db/tbl"
 )
 
 func TestSQLUpdateStaff(t *testing.T) {

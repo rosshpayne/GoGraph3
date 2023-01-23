@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoGraph/tx/param"
+	"github.com/ros2hp/method-db/param"
 	//	"github.com/GoGraph/histogram"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/query"
 
 	hdr "github.com/HdrHistogram/hdrhistogram-go"
 

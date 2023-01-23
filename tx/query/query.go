@@ -8,9 +8,9 @@ import (
 
 	//elog "github.com/GoGraph/errlog"
 	//slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/tbl"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type ScanOrder int8

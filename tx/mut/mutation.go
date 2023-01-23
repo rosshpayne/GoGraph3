@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/GoGraph/tx/dbs"
-	"github.com/GoGraph/tx/key"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/dbs"
+	"github.com/ros2hp/method-db/key"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/tbl"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type StdMut byte

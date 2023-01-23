@@ -17,7 +17,7 @@ import (
 	"github.com/GoGraph/run"
 	"github.com/GoGraph/stats"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
+	"github.com/ros2hp/method-db/tx"
 )
 
 var execCnt int

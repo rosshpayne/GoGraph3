@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/throttle"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/throttle"
 )
 
 func alertlog(s string) {

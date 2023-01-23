@@ -1,7 +1,7 @@
 package ds
 
 import (
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type EdgeChild struct {

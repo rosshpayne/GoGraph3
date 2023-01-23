@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoGraph/tx/key"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/key"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/query"
 )
 
 // db defines interfaces to be implemented by dynamodb spanner mysql etc

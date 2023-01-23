@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	tx "github.com/GoGraph/tx/tbl"
+	tx "github.com/ros2hp/method-db/tbl"
 )
 
 type (

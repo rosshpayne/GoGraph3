@@ -10,8 +10,8 @@ import (
 	"time"
 
 	param "github.com/GoGraph/dygparam"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/uuid"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	// "github.com/aws/aws-sdk-go/aws"

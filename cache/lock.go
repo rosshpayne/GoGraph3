@@ -12,7 +12,7 @@ import (
 	elog "github.com/GoGraph/errlog"
 	"github.com/GoGraph/ggdb"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/uuid"
 	"github.com/GoGraph/types"
 )
 

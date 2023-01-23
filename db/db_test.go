@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/mut"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/mut"
 )
 
 func TestFetchData(t *testing.T) {

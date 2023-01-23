@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/query"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"

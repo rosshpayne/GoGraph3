@@ -7,9 +7,9 @@ import (
 
 	param "github.com/GoGraph/syslog/param"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 const logid = "run"

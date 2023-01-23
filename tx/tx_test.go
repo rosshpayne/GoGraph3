@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx/db"
-	dyn "github.com/GoGraph/tx/dynamodb"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/mysql"
+	"github.com/ros2hp/method-db/db"
+	dyn "github.com/ros2hp/method-db/dynamodb"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/mysql"
 )
 
 type Person struct {

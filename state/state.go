@@ -10,10 +10,10 @@ import (
 	"github.com/GoGraph/run"
 	"github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/db"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/db"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/query"
 	"github.com/GoGraph/types"
 )
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	blk "github.com/GoGraph/block"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 // NV (Name-Value) links the graph query to the graph data.

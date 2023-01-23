@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GoGraph/tx/db"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/db"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/query"
 )
 
 var noDataFoundErr = errors.New("no rows in result set")

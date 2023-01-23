@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	//	"github.com/GoGraph/tx/db"
-	//"github.com/GoGraph/tx/query"
+	//	"github.com/ros2hp/method-db/db"
+	//"github.com/ros2hp/method-db/query"
 )
 
 type LogLvl int

@@ -17,9 +17,9 @@ import (
 	elog "github.com/GoGraph/errlog"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/uuid"
 	"github.com/GoGraph/types"
 )
 

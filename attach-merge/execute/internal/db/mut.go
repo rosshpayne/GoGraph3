@@ -5,9 +5,10 @@ package db
 
 import (
 	"github.com/GoGraph/block"
-	"github.com/GoGraph/dbs"
 	param "github.com/GoGraph/dygparam"
-	"github.com/GoGraph/uuid"
+
+	"github.com/ros2hp/method-db/dbs"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type WithOBatchLimit struct {

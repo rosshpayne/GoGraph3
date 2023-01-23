@@ -20,13 +20,14 @@ import (
 	"github.com/GoGraph/grmgr"
 	mon "github.com/GoGraph/monitor"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/key"
-	"github.com/GoGraph/tx/mut"
 	"github.com/GoGraph/types"
 	//	"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/uuid"
+
+	"github.com/ros2hp/method-db/key"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type action byte

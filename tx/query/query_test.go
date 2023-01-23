@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/GoGraph/tx"
+	"github.com/ros2hp/method-db/tx"
 )
 
 func TestConst(t *testing.T) {

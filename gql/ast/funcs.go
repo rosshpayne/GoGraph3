@@ -8,7 +8,7 @@ import (
 	"github.com/GoGraph/ds"
 	"github.com/GoGraph/gql/internal/es"
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/query"
 	"github.com/GoGraph/types"
 )
 

@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/GoGraph/tx/db"
-	mdbsql "github.com/GoGraph/tx/internal/sql"
-	"github.com/GoGraph/tx/key"
-	"github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/query"
-	"github.com/GoGraph/tx/tbl"
+	"github.com/ros2hp/method-db/db"
+	mdbsql "github.com/ros2hp/method-db/internal/sql"
+	"github.com/ros2hp/method-db/key"
+	"github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/query"
+	"github.com/ros2hp/method-db/tbl"
 
 	_ "github.com/go-sql-driver/mysql"
 )

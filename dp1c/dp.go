@@ -14,13 +14,14 @@ import (
 	"github.com/GoGraph/grmgr"
 	slog "github.com/GoGraph/syslog"
 	tbl "github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/key"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/query"
-	txtbl "github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/tx/uuid"
 	"github.com/GoGraph/types"
+
+	"github.com/ros2hp/method-db/key"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/query"
+	txtbl "github.com/ros2hp/method-db/tbl"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 var (

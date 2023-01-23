@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoGraph/tx/db"
-	"github.com/GoGraph/tx/dbs"
-	"github.com/GoGraph/tx/key"
-	mdblog "github.com/GoGraph/tx/log"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/param"
-	"github.com/GoGraph/tx/query"
-	"github.com/GoGraph/tx/tbl"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/db"
+	"github.com/ros2hp/method-db/dbs"
+	"github.com/ros2hp/method-db/key"
+	mdblog "github.com/ros2hp/method-db/log"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/param"
+	"github.com/ros2hp/method-db/query"
+	"github.com/ros2hp/method-db/tbl"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type LogLvl int

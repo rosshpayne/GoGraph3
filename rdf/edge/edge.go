@@ -10,8 +10,8 @@ import (
 	param "github.com/GoGraph/dygparam"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/tx"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 const logid = "EdgeLoad"

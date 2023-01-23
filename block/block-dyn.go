@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoGraph/tx/uuid"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 type DynaGType uint8

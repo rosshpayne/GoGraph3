@@ -7,12 +7,11 @@ import (
 	"fmt"
 
 	blk "github.com/GoGraph/block"
-	//dyn "github.com/GoGraph/db"
-	dyn "github.com/GoGraph/tx/dynamodb"
-	//	"github.com/GoGraph/dbConn"
+
 	"github.com/GoGraph/tbl"
-	"github.com/GoGraph/tx"
-	"github.com/GoGraph/tx/db"
+	"github.com/ros2hp/method-db/db"
+	dyn "github.com/ros2hp/method-db/dynamodb"
+	"github.com/ros2hp/method-db/tx"
 )
 
 const (

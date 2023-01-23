@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/GoGraph/tx/log"
+	"github.com/ros2hp/method-db/log"
 )
 
 type ndAlias = string // rdf blank-node-id e.g. _:a subject entry in rdf file

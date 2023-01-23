@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	slog "github.com/GoGraph/syslog"
-	"github.com/GoGraph/tx/throttle"
+	"github.com/ros2hp/method-db/throttle"
 )
 
 const logid = "dbThrottle"

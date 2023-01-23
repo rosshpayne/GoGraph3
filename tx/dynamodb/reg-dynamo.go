@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoGraph/tx/db"
-	"github.com/GoGraph/tx/key"
-	"github.com/GoGraph/tx/mut"
-	"github.com/GoGraph/tx/query"
+	"github.com/ros2hp/method-db/db"
+	"github.com/ros2hp/method-db/key"
+	"github.com/ros2hp/method-db/mut"
+	"github.com/ros2hp/method-db/query"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
