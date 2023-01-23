@@ -23,14 +23,14 @@ import (
 	"github.com/GoGraph/state"
 	slog "github.com/GoGraph/syslog"
 	"github.com/GoGraph/tbl"
-	"github.com/ros2hp/method-db/tx"
+	"github.com/GoGraph/types"
 	"github.com/ros2hp/method-db/db"
 	dyn "github.com/ros2hp/method-db/dynamodb"
 	dbadmin "github.com/ros2hp/method-db/dynamodb/admin"
 	"github.com/ros2hp/method-db/mysql"
 	"github.com/ros2hp/method-db/query"
+	"github.com/ros2hp/method-db/tx"
 	"github.com/ros2hp/method-db/uuid"
-	"github.com/GoGraph/types"
 )
 
 type scanStatus int
@@ -127,7 +127,7 @@ func main() {
 	// db.Init(ctx, &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	// mysql.Init(ctx)
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	mysql.Register(ctx, "mysql-GoGraph", os.Getenv("MYSQL")+"/GoGraph")
 
 	logrmDB := slog.NewLogr("mdb")
 	logrmGr := slog.NewLogr("grmgr")

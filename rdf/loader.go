@@ -35,11 +35,11 @@ import (
 	"github.com/ros2hp/method-db/mysql"
 	//"github.com/GoGraph/rdf/uuid"
 	slog "github.com/GoGraph/syslog"
-	"github.com/ros2hp/method-db/tx"
 	"github.com/ros2hp/method-db/db"
+	"github.com/ros2hp/method-db/tx"
 	//"github.com/ros2hp/method-db/mut"
-	"github.com/ros2hp/method-db/uuid"
 	"github.com/GoGraph/types"
+	"github.com/ros2hp/method-db/uuid"
 )
 
 const (
@@ -173,7 +173,7 @@ func main() { //(f io.Reader) error { // S P O
 	// db.Init(ctx, &ctxEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
 	// mysql.Init(ctx)
 	dyn.Register(ctx, "default", &wpEnd, []db.Option{db.Option{Name: "throttler", Val: grmgr.Control}, db.Option{Name: "Region", Val: "us-east-1"}}...)
-	mysql.Register(ctx, "mysql-GoGraph", "admin:gjIe8Hl9SFD1g3ahyu6F@tcp(mysql8.cjegagpjwjyi.us-east-1.rds.amazonaws.com:3306)/GoGraph")
+	mysql.Register(ctx, "mysql-GoGraph", os.Getenv("MYSQL")+"/GoGraph")
 
 	logrmDB := slog.NewLogr("mdb")
 	logrmGr := slog.NewLogr("grmgr")
