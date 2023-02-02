@@ -1,5 +1,5 @@
 # GoGraph
 
-An experimental graph database utilising AWS Dynamodb or Google's Spanner as the data store and GraphSQL syntax for the query language.
+An experimental graph database using AWS Dynamodb or Google's Spanner as the data store and utilising GraphQL like syntax for the query language.
 
-See __GoGraph-Description.pdf__ for complete documentation of its design and performance results.
+See __GoGraph-Description.pdf__ for a complete description of its design and analysis of the performance results.
